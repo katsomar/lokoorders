@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { motion, AnimatePresence } from "framer-motion";
+import { SignatureCanvas } from "@/components/ui/signature-canvas";
 
 export default function DeliveryConfirmationPage() {
   const params = useParams();
@@ -146,12 +147,7 @@ export default function DeliveryConfirmationPage() {
               )}
 
               {proofType === "signature" && (
-                <div className="aspect-video bg-white rounded-2xl border-2 border-brand-sage relative overflow-hidden">
-                   <div className="absolute inset-0 flex items-center justify-center text-gray-300 pointer-events-none">
-                      Sign here
-                   </div>
-                   <canvas className="w-full h-full cursor-crosshair" />
-                </div>
+                <SignatureCanvas onSave={(data) => console.log("Signature captured:", data)} />
               )}
 
               <div className="pt-4 space-y-3">

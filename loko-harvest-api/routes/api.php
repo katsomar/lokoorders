@@ -49,6 +49,16 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'index']);
         Route::post('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'store']);
         
+        // Notifications
+        Route::get('/notifications', [App\Http\Controllers\Api\V1\NotificationController::class, 'index']);
+        Route::post('/notifications/{id}/read', [App\Http\Controllers\Api\V1\NotificationController::class, 'markAsRead']);
+        Route::post('/notifications/read-all', [App\Http\Controllers\Api\V1\NotificationController::class, 'markAllAsRead']);
+        
+        // Reports
+        Route::get('/reports/sales-summary', [App\Http\Controllers\Api\V1\ReportController::class, 'salesSummary']);
+        Route::get('/reports/aging', [App\Http\Controllers\Api\V1\ReportController::class, 'agingReport']);
+        Route::get('/reports/driver-performance', [App\Http\Controllers\Api\V1\ReportController::class, 'driverPerformance']);
+        
         // Other module routes will go here
     });
 });
