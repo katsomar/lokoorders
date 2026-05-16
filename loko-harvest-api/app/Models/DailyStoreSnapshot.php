@@ -8,4 +8,6 @@ class DailyStoreSnapshot extends Model
 {
     use \App\Traits\HasUuid;
     protected $guarded = [];
+
+    public function product() { return $this->belongsTo(Product::class); }
 }

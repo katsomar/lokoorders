@@ -42,6 +42,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/accounts/{customerId}', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'show']);
         Route::get('/accounts/{customerId}/ledger', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'ledger']);
         
+        // Production Store
+        Route::get('/production-stock', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'index']);
+        Route::get('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'snapshots']);
+        Route::post('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'createSnapshot']);
+        Route::get('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'index']);
+        Route::post('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'store']);
+        
         // Other module routes will go here
     });
 });
