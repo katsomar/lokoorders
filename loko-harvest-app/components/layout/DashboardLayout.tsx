@@ -1,0 +1,178 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  LayoutDashboard, 
+  ShoppingBag, 
+  Users, 
+  Truck, 
+  CreditCard, 
+  BarChart3, 
+  Settings, 
+  Bell, 
+  Menu, 
+  X, 
+  LogOut,
+  Warehouse,
+  ChevronRight
+} from "lucide-react";
+import { useAuth } from "@/store/useAuth";
+import { Button } from "@/components/ui/button";
+
+const navItems = [
+  { group: "General", items: [
+    { name: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
+  ]},
+  { group: "Production & Sales", items: [
+    { name: "Production Store", href: "/production-store", icon: Warehouse },
+    { name: "Sales Store", href: "/sales-store", icon: ShoppingBag },
+  ]},
+  { group: "Orders & Customers", items: [
+    { name: "Orders", href: "/orders", icon: ShoppingBag },
+    { name: "Customers", href: "/customers", icon: Users },
+  ]},
+  { group: "Logistics", items: [
+    { name: "Deliveries", href: "/deliveries", icon: Truck },
+    { name: "Drivers", href: "/drivers", icon: Users },
+  ]},
+  { group: "Finance", items: [
+    { name: "Invoices", href: "/invoices", icon: CreditCard },
+    { name: "Payments", href: "/payments", icon: CreditCard },
+    { name: "Returns", href: "/returns", icon: ShoppingBag },
+  ]},
+  { group: "Analytics", items: [
+    { name: "Reports", href: "/reports", icon: BarChart3 },
+  ]},
+  { group: "System", items: [
+    { name: "Settings", href: "/settings", icon: Settings },
+  ]}
+];
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const pathname = usePathname();
+  const { user, clearAuth } = useAuth();
+
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
+      {/* Sidebar */}
+      <motion.aside
+        initial={false}
+        animate={{ width: isSidebarOpen ? 240 : 80 }}
+        className="relative z-20 flex flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out"
+      >
+        <div className="flex h-16 items-center justify-between px-6">
+          {isSidebarOpen && (
+            <motion.span 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xl font-bold font-heading tracking-tight"
+            >
+              LOKO <span className="text-brand-yellow">HARVEST</span>
+            </motion.span>
+          )}
+          <button onClick={toggleSidebar} className="text-white hover:text-brand-yellow">
+            <Menu size={24} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-hide">
+          {navItems.map((group) => (
+            <div key={group.group} className="space-y-2">
+              {isSidebarOpen && (
+                <h3 className="px-2 text-xs font-semibold uppercase tracking-wider text-sage-300 opacity-50 font-heading">
+                  {group.group}
+                </h3>
+              )}
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all group ${
+                        isActive 
+                          ? "bg-white/10 text-brand-yellow border-l-4 border-brand-yellow" 
+                          : "text-white/70 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      <item.icon size={20} className={isActive ? "text-brand-yellow" : ""} />
+                      {isSidebarOpen && (
+                        <span className="text-sm font-medium">{item.name}</span>
+                      )}
+                      {!isSidebarOpen && isActive && (
+                         <div className="absolute left-0 w-1 h-6 bg-brand-yellow rounded-r-full" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 border-t border-white/10">
+          <button 
+            onClick={clearAuth}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-white/70 hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          >
+            <LogOut size={20} />
+            {isSidebarOpen && <span className="text-sm font-medium">Logout</span>}
+          </button>
+        </div>
+      </motion.aside>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Nav */}
+        <header className="h-16 bg-white border-b border-brand-sage flex items-center justify-between px-8 z-10">
+          <div className="flex items-center gap-4">
+            <h2 className="text-lg font-semibold text-brand-forest font-heading">
+              {navItems.flatMap(g => g.items).find(i => i.href === pathname)?.name || "Dashboard"}
+            </h2>
+          </div>
+          
+          <div className="flex items-center gap-6">
+            <button className="relative text-gray-400 hover:text-brand-forest transition-colors">
+              <Bell size={22} />
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-amber text-[10px] font-bold text-white">
+                3
+              </span>
+            </button>
+            
+            <div className="flex items-center gap-3 border-l border-brand-sage pl-6">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-semibold text-brand-forest leading-none">{user?.name || "Admin User"}</p>
+                <p className="text-xs text-gray-500 mt-1 capitalize">{user?.role?.replace('_', ' ') || "Administrator"}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest font-bold border border-brand-forest/10">
+                {user?.name?.charAt(0) || "A"}
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Body */}
+        <main className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
+    </div>
+  );
+}
