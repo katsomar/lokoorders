@@ -131,27 +131,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Nav */}
-        <header className="h-16 bg-white border-b border-brand-sage flex items-center justify-between px-8 z-10">
+        <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-8 z-10 text-white">
           <div className="flex items-center gap-4">
-            <h2 className="text-lg font-semibold text-brand-forest font-heading">
+            <h2 className="text-lg font-bold text-white font-heading tracking-tight flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-brand-yellow animate-pulse" />
               {navItems.flatMap(g => g.items).find(i => i.href === pathname)?.name || "Dashboard"}
             </h2>
           </div>
           
           <div className="flex items-center gap-6">
-            <button className="relative text-gray-400 hover:text-brand-forest transition-colors">
+            <button className="relative text-white/80 hover:text-brand-yellow transition-colors">
               <Bell size={22} />
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-amber text-[10px] font-bold text-white">
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-yellow text-[10px] font-extrabold text-brand-forest">
                 3
               </span>
             </button>
             
-            <div className="flex items-center gap-3 border-l border-brand-sage pl-6">
+            <div className="flex items-center gap-3 border-l border-white/10 pl-6">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-brand-forest leading-none">{user?.name || "Admin User"}</p>
-                <p className="text-xs text-gray-500 mt-1 capitalize">{user?.role?.replace('_', ' ') || "Administrator"}</p>
+                <p className="text-sm font-semibold text-white leading-none">{user?.name || "Admin User"}</p>
+                <p className="text-xs text-brand-yellow/80 mt-1 capitalize font-medium">{user?.role?.replace('_', ' ') || "Administrator"}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest font-bold border border-brand-forest/10">
+              <div className="h-10 w-10 rounded-full bg-brand-yellow flex items-center justify-center text-brand-forest font-extrabold border border-white/20 shadow-inner">
                 {user?.name?.charAt(0) || "A"}
               </div>
             </div>
