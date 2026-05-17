@@ -9,7 +9,10 @@ import {
   Wallet, 
   TrendingUp, 
   Warehouse,
-  History
+  History,
+  Users,
+  User,
+  Activity
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -23,8 +26,7 @@ import {
   Pie,
   Cell,
   BarChart,
-  Bar,
-  HorizontalBarChart
+  Bar
 } from "recharts";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
@@ -42,11 +44,11 @@ const revenueData = [
 ];
 
 const statusData = [
-  { name: "Pending", value: 40, color: "#6B7280" },
-  { name: "Processing", value: 30, color: "#3B82F6" },
-  { name: "Dispatched", value: 20, color: "#8B5CF6" },
-  { name: "Delivered", value: 50, color: "#1A5C2A" },
-  { name: "Returned", value: 10, color: "#F43F5E" },
+  { name: "Delivered", value: 50, color: "#16A34A" }, // Fresh Green
+  { name: "Pending", value: 40, color: "#F5A800" },    // Soft Amber
+  { name: "Dispatched", value: 20, color: "#2563EB" }, // Vivid Blue
+  { name: "Processing", value: 30, color: "#8B5CF6" }, // Purple
+  { name: "Returned", value: 10, color: "#E11D48" },   // Rose
 ];
 
 const topCustomers = [
@@ -69,87 +71,123 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        {/* KPI Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        {/* ROW 1: Upgraded Operations Cards & Donut Chart (Grid of 3 columns) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Card 1: Fulfillment Operations */}
           <KPICard 
-            label="Today's Orders" 
-            value={24} 
+            label="Fulfillment Operations" 
+            value={36} 
+            subtitle="Active orders handled in the last 24 hours"
             icon={ShoppingBag} 
+            rightIcon={Truck}
             trend={{ value: 12, isUp: true }}
+            subMetrics={[
+              { label: "Today's New Orders", value: "24", icon: ShoppingBag },
+              { label: "Active Fleet Drivers", value: "6 drivers", icon: Users }
+            ]}
+            breakdownTitle="Delivery Fulfillment Status"
+            breakdown={[
+              { name: "Completed / Delivered", value: "12 orders", color: "#16A34A" },
+              { name: "Pending Dispatch", value: "18 orders", color: "#F5A800" },
+              { name: "Returned Vouchers", value: "6 items", color: "#E11D48" }
+            ]}
           />
+
+          {/* Card 2: Financial Status & Claims */}
           <KPICard 
-            label="Pending Deliveries" 
-            value={18} 
-            icon={Clock} 
-            iconBg="bg-amber-50"
-            iconColor="text-brand-amber"
-          />
-          <KPICard 
-            label="Delivered Today" 
-            value={12} 
-            icon={CheckCircle2} 
+            label="Revenue & Collections MTD" 
+            value={4250000} 
+            prefix="UGX "
+            subtitle="Total collections posted this month"
+            icon={Wallet} 
+            rightIcon={TrendingUp}
+            trend={{ value: 8, isUp: true }}
+            subMetrics={[
+              { label: "Pending Account Credits", value: "UGX 1.2M MTD", icon: CheckCircle2 }
+            ]}
+            breakdownTitle="Top Outstanding Claims"
+            breakdown={[
+              { name: "Shoprite Lugogo Ledger", value: "UGX 12.5M", color: "#16A34A" },
+              { name: "KFC Bukoto Ledger", value: "UGX 8.4M", color: "#F5A800" },
+              { name: "Café Javas Ledger", value: "UGX 6.2M", color: "#2563EB" }
+            ]}
             iconBg="bg-green-50"
             iconColor="text-green-600"
           />
-          <KPICard 
-            label="Today's Revenue" 
-            value={4250000} 
-            prefix="UGX "
-            icon={Wallet} 
-            trend={{ value: 8, isUp: true }}
-          />
-          <KPICard 
-            label="Outstanding Balance" 
-            value={42500000} 
-            prefix="UGX "
-            icon={TrendingUp} 
-            iconBg="bg-red-50"
-            iconColor="text-red-600"
-          />
-          <KPICard 
-            label="Production Store" 
-            value={1250} 
-            suffix=" Trays"
-            icon={Warehouse} 
-          />
-          <KPICard 
-            label="Sales Store" 
-            value={840} 
-            suffix=" Trays"
-            icon={ShoppingBag} 
-          />
-          <KPICard 
-            label="Active Drivers" 
-            value={6} 
-            icon={Truck} 
-          />
+
+          {/* Card 3: Order Status Distribution (Pie Chart matching screenshot style) */}
+          <Card className="border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between h-full">
+            <div className="bg-brand-forest text-white px-5 py-3.5 flex items-center gap-2">
+              <Activity size={16} className="text-brand-yellow" />
+              <h3 className="font-heading font-semibold text-sm">Order Status Distribution</h3>
+            </div>
+            
+            <CardContent className="p-5 flex flex-col justify-between flex-1">
+              <div className="h-[210px] w-full flex items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={52}
+                      outerRadius={72}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-4 border-t border-brand-sage/50 pt-3.5">
+                {statusData.map((status) => (
+                  <div key={status.name} className="flex items-center gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
+                    <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">{status.name}</span>
+                    <span className="text-[11px] text-gray-700 font-extrabold ml-auto">{status.value}%</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
         </div>
 
-        {/* Charts Row */}
+        {/* ROW 2: Revenue Area Chart (2/3) & Warehouse Stock KPICard (1/3) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Revenue Trend (Last 30 Days)</CardTitle>
+          
+          <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6">
+              <CardTitle className="text-base font-bold text-brand-forest font-heading">Revenue Trends (Last 30 Days)</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={revenueData}>
                     <defs>
                       <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#1A5C2A" stopOpacity={0.1}/>
+                        <stop offset="5%" stopColor="#1A5C2A" stopOpacity={0.15}/>
                         <stop offset="95%" stopColor="#1A5C2A" stopOpacity={0}/>
                       </linearGradient>
                       <linearGradient id="colorInvoiced" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F5A800" stopOpacity={0.1}/>
+                        <stop offset="5%" stopColor="#F5A800" stopOpacity={0.15}/>
                         <stop offset="95%" stopColor="#F5A800" stopOpacity={0}/>
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
                     <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
                     />
                     <Area type="monotone" dataKey="collected" stroke="#1A5C2A" strokeWidth={3} fillOpacity={1} fill="url(#colorCollected)" name="Collected" />
                     <Area type="monotone" dataKey="invoiced" stroke="#F5A800" strokeWidth={3} fillOpacity={1} fill="url(#colorInvoiced)" name="Invoiced" />
@@ -159,99 +197,88 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Order Status Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[300px] w-full flex flex-col items-center justify-center">
-                <ResponsiveContainer width="100%" height="80%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4 w-full">
-                  {statusData.map((status) => (
-                    <div key={status.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color }} />
-                      <span className="text-xs text-gray-600 font-medium">{status.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Warehouse Stock detailed card */}
+          <KPICard 
+            label="Warehouse Stock Levels" 
+            value={2090} 
+            suffix=" Trays"
+            subtitle="Combined egg inventory across stores"
+            icon={Warehouse} 
+            rightIcon={Warehouse}
+            subMetrics={[
+              { label: "Active Intake Lines", value: "11 active lines", icon: Warehouse }
+            ]}
+            breakdownTitle="Egg Reserve Allocation"
+            breakdown={[
+              { name: "Production Store Stock", value: "1,250 trays", color: "#1A5C2A" },
+              { name: "Sales Store Stock", value: "840 trays", color: "#F5A800" },
+              { name: "Reserve Safety Buffer", value: "500 trays", color: "#E11D48" }
+            ]}
+            iconBg="bg-indigo-50"
+            iconColor="text-indigo-600"
+          />
+
         </div>
 
-        {/* Bottom Row */}
+        {/* ROW 3: Top Customers Bar Chart (2/3) & Live Activity Feed (1/3) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2 border-none shadow-sm">
-            <CardHeader>
-              <CardTitle>Top Customers by Outstanding Balance</CardTitle>
+          
+          <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6">
+              <CardTitle className="text-base font-bold text-brand-forest font-heading">Top Customers by Outstanding Balance</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={topCustomers} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8F0E9" />
-                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
-                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#1A5C2A', fontWeight: 600 }} width={120} />
+                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
+                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#1A5C2A', fontWeight: 600 }} width={120} />
                     <Tooltip 
                       cursor={{ fill: '#F8FBF8' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9' }}
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
                     />
-                    <Bar dataKey="balance" fill="#1A5C2A" radius={[0, 4, 4, 0]} barSize={24} />
+                    <Bar dataKey="balance" fill="#1A5C2A" radius={[0, 6, 6, 0]} barSize={20} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Live Activity</CardTitle>
-              <History size={18} className="text-gray-400" />
+          <Card className="border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
+              <CardTitle className="text-base font-bold text-brand-forest font-heading">Live System Feed</CardTitle>
+              <History size={18} className="text-brand-mid" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="space-y-6">
                 {activityFeed.map((item) => (
                   <div key={item.id} className="flex gap-4 group">
                     <div className="mt-1">
-                      <div className={`h-2 w-2 rounded-full mt-1.5 ${
+                      <div className={`h-2.5 w-2.5 rounded-full mt-1 ${
                         item.type === 'order' ? 'bg-blue-500' :
                         item.type === 'delivery' ? 'bg-green-500' :
                         item.type === 'payment' ? 'bg-amber-500' :
-                        'bg-purple-500'
+                        'bg-rose-500'
                       }`} />
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm text-gray-700 leading-snug group-hover:text-brand-forest transition-colors">
+                    <div className="flex-1 space-y-0.5">
+                      <p className="text-xs text-gray-700 leading-relaxed group-hover:text-brand-forest transition-colors font-medium">
                         {item.text}
                       </p>
-                      <p className="text-xs text-gray-400">{item.time}</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{item.time}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <button className="w-full mt-6 py-2 text-sm font-semibold text-brand-forest hover:bg-brand-sage rounded-lg transition-colors">
-                View All Activity
+              <button className="w-full mt-6 py-2.5 text-xs font-bold text-brand-forest hover:bg-brand-sage/30 rounded-xl transition-all border border-brand-sage border-dashed">
+                View All Audits
               </button>
             </CardContent>
           </Card>
+
         </div>
+
       </div>
     </DashboardLayout>
   );
