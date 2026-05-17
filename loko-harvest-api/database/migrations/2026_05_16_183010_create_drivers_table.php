@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignUuid('user_id')->constrained('users');
             $table->string('full_name');
             $table->string('phone');
-            $table->string('vehicle_registration');
+            $table->foreignUuid('vehicle_id')->nullable()->constrained('vehicles')->nullOnDelete();
             $table->string('license_number');
             $table->enum('employment_status', ['active', 'inactive'])->default('active');
             $table->date('date_joined');

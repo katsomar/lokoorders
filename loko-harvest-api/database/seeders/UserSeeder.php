@@ -41,11 +41,12 @@ class UserSeeder extends Seeder
             $user = User::create($userData);
             
             if ($user->role === 'driver') {
+                $vehicle = \App\Models\Vehicle::first();
                 \App\Models\Driver::create([
                     'user_id' => $user->id,
                     'full_name' => $user->name,
                     'phone' => $user->phone,
-                    'vehicle_registration' => 'UG ' . rand(100, 999) . ' X',
+                    'vehicle_id' => $vehicle ? $vehicle->id : null,
                     'license_number' => 'UG-' . rand(1000, 9999),
                     'employment_status' => 'active',
                     'date_joined' => now()->toDateString(),
