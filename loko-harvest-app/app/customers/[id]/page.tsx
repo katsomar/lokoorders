@@ -255,12 +255,12 @@ export default function CustomerDetailPage() {
               variant="ghost" 
               size="icon" 
               onClick={() => router.push("/customers")}
-              className="text-white hover:bg-white/20 h-10 w-10 rounded-full"
+              className="text-brand-forest hover:bg-brand-sage/25 h-10 w-10 rounded-full"
             >
               <ChevronLeft size={24} />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-white font-heading">{customer.name}</h1>
+              <h1 className="text-2xl font-bold text-brand-forest font-heading">{customer.name}</h1>
               <div className="flex items-center gap-2 mt-1">
                 {customer.isParent ? (
                   <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[10px]">
@@ -271,12 +271,12 @@ export default function CustomerDetailPage() {
                     <Badge className="bg-brand-sage text-brand-forest border-none font-semibold text-[10px]">
                       Branch Location
                     </Badge>
-                    <span className="text-white/60 text-xs font-semibold">
-                      of <Link href={`/customers/${customer.parentId}`} className="underline hover:text-brand-yellow">{customer.parentName}</Link>
+                    <span className="text-gray-500 text-xs font-semibold">
+                      of <Link href={`/customers/${customer.parentId}`} className="underline hover:text-brand-forest text-brand-forest font-bold">{customer.parentName}</Link>
                     </span>
                   </div>
                 ) : (
-                  <Badge className="bg-gray-100/20 text-white border-none font-medium text-[10px]">
+                  <Badge className="bg-brand-sage text-brand-forest border-none font-medium text-[10px]">
                     Standalone Client
                   </Badge>
                 )}

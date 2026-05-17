@@ -137,13 +137,13 @@ export default function NewOrderPage() {
             variant="ghost" 
             size="icon" 
             onClick={() => router.back()}
-            className="text-white hover:bg-white/20 h-10 w-10 rounded-full"
+            className="text-brand-forest hover:bg-brand-sage/25 h-10 w-10 rounded-full"
           >
             <ChevronLeft size={24} />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-white font-heading">Record New Order</h1>
-            <p className="text-gray-300 font-body">Capture intake orders under corporate or standalone customer accounts</p>
+            <h1 className="text-2xl font-bold text-brand-forest font-heading">Record New Order</h1>
+            <p className="text-gray-500 font-body">Capture intake orders under corporate or standalone customer accounts</p>
           </div>
         </div>
 

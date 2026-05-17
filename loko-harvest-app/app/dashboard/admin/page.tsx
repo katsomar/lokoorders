@@ -199,20 +199,21 @@ export default function AdminDashboard() {
 
           {/* Warehouse Stock detailed card */}
           <KPICard 
-            label="Warehouse Stock Levels" 
-            value={2090} 
-            suffix=" Trays"
-            subtitle="Combined egg inventory across stores"
+            label="Warehouse Inventory Valuation" 
+            value={103680000} 
+            prefix="UGX "
+            subtitle="Combined financial worth of Production and Sales stores"
             icon={Warehouse} 
             rightIcon={Warehouse}
             subMetrics={[
-              { label: "Active Intake Lines", value: "11 active lines", icon: Warehouse }
+              { label: "Production Store Value", value: "UGX 58.2M", icon: Warehouse },
+              { label: "Sales Store Value", value: "UGX 45.4M", icon: Warehouse }
             ]}
-            breakdownTitle="Egg Reserve Allocation"
+            breakdownTitle="Inventory Worth Allocation"
             breakdown={[
-              { name: "Production Store Stock", value: "1,250 trays", color: "#1A5C2A" },
-              { name: "Sales Store Stock", value: "840 trays", color: "#F5A800" },
-              { name: "Reserve Safety Buffer", value: "500 trays", color: "#E11D48" }
+              { name: "Production Store (Bulk Trays)", value: "UGX 58,225,000", color: "#1A5C2A" },
+              { name: "Sales Store (Packaged Eggs)", value: "UGX 45,455,000", color: "#F5A800" },
+              { name: "Reserve Poultry & Feed Value", value: "UGX 10,950,000", color: "#2563EB" }
             ]}
             iconBg="bg-indigo-50"
             iconColor="text-indigo-600"
