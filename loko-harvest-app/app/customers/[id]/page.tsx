@@ -19,7 +19,8 @@ import {
   Building2,
   ListFilter,
   DollarSign,
-  Briefcase
+  Briefcase,
+  FileText
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -56,10 +57,10 @@ const allCustomers = [
       { id: "shoprite-acacia", name: "Shoprite Acacia Branch", balance: 3200000, zone: "Kololo", contact: "Agnes Nabeta", credit_limit: 15000000 }
     ],
     ledger: [
-      { id: "1", date: "2026-05-16", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0042", description: "Order delivery for Lugogo", debit: 4250000, credit: 0, balance: 15700000 },
-      { id: "2", date: "2026-05-15", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "payment", ref: "LHP-2026-0515", description: "Consolidated payment via Bank Transfer", debit: 0, credit: 2000000, balance: 11450000 },
-      { id: "3", date: "2026-05-14", branchId: "shoprite-acacia", branchName: "Acacia", type: "invoice", ref: "LHI-2026-0041", description: "Order delivery for Acacia", debit: 3200000, credit: 0, balance: 13450000 },
-      { id: "4", date: "2026-05-12", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0035", description: "Opening invoice setup", debit: 10250000, credit: 0, balance: 10250000 },
+      { id: "1", date: "2026-05-16", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0042", description: "Order delivery for Lugogo", debit: 4250000, credit: 0, balance: 15700000, efrisNumber: "EFRIS-UG-59283", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_59283.jpg" },
+      { id: "2", date: "2026-05-15", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "payment", ref: "LHP-2026-0515", description: "Consolidated payment via Bank Transfer", debit: 0, credit: 2000000, balance: 11450000, efrisNumber: "-", paymentMethod: "Bank Transfer", deliveredBy: "-", receivedBy: "John Okello (Sales Manager)", proofDoc: "/proof_rcpt_1029.jpg" },
+      { id: "3", date: "2026-05-14", branchId: "shoprite-acacia", branchName: "Acacia", type: "invoice", ref: "LHI-2026-0041", description: "Order delivery for Acacia", debit: 3200000, credit: 0, balance: 13450000, efrisNumber: "EFRIS-UG-59114", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59114.jpg" },
+      { id: "4", date: "2026-05-12", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0035", description: "Opening invoice setup", debit: 10250000, credit: 0, balance: 10250000, efrisNumber: "EFRIS-UG-58091", paymentMethod: "-", deliveredBy: "Ssempijja D. (HQ Staff)", receivedBy: "-", proofDoc: "/proof_inv_58091.jpg" },
     ]
   },
   {
@@ -80,9 +81,9 @@ const allCustomers = [
       { id: "mega-entebbe", name: "Mega Standard Entebbe", balance: 3000000, zone: "Entebbe", contact: "Sarah Namubiru", credit_limit: 5000000 }
     ],
     ledger: [
-      { id: "1", date: "2026-05-15", branchId: "mega-nakasero", branchName: "Nakasero", type: "invoice", ref: "LHI-2026-0045", description: "Deliveries for Nakasero Branch", debit: 5000000, credit: 0, balance: 12500000 },
-      { id: "2", date: "2026-05-13", branchId: "mega-downtown", branchName: "Downtown", type: "invoice", ref: "LHI-2026-0038", description: "Deliveries for Downtown Branch", debit: 4500000, credit: 0, balance: 7500000 },
-      { id: "3", date: "2026-05-12", branchId: "mega-entebbe", branchName: "Entebbe", type: "invoice", ref: "LHI-2026-0032", description: "Deliveries for Entebbe Branch", debit: 3000000, credit: 0, balance: 3000000 }
+      { id: "1", date: "2026-05-15", branchId: "mega-nakasero", branchName: "Nakasero", type: "invoice", ref: "LHI-2026-0045", description: "Deliveries for Nakasero Branch", debit: 5000000, credit: 0, balance: 12500000, efrisNumber: "EFRIS-UG-60312", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_60312.jpg" },
+      { id: "2", date: "2026-05-13", branchId: "mega-downtown", branchName: "Downtown", type: "invoice", ref: "LHI-2026-0038", description: "Deliveries for Downtown Branch", debit: 4500000, credit: 0, balance: 7500000, efrisNumber: "EFRIS-UG-60199", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_60199.jpg" },
+      { id: "3", date: "2026-05-12", branchId: "mega-entebbe", branchName: "Entebbe", type: "invoice", ref: "LHI-2026-0032", description: "Deliveries for Entebbe Branch", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-59002", paymentMethod: "-", deliveredBy: "Ssempijja D. (HQ Staff)", receivedBy: "-", proofDoc: "/proof_inv_59002.jpg" }
     ]
   },
   {
@@ -99,8 +100,8 @@ const allCustomers = [
     isParent: false,
     branches: [],
     ledger: [
-      { id: "1", date: "2026-05-16", type: "invoice", ref: "LHI-2026-0043", description: "Dressed Chicken Order Delivery", debit: 5400000, credit: 0, balance: 8400000 },
-      { id: "2", date: "2026-05-14", type: "invoice", ref: "LHI-2026-0039", description: "Dressed Chicken Order Delivery", debit: 3000000, credit: 0, balance: 3000000 }
+      { id: "1", date: "2026-05-16", type: "invoice", ref: "LHI-2026-0043", description: "Dressed Chicken Order Delivery", debit: 5400000, credit: 0, balance: 8400000, efrisNumber: "EFRIS-UG-59299", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59299.jpg" },
+      { id: "2", date: "2026-05-14", type: "invoice", ref: "LHI-2026-0039", description: "Dressed Chicken Order Delivery", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-58312", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_58312.jpg" }
     ]
   },
   {
@@ -117,8 +118,8 @@ const allCustomers = [
     isParent: false,
     branches: [],
     ledger: [
-      { id: "1", date: "2026-05-15", type: "invoice", ref: "LHI-2026-0040", description: "Fresh Brown Egg Delivery", debit: 3200000, credit: 0, balance: 6200000 },
-      { id: "2", date: "2026-05-12", type: "invoice", ref: "LHI-2026-0031", description: "Fresh Brown Egg Delivery", debit: 3000000, credit: 0, balance: 3000000 }
+      { id: "1", date: "2026-05-15", type: "invoice", ref: "LHI-2026-0040", description: "Fresh Brown Egg Delivery", debit: 3200000, credit: 0, balance: 6200000, efrisNumber: "EFRIS-UG-59021", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59021.jpg" },
+      { id: "2", date: "2026-05-12", type: "invoice", ref: "LHI-2026-0031", description: "Fresh Brown Egg Delivery", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-58004", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_58004.jpg" }
     ]
   },
   {
@@ -151,6 +152,7 @@ export default function CustomerDetailPage() {
   const [paymentBranch, setPaymentBranch] = useState("all");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedProofTx, setSelectedProofTx] = useState<any | null>(null);
 
   // Find customer by ID. If it's a branch, we construct its branch record.
   const customerId = params.id as string;
@@ -438,52 +440,110 @@ export default function CustomerDetailPage() {
                 </CardHeader>
                 
                 <CardContent className="p-0">
-                  <Table>
-                    <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
-                      <TableRow>
-                        <TableHead className="text-xs font-bold text-brand-forest pl-6">Date</TableHead>
-                        <TableHead className="text-xs font-bold text-brand-forest">Ref #</TableHead>
-                        {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
-                        <TableHead className="text-xs font-bold text-brand-forest">Description</TableHead>
-                        <TableHead className="text-right text-xs font-bold text-brand-forest">Debit</TableHead>
-                        <TableHead className="text-right text-xs font-bold text-brand-forest">Credit</TableHead>
-                        <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Balance</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {getFilteredLedger().length === 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
                         <TableRow>
-                          <TableCell colSpan={customer.isParent ? 7 : 6} className="text-center py-8 text-gray-500 font-body text-xs">
-                            No ledger transactions recorded.
-                          </TableCell>
+                          <TableHead className="text-xs font-bold text-brand-forest pl-6">Date</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Ref / EFRIS #</TableHead>
+                          {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
+                          <TableHead className="text-xs font-bold text-brand-forest">Description</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Payment Method</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Delivered / Handled By</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest">Charge / Invoice (Unpaid)</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest">Amount Paid</TableHead>
+                          <TableHead className="text-center text-xs font-bold text-brand-forest">Proof</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Outstanding Balance</TableHead>
                         </TableRow>
-                      ) : (
-                        getFilteredLedger().map((tx: any) => (
-                          <TableRow key={tx.id} className="hover:bg-brand-sage/5 transition-colors">
-                            <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
-                            <TableCell className="font-mono text-xs font-bold text-brand-forest">{tx.ref}</TableCell>
-                            {customer.isParent && (
-                              <TableCell>
-                                <Badge className="bg-brand-sage/30 text-brand-forest text-[9px] border-none font-bold">
-                                  {tx.branchName || "HQ Consolidated"}
-                                </Badge>
-                              </TableCell>
-                            )}
-                            <TableCell className="text-xs text-gray-600 font-medium">{tx.description}</TableCell>
-                            <TableCell className="text-right text-xs font-bold text-red-600">
-                              {tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "-"}
-                            </TableCell>
-                            <TableCell className="text-right text-xs font-bold text-green-600">
-                              {tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "-"}
-                            </TableCell>
-                            <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading">
-                              UGX {tx.balance.toLocaleString()}
+                      </TableHeader>
+                      <TableBody>
+                        {getFilteredLedger().length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-8 text-gray-500 font-body text-xs">
+                              No ledger transactions recorded.
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                        ) : (
+                          getFilteredLedger().map((tx: any) => (
+                            <TableRow key={tx.id} className="hover:bg-brand-sage/5 transition-colors">
+                              <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
+                              <TableCell className="text-xs">
+                                <div className="font-mono font-bold text-brand-forest">{tx.ref}</div>
+                                {tx.efrisNumber && tx.efrisNumber !== "-" && (
+                                  <div className="text-[10px] text-gray-400 font-semibold">{tx.efrisNumber}</div>
+                                )}
+                              </TableCell>
+                              {customer.isParent && (
+                                <TableCell>
+                                  <Badge className="bg-brand-sage/30 text-brand-forest text-[9px] border-none font-bold">
+                                    {tx.branchName || "HQ Consolidated"}
+                                  </Badge>
+                                </TableCell>
+                              )}
+                              <TableCell className="text-xs text-gray-600 font-medium whitespace-nowrap">{tx.description}</TableCell>
+                              <TableCell className="text-xs">
+                                {tx.type === "invoice" ? (
+                                  tx.efrisNumber && tx.efrisNumber !== "-" ? (
+                                    <Badge className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
+                                      EFRIS Invoice
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
+                                      Farm Invoice
+                                    </Badge>
+                                  )
+                                ) : tx.paymentMethod && tx.paymentMethod !== "-" ? (
+                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
+                                    {tx.paymentMethod}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-gray-400 font-medium">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                                {tx.deliveredBy && tx.deliveredBy !== "-" ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Dispatched By</span>
+                                    <span>{tx.deliveredBy}</span>
+                                  </div>
+                                ) : tx.receivedBy && tx.receivedBy !== "-" ? (
+                                  <div className="flex flex-col">
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Received By</span>
+                                    <span>{tx.receivedBy}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-red-600">
+                                {tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "-"}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-bold text-green-600">
+                                {tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "-"}
+                              </TableCell>
+                              <TableCell className="text-center text-xs">
+                                {tx.proofDoc ? (
+                                  <Button 
+                                    variant="ghost" 
+                                    onClick={() => setSelectedProofTx(tx)}
+                                    className="h-7 px-2.5 bg-brand-sage/30 hover:bg-brand-sage/50 text-brand-forest font-extrabold text-[10px] gap-1 rounded-lg border-none"
+                                  >
+                                    <FileText size={12} />
+                                    View Proof
+                                  </Button>
+                                ) : (
+                                  <span className="text-gray-400 font-medium">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading">
+                                UGX {tx.balance.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -684,6 +744,131 @@ export default function CustomerDetailPage() {
               </div>
 
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* VERIFY PROOF DOCUMENT MODAL */}
+      {selectedProofTx && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center justify-between border-b border-brand-sage/20">
+              <div className="flex items-center gap-2">
+                <FileText size={20} className="text-brand-yellow" />
+                <div>
+                  <h3 className="font-heading font-bold text-base">Digital Document Verification</h3>
+                  <p className="text-[10px] text-white/70">Secure, read-only system audit proof ledger verification</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedProofTx(null)}
+                className="text-white/60 hover:text-white text-xs font-bold bg-white/10 hover:bg-white/20 h-6 px-2 rounded-lg transition-colors border-none"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Paper Receipt Mockup Graphic */}
+              <div className="bg-amber-50/15 border-2 border-dashed border-gray-300 rounded-2xl p-5 font-mono text-xs text-gray-800 space-y-4 max-w-sm mx-auto shadow-inner relative overflow-hidden">
+                {/* Receipt Header */}
+                <div className="text-center border-b border-dashed border-gray-300 pb-3">
+                  <p className="font-extrabold uppercase text-[12px] tracking-wider text-brand-forest">LOKO HARVEST FARM LTD</p>
+                  <p className="text-[9px] text-gray-400">P.O. Box 7244, Mukono, Uganda</p>
+                  <p className="text-[9px] text-gray-400">Tel: +256 700 100 200</p>
+                  <div className={`mt-2 text-[9px] font-extrabold py-0.5 px-2 rounded uppercase inline-block ${
+                    selectedProofTx.type === "invoice" 
+                      ? (selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800")
+                      : "bg-blue-100 text-blue-800"
+                  }`}>
+                    {selectedProofTx.type === "invoice" 
+                      ? (selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" ? "EFRIS Fiscal Invoice" : "Farm Standard Invoice")
+                      : "Payment Receipt Voucher"
+                    }
+                  </div>
+                </div>
+
+                {/* Receipt Metadata */}
+                <div className="space-y-1.5 text-[9px]">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">DATE:</span>
+                    <span className="font-bold">{format(new Date(selectedProofTx.date), "dd/MM/yyyy")}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">REF NO:</span>
+                    <span className="font-bold">{selectedProofTx.ref}</span>
+                  </div>
+                  {selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">EFRIS NO:</span>
+                      <span className="font-bold text-red-600">{selectedProofTx.efrisNumber}</span>
+                    </div>
+                  )}
+                  {selectedProofTx.paymentMethod && selectedProofTx.paymentMethod !== "-" && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">METHOD:</span>
+                      <span className="font-bold">{selectedProofTx.paymentMethod}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">CUSTOMER:</span>
+                    <span className="font-bold">{customer.name}</span>
+                  </div>
+                </div>
+
+                {/* Amount Table */}
+                <div className="border-t border-b border-dashed border-gray-300 py-3 text-[10px]">
+                  <div className="flex justify-between font-bold text-gray-500 uppercase text-[8px] mb-1">
+                    <span>Description</span>
+                    <span>Amount</span>
+                  </div>
+                  <div className="flex justify-between text-gray-700 font-semibold mb-2">
+                    <span>{selectedProofTx.description}</span>
+                    <span>
+                      UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-extrabold text-brand-forest border-t border-dashed border-gray-200 pt-1.5 text-xs">
+                    <span>TOTAL VALUE</span>
+                    <span>UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Handled By */}
+                <div className="text-[9px] text-gray-500 space-y-1">
+                  {selectedProofTx.deliveredBy && selectedProofTx.deliveredBy !== "-" && (
+                    <div>
+                      <span className="text-gray-400">DISPATCHED BY:</span> <strong className="text-gray-700">{selectedProofTx.deliveredBy}</strong>
+                    </div>
+                  )}
+                  {selectedProofTx.receivedBy && selectedProofTx.receivedBy !== "-" && (
+                    <div>
+                      <span className="text-gray-400">COLLECTED BY:</span> <strong className="text-gray-700">{selectedProofTx.receivedBy}</strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer barcode mockup */}
+                <div className="text-center pt-2 border-t border-dashed border-gray-200">
+                  <div className="inline-block bg-gray-900 text-white font-mono tracking-widest text-[8px] py-1.5 px-3 rounded uppercase font-bold">
+                    ||||| | |||| ||| || ||| | {selectedProofTx.ref}
+                  </div>
+                  <p className="text-[8px] text-gray-400 mt-1 uppercase font-semibold text-center w-full">Thank you for doing business with Loko Harvest!</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5">
+                <Button 
+                  onClick={() => setSelectedProofTx(null)}
+                  className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 w-full"
+                >
+                  Verify & Close Audit
+                </Button>
+              </div>
+            </div>
 
           </div>
         </div>
