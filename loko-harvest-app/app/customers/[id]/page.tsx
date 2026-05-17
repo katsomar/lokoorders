@@ -280,21 +280,21 @@ export default function CustomerDetailPage() {
                     Standalone Client
                   </Badge>
                 )}
-                <Badge className="bg-white/10 text-white border-none text-[10px] capitalize">{customer.type}</Badge>
+                <Badge className="bg-brand-sage text-brand-forest border-none text-[10px] font-bold capitalize">{customer.type}</Badge>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2 border-white/20 text-white hover:bg-white/10">
-              <Printer size={18} />
+          <div className="flex items-center gap-2.5">
+            <Button variant="outline" className="gap-1.5 border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm">
+              <Printer size={15} />
               Print Ledger Statement
             </Button>
             <Button 
               onClick={() => setShowPaymentModal(true)}
-              className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold shadow-md"
+              className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-extrabold shadow-sm h-9.5 px-4 rounded-xl text-xs"
             >
-              <Plus size={18} />
+              <Plus size={15} />
               Record Payment Receipt
             </Button>
           </div>

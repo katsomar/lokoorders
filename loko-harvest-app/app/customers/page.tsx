@@ -212,8 +212,8 @@ export default function CustomersPage() {
             <h1 className="text-2xl font-bold text-brand-forest font-heading">Customer Directory & Branches</h1>
             <p className="text-gray-500 font-body">Manage unified corporate customer structures, branches, balances and credit limits</p>
           </div>
-          <Button className="gap-2 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-bold border-none shadow-md">
-            <Plus size={18} />
+          <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs">
+            <Plus size={15} />
             Add HQ / Customer
           </Button>
         </div>
@@ -256,176 +256,173 @@ export default function CustomersPage() {
             </Button>
           </div>
         </div>
-
-        {/* Customers Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-brand-sage/50 overflow-hidden">
-          <Table>
-            <TableHeader className="bg-gray-50/70 border-b border-brand-sage/40">
-              <TableRow>
-                <TableHead className="w-[40px]"></TableHead>
-                <TableHead className="text-brand-forest font-bold">HQ Customer / Branch Name</TableHead>
-                <TableHead className="text-brand-forest font-bold">Delivery Zone</TableHead>
-                <TableHead className="text-brand-forest font-bold">Account Level</TableHead>
-                <TableHead className="text-brand-forest font-bold">Contact Person</TableHead>
-                <TableHead className="text-right text-brand-forest font-bold">Outstanding Balance</TableHead>
-                <TableHead className="text-right text-brand-forest font-bold">Credit Limit</TableHead>
-                <TableHead className="text-right text-brand-forest font-bold w-[80px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredCustomers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500 font-body">
-                    No customers found matching the search criteria.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredCustomers.map((customer) => {
-                  const isExpanded = expandedParents.includes(customer.id);
-                  const consolidatedBalance = getConsolidatedBalance(customer);
-                  
-                  return (
-                    <React.Fragment key={customer.id}>
-                      
-                      {/* Parent Corporate Row */}
-                      <TableRow className={`hover:bg-brand-sage/10 transition-colors ${customer.isParent ? 'font-semibold bg-gray-50/50' : ''}`}>
-                        <TableCell className="p-0 text-center">
-                          {customer.isParent && (
-                            <button 
-                              onClick={() => toggleParent(customer.id)}
-                              className="p-2 text-brand-forest hover:bg-brand-sage/30 rounded-lg transition-colors"
-                            >
-                              {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                            </button>
-                          )}
-                        </TableCell>
-                        
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {customer.isParent ? (
-                              <Building2 size={16} className="text-brand-forest" />
-                            ) : (
-                              <User size={16} className="text-brand-mid" />
-                            )}
-                            <Link 
-                              href={`/customers/${customer.id}`} 
-                              className="font-bold text-brand-forest hover:underline hover:text-[#12421D] transition-colors"
-                            >
-                              {customer.name}
-                            </Link>
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell>
-                          <div className="flex items-center gap-1 text-xs text-gray-600 font-medium">
-                            <MapPin size={12} className="text-brand-mid" />
-                            {customer.zone}
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell>
+        {/* Customers Cards Group */}
+        {filteredCustomers.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-brand-sage/50 p-12 text-center text-gray-500 font-body">
+            No customers found matching the search criteria.
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {filteredCustomers.map((customer) => {
+              const isExpanded = expandedParents.includes(customer.id);
+              const consolidatedBalance = getConsolidatedBalance(customer);
+              const hasBranches = customer.isParent && customer.branches.length > 0;
+              
+              return (
+                <div 
+                  key={customer.id} 
+                  className="bg-white rounded-2xl shadow-sm border border-brand-sage/40 overflow-hidden hover:shadow-md transition-all duration-300"
+                >
+                  {/* HQ/Parent Corporate Profile Header Block */}
+                  <div className="bg-gray-50/50 px-6 py-4.5 border-b border-brand-sage/20 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                    {/* Left Column: Name & Account Level */}
+                    <div className="flex items-start gap-3.5">
+                      <div className="p-2.5 bg-brand-forest/10 rounded-xl mt-0.5 text-brand-forest">
+                        {customer.isParent ? <Building2 size={20} /> : <User size={20} />}
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link 
+                            href={`/customers/${customer.id}`} 
+                            className="font-black text-brand-forest text-base hover:underline font-heading"
+                          >
+                            {customer.name}
+                          </Link>
                           {customer.isParent ? (
-                            <Badge className="bg-brand-forest text-white border-none text-[10px]">
+                            <Badge className="bg-brand-forest text-white border-none text-[9px] py-0.5 px-2 font-extrabold uppercase tracking-wider rounded-lg">
                               Corporate HQ ({customer.branches.length} Branches)
                             </Badge>
                           ) : (
-                            <Badge className="bg-gray-100 text-gray-700 border-none text-[10px]">
+                            <Badge className="bg-brand-sage/30 text-brand-forest border-none text-[9px] py-0.5 px-2 font-extrabold uppercase tracking-wider rounded-lg">
                               Standalone
                             </Badge>
                           )}
-                        </TableCell>
+                        </div>
                         
-                        <TableCell>
-                          <div className="text-xs">
-                            <p className="font-bold text-gray-800">{customer.contact_person}</p>
-                            <p className="text-gray-400 font-medium">{customer.phone}</p>
-                          </div>
-                        </TableCell>
-                        
-                        <TableCell className="text-right">
-                          <span className={`font-black ${consolidatedBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            UGX {consolidatedBalance.toLocaleString()}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-xs text-gray-500 font-medium">
+                          <span className="flex items-center gap-1">
+                            <MapPin size={13} className="text-brand-mid" />
+                            {customer.zone}
                           </span>
-                        </TableCell>
-                        
-                        <TableCell className="text-right text-gray-500 font-bold text-xs">
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <span>Contact: <strong className="text-gray-700">{customer.contact_person}</strong> ({customer.phone})</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right Column: Financial summary and details link */}
+                    <div className="flex flex-wrap items-center gap-6 ml-auto lg:ml-0 w-full lg:w-auto justify-between lg:justify-end border-t lg:border-t-0 border-gray-150/70 pt-3.5 lg:pt-0 mt-2 lg:mt-0">
+                      <div className="text-left">
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Consolidated Balance</p>
+                        <p className={`text-base font-black font-heading mt-0.5 ${consolidatedBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          UGX {consolidatedBalance.toLocaleString()}
+                        </p>
+                      </div>
+
+                      <div className="text-right hidden sm:block">
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">HQ Credit Limit</p>
+                        <p className="text-xs font-bold text-gray-500 mt-1">
                           UGX {customer.credit_limit.toLocaleString()}
-                        </TableCell>
-                        
-                        <TableCell className="text-right">
-                          <Link href={`/customers/${customer.id}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-brand-forest hover:bg-brand-sage/20">
-                              <ChevronRight size={18} />
-                            </Button>
-                          </Link>
-                        </TableCell>
-                      </TableRow>
+                        </p>
+                      </div>
 
-                      {customer.isParent && isExpanded && customer.branches.map((branch) => (
-                        <TableRow 
-                          key={branch.id} 
-                          className="bg-brand-sage/5 hover:bg-brand-sage/10 transition-colors border-l-4 border-brand-mid"
-                        >
-                          <TableCell />
-                          <TableCell className="pl-8">
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-300 font-bold">↳</span>
-                              <Link 
-                                href={`/customers/${branch.id}?parent=${customer.id}`} 
-                                className="font-bold text-gray-700 hover:underline hover:text-brand-forest transition-colors text-xs"
-                              >
-                                {branch.name}
-                              </Link>
-                            </div>
-                          </TableCell>
-                          
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-[11px] text-gray-500 font-bold uppercase tracking-wider">
-                              <MapPin size={10} className="text-brand-mid" />
-                              {branch.zone}
-                            </div>
-                          </TableCell>
-                          
-                          <TableCell>
-                            <Badge className="bg-brand-sage/30 text-brand-forest border-none text-[9px] font-bold">
-                              Branch Location
-                            </Badge>
-                          </TableCell>
-                          
-                          <TableCell>
-                            <div className="text-[11px]">
-                              <p className="font-semibold text-gray-600">{branch.contact_person}</p>
-                              <p className="text-gray-400 font-medium">{branch.phone}</p>
-                            </div>
-                          </TableCell>
-                          
-                          <TableCell className="text-right">
-                            <span className={`font-extrabold text-xs ${branch.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                              UGX {branch.balance.toLocaleString()}
-                            </span>
-                          </TableCell>
-                          
-                          <TableCell className="text-right text-gray-400 font-bold text-[11px]">
-                            UGX {branch.credit_limit.toLocaleString()}
-                          </TableCell>
-                          
-                          <TableCell className="text-right">
-                            <Link href={`/customers/${branch.id}?parent=${customer.id}`}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:bg-brand-sage/30">
-                                <ChevronRight size={14} />
-                              </Button>
-                            </Link>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      <div className="flex items-center gap-2">
+                        <Link href={`/customers/${customer.id}`}>
+                          <Button 
+                            variant="outline" 
+                            className="h-8.5 px-3.5 text-xs font-extrabold gap-1 rounded-xl"
+                          >
+                            View Account
+                            <ChevronRight size={14} />
+                          </Button>
+                        </Link>
 
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                        {hasBranches && (
+                          <Button
+                            variant="secondary"
+                            size="icon"
+                            onClick={() => toggleParent(customer.id)}
+                            className="h-8.5 w-8.5 rounded-xl text-brand-forest hover:bg-brand-sage/40 transition-all duration-200"
+                          >
+                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Collapsible Nested Branches Section */}
+                  {hasBranches && isExpanded && (
+                    <div className="bg-gray-50/20 p-0 border-t border-brand-sage/20">
+                      <div className="px-6 py-2.5 bg-brand-sage/5 border-b border-brand-sage/20 text-[10px] font-black text-brand-forest uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="text-xs">↳</span> Associated Branch Locations
+                      </div>
+                      <Table>
+                        <TableHeader className="bg-white/50 border-b border-brand-sage/20">
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="text-brand-forest font-extrabold pl-8 text-[11px]">Branch Location Name</TableHead>
+                            <TableHead className="text-brand-forest font-extrabold text-[11px]">Delivery Zone</TableHead>
+                            <TableHead className="text-brand-forest font-extrabold text-[11px]">Contact Person</TableHead>
+                            <TableHead className="text-right text-brand-forest font-extrabold text-[11px]">Outstanding Balance</TableHead>
+                            <TableHead className="text-right text-brand-forest font-extrabold text-[11px]">Credit Limit</TableHead>
+                            <TableHead className="text-right text-brand-forest font-extrabold w-[60px]"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {customer.branches.map((branch) => (
+                            <TableRow 
+                              key={branch.id} 
+                              className="bg-white hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0"
+                            >
+                              <TableCell className="pl-8 font-semibold">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-brand-mid font-bold text-xs">↳</span>
+                                  <Link 
+                                    href={`/customers/${branch.id}?parent=${customer.id}`} 
+                                    className="font-bold text-gray-700 hover:underline hover:text-brand-forest transition-colors text-xs"
+                                  >
+                                    {branch.name}
+                                  </Link>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1 text-[11px] text-gray-500 font-bold uppercase tracking-wider">
+                                  <MapPin size={10} className="text-brand-mid" />
+                                  {branch.zone}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-[11px]">
+                                  <p className="font-semibold text-gray-600">{branch.contact_person}</p>
+                                  <p className="text-gray-400 font-medium">{branch.phone}</p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={`font-extrabold text-xs ${branch.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                  UGX {branch.balance.toLocaleString()}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right text-gray-400 font-bold text-[11px]">
+                                UGX {branch.credit_limit.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Link href={`/customers/${branch.id}?parent=${customer.id}`}>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
+                                    <ChevronRight size={14} />
+                                  </Button>
+                                </Link>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
       </div>
     </DashboardLayout>
