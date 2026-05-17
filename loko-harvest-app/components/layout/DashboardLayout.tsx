@@ -72,18 +72,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         animate={{ width: isSidebarOpen ? 240 : 80 }}
         className="relative z-20 flex flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out"
       >
-        <div className="flex h-16 items-center justify-between px-6">
-          {isSidebarOpen && (
-            <motion.span 
+        <div className="flex h-16 items-center justify-between px-5 border-b border-white/10">
+          {isSidebarOpen ? (
+            <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="text-xl font-bold font-heading tracking-tight"
+              className="flex items-center"
             >
-              LOKO <span className="text-brand-yellow">HARVEST</span>
-            </motion.span>
+              <img 
+                src="/logo/loko.png" 
+                alt="Loko Harvest Logo" 
+                className="h-9 w-auto object-contain"
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center justify-center w-6 h-6"
+            >
+              <img 
+                src="/logo/loko.png" 
+                alt="Loko Harvest Logo" 
+                className="h-6 w-auto object-contain"
+              />
+            </motion.div>
           )}
-          <button onClick={toggleSidebar} className="text-white hover:text-brand-yellow">
-            <Menu size={24} />
+          <button onClick={toggleSidebar} className="text-white hover:text-brand-yellow shrink-0">
+            <Menu size={20} />
           </button>
         </div>
 

@@ -69,12 +69,13 @@ export default function LoginPage() {
         transition={{ duration: 0.5 }}
         className="w-full max-w-md"
       >
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-forest text-white shadow-lg">
-            <LogIn size={32} />
-          </div>
-          <h1 className="text-3xl font-bold text-brand-forest font-heading">LOKO Harvest</h1>
-          <p className="text-gray-600 font-body">Orders & Delivery Management System</p>
+        <div className="mb-8 text-center flex flex-col items-center">
+          <img 
+            src="/logo/loko.png" 
+            alt="Loko Harvest Limited Logo" 
+            className="h-24 w-auto object-contain mb-2.5"
+          />
+          <p className="text-xs text-brand-forest font-bold uppercase tracking-widest">Orders & Delivery Portal</p>
         </div>
 
         <Card className="border-none shadow-xl">
