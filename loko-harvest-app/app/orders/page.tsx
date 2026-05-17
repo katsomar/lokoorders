@@ -84,6 +84,13 @@ const mockOrders = [
 export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Dynamic order metrics calculations
+  const totalUrgent = mockOrders.filter(o => o.urgency === "urgent" || o.urgency === "critical").length;
+  const totalPending = mockOrders.filter(o => o.status === "pending").length;
+  const totalDispatched = mockOrders.filter(o => o.status === "dispatched").length;
+  const totalDelivered = mockOrders.filter(o => o.status === "delivered").length;
+  const totalUndelivered = mockOrders.filter(o => o.status !== "delivered").length;
+
   const getUrgencyBadge = (urgency: string) => {
     switch (urgency.toLowerCase()) {
       case 'critical':
@@ -128,6 +135,71 @@ export default function OrdersPage() {
               New Order
             </Button>
           </Link>
+        </div>
+
+        {/* Dynamic Orders Summary Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          
+          {/* Card 1: Urgent / Critical */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Urgent Action</span>
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-2xl font-black text-red-600 font-heading leading-none">{totalUrgent}</h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Critical & Urgent</p>
+            </div>
+          </div>
+
+          {/* Card 2: Pending Approval */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Pending Orders</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-2xl font-black text-gray-700 font-heading leading-none">{totalPending}</h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Awaiting Review</p>
+            </div>
+          </div>
+
+          {/* Card 3: Dispatched */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Dispatched</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-2xl font-black text-purple-600 font-heading leading-none">{totalDispatched}</h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">In Transit</p>
+            </div>
+          </div>
+
+          {/* Card 4: Delivered */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Delivered</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-2xl font-black text-green-600 font-heading leading-none">{totalDelivered}</h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Fulfillments Cleared</p>
+            </div>
+          </div>
+
+          {/* Card 5: Total Undelivered */}
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200 col-span-2 lg:col-span-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Undelivered Pipeline</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-2xl font-black text-brand-forest font-heading leading-none">{totalUndelivered}</h3>
+              <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Active Operations</p>
+            </div>
+          </div>
+
         </div>
 
         {/* Standardized Filters Panel */}

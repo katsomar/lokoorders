@@ -184,7 +184,7 @@ const mockCustomers: Customer[] = [
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [searchTerm, setSearchTerm] = useState("");
-  const [expandedParents, setExpandedParents] = useState<string[]>(["parent-mega", "parent-shoprite"]); // keep open by default for demo
+  const [expandedParents, setExpandedParents] = useState<string[]>([]); // collapsed by default for clean and compact layout
   const [filterType, setFilterType] = useState<string>("all");
 
   // Add Customer modal states
@@ -313,6 +313,11 @@ export default function CustomersPage() {
     if (filterType === "parents") return matchesSearch && customer.isParent;
     return matchesSearch;
   });
+  // Dynamic financial overview calculations
+  const totalCreditLimit = customers.reduce((acc, c) => acc + c.credit_limit, 0);
+  const totalUnpaid = customers.reduce((acc, c) => acc + getConsolidatedBalance(c), 0);
+  const totalPaid = Math.max(0, totalCreditLimit - totalUnpaid);
+  const paymentPercentage = totalCreditLimit > 0 ? Math.round((totalPaid / totalCreditLimit) * 100) : 0;
 
   return (
     <DashboardLayout>
@@ -331,6 +336,96 @@ export default function CustomersPage() {
             <Plus size={15} />
             Add HQ / Customer
           </Button>
+        </div>
+
+        {/* Dynamic Financial Overview Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          
+          {/* Card 1: Circular Progress Bar for Payments Collection */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-5 hover:shadow-md transition-shadow duration-200">
+            <div className="relative h-20 w-20 flex-shrink-0">
+              <svg className="h-full w-full -rotate-90">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="32"
+                  className="stroke-gray-100"
+                  strokeWidth="7"
+                  fill="transparent"
+                />
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="32"
+                  className="stroke-brand-mid transition-all duration-500 ease-in-out"
+                  strokeWidth="7"
+                  fill="transparent"
+                  strokeDasharray={201}
+                  strokeDashoffset={201 - (paymentPercentage / 100) * 201}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-sm font-black text-brand-forest font-heading">{paymentPercentage}%</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Payment Performance</h3>
+              <p className="text-base font-black text-brand-forest font-heading mt-0.5">{paymentPercentage}% Cleared</p>
+              <p className="text-[10px] text-gray-500 font-semibold leading-tight">
+                UGX {totalPaid.toLocaleString()} / UGX {totalCreditLimit.toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {/* Card 2: Total Unpaid Balance */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+            <div className="h-12 w-12 bg-red-50 border border-red-100 rounded-xl flex items-center justify-center text-red-500 flex-shrink-0">
+              <DollarSign size={22} className="stroke-[2.5]" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Unpaid Balance</h3>
+              <p className="text-lg font-black text-red-600 font-heading">
+                UGX {totalUnpaid.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-1 text-[9px] text-red-500 font-bold uppercase">
+                <span>⚠️ Outstanding Receivables</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Total Paid Collection */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+            <div className="h-12 w-12 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-600 flex-shrink-0">
+              <DollarSign size={22} className="stroke-[2.5]" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Cleared Payments</h3>
+              <p className="text-lg font-black text-green-600 font-heading">
+                UGX {totalPaid.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-1 text-[9px] text-green-600 font-bold uppercase">
+                <span>✓ Successfully Collected</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Total Customer Accounts */}
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
+            <div className="h-12 w-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 flex-shrink-0">
+              <Building2 size={22} className="stroke-[2.5]" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Accounts</h3>
+              <p className="text-lg font-black text-brand-forest font-heading">
+                {customers.length} Accounts
+              </p>
+              <div className="flex items-center gap-1 text-[9px] text-gray-500 font-bold uppercase">
+                <span>⚡ {customers.reduce((acc, c) => acc + c.branches.length, 0)} Active Branches</span>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         {/* Filters Panel */}
