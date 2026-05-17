@@ -153,6 +153,32 @@ export default function CustomerDetailPage() {
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProofTx, setSelectedProofTx] = useState<any | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoProgress, setLogoProgress] = useState(0);
+  const [customerLogo, setCustomerLogo] = useState<{ color: string; letter: string } | null>(null);
+
+  const handleSimulateLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    setLogoUploading(true);
+    setLogoProgress(0);
+    
+    const interval = setInterval(() => {
+      setLogoProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setLogoUploading(false);
+          const firstLetter = customer ? customer.name.charAt(0).toUpperCase() : "C";
+          setCustomerLogo({
+            color: "bg-brand-forest text-brand-yellow border border-brand-yellow/30 shadow-md",
+            letter: firstLetter
+          });
+          return 100;
+        }
+        return prev + 20;
+      });
+    }, 200);
+  };
 
   // Find customer by ID. If it's a branch, we construct its branch record.
   const customerId = params.id as string;
@@ -597,6 +623,69 @@ export default function CustomerDetailPage() {
           {/* Contact info sidebar */}
           <div className="space-y-6">
             
+            {/* Corporate Logo Card Upload */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Corporate Identity Logo
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5 flex flex-col items-center text-center space-y-4">
+                <div className="relative group">
+                  {/* Upload Avatar */}
+                  <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border-2 border-dashed border-brand-sage/60 bg-brand-sage/10 text-brand-forest transition-all ${
+                    customerLogo 
+                      ? customerLogo.color 
+                      : customer ? (
+                          customer.id === "cust-shoprite" ? "bg-red-600 text-white" :
+                          customer.id === "cust-kfc" ? "bg-red-800 text-white" :
+                          customer.id === "cust-cj" ? "bg-amber-800 text-white" :
+                          "bg-brand-sage/20 text-brand-forest"
+                        ) : "bg-brand-sage/20 text-brand-forest"
+                  }`}>
+                    {customerLogo ? customerLogo.letter : customer ? customer.name.charAt(0).toUpperCase() : "C"}
+                  </div>
+                  
+                  {/* Hover Upload overlay */}
+                  <label htmlFor="logo-upload-input" className="absolute inset-0 bg-black/40 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px] font-extrabold uppercase">
+                    Upload
+                  </label>
+                  <input 
+                    type="file" 
+                    id="logo-upload-input" 
+                    accept="image/*" 
+                    onChange={handleSimulateLogoUpload} 
+                    className="hidden" 
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-gray-800">{customer ? customer.name : "Corporate Customer"}</h4>
+                  <p className="text-[10px] text-gray-400 font-semibold tracking-wide uppercase">Brand Identity Logo</p>
+                </div>
+
+                {logoUploading ? (
+                  <div className="w-full space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-brand-forest">
+                      <span>Simulating Secure Upload...</span>
+                      <span>{logoProgress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-brand-yellow h-full transition-all duration-200" style={{ width: `${logoProgress}%` }} />
+                    </div>
+                  </div>
+                ) : (
+                  <label 
+                    htmlFor="logo-upload-input" 
+                    className="w-full cursor-pointer h-9 px-4 bg-brand-sage/20 hover:bg-brand-sage/40 text-brand-forest font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-brand-sage/50"
+                  >
+                    <FileText size={14} />
+                    Upload Brand Logo
+                  </label>
+                )}
+              </CardContent>
+            </Card>
+
             {/* HQ Contact Info */}
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
