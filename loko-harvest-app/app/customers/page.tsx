@@ -13,7 +13,11 @@ import {
   MapPin,
   Building2,
   FolderOpen,
-  DollarSign
+  DollarSign,
+  Upload,
+  X,
+  Mail,
+  Phone
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -50,6 +54,8 @@ interface Customer {
   isParent: boolean;
   branches: Branch[];
   balance?: number; // for non-parents
+  logoColor?: string;
+  logoLetter?: string;
 }
 
 const mockCustomers: Customer[] = [
@@ -62,6 +68,8 @@ const mockCustomers: Customer[] = [
     type: "supermarket",
     credit_limit: 30000000,
     isParent: true,
+    logoColor: "bg-red-600 text-white",
+    logoLetter: "S",
     branches: [
       {
         id: "shoprite-lugogo",
@@ -94,6 +102,8 @@ const mockCustomers: Customer[] = [
     type: "supermarket",
     credit_limit: 25000000,
     isParent: true,
+    logoColor: "bg-brand-forest text-brand-yellow border border-brand-yellow/30",
+    logoLetter: "M",
     branches: [
       {
         id: "mega-downtown",
@@ -137,6 +147,8 @@ const mockCustomers: Customer[] = [
     balance: 8400000,
     credit_limit: 10000000,
     isParent: false,
+    logoColor: "bg-red-800 text-white",
+    logoLetter: "K",
     branches: []
   },
   { 
@@ -149,6 +161,8 @@ const mockCustomers: Customer[] = [
     balance: 6200000,
     credit_limit: 8000000,
     isParent: false,
+    logoColor: "bg-amber-800 text-white",
+    logoLetter: "CJ",
     branches: []
   },
   { 
@@ -161,14 +175,112 @@ const mockCustomers: Customer[] = [
     balance: 0,
     credit_limit: 20000000,
     isParent: false,
+    logoColor: "bg-blue-800 text-white",
+    logoLetter: "C",
     branches: []
   },
 ];
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>(mockCustomers);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedParents, setExpandedParents] = useState<string[]>(["parent-mega", "parent-shoprite"]); // keep open by default for demo
   const [filterType, setFilterType] = useState<string>("all");
+
+  // Add Customer modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newContactPerson, setNewContactPerson] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newAddress, setNewAddress] = useState("");
+  const [newZone, setNewZone] = useState("Kampala Central");
+  const [newType, setNewType] = useState("supermarket");
+  const [newCreditLimit, setNewCreditLimit] = useState("10000000");
+  const [newCreditTerms, setNewCreditTerms] = useState("15 Days");
+  const [newInitialBalance, setNewInitialBalance] = useState("0");
+  const [newIsParent, setNewIsParent] = useState(false);
+
+  // Logo customization states
+  const [logoOption, setLogoOption] = useState<"text" | "upload">("text");
+  const [logoText, setLogoText] = useState("");
+  const [logoBgColor, setLogoBgColor] = useState("bg-brand-forest text-brand-yellow border border-brand-yellow/30");
+  const [uploadedLogoLetter, setUploadedLogoLetter] = useState("");
+  const [uploadedLogoColor, setUploadedLogoColor] = useState("");
+
+  const [modalUploading, setModalUploading] = useState(false);
+  const [modalUploadProgress, setModalUploadProgress] = useState(0);
+
+  const handleModalSimulatedUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    setModalUploading(true);
+    setModalUploadProgress(0);
+    const interval = setInterval(() => {
+      setModalUploadProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setModalUploading(false);
+          const firstLetter = newCustomerName ? newCustomerName.charAt(0).toUpperCase() : "C";
+          setUploadedLogoLetter(firstLetter);
+          setUploadedLogoColor("bg-[#1E293B] text-white border-2 border-brand-sage/50 shadow-md");
+          return 100;
+        }
+        return prev + 25;
+      });
+    }, 200);
+  };
+
+  const handleAddCustomerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerName) return;
+
+    let finalLogoColor = "bg-brand-forest text-brand-yellow";
+    let finalLogoLetter = "C";
+
+    if (logoOption === "text") {
+      finalLogoColor = logoBgColor;
+      finalLogoLetter = logoText.toUpperCase() || newCustomerName.charAt(0).toUpperCase();
+    } else {
+      finalLogoColor = uploadedLogoColor || "bg-[#1E293B] text-white border-2 border-brand-sage/50 shadow-md";
+      finalLogoLetter = uploadedLogoLetter || newCustomerName.charAt(0).toUpperCase();
+    }
+
+    const newCustomerObj: Customer = {
+      id: `cust-${Date.now()}`,
+      name: newCustomerName,
+      contact_person: newContactPerson || "N/A",
+      phone: newPhone || "N/A",
+      zone: newZone,
+      type: newType,
+      credit_limit: parseFloat(newCreditLimit) || 0,
+      isParent: newIsParent,
+      branches: [],
+      balance: parseFloat(newInitialBalance) || 0,
+      logoColor: finalLogoColor,
+      logoLetter: finalLogoLetter
+    };
+
+    setCustomers(prev => [newCustomerObj, ...prev]);
+
+    // Reset Form
+    setNewCustomerName("");
+    setNewContactPerson("");
+    setNewPhone("");
+    setNewEmail("");
+    setNewAddress("");
+    setNewZone("Kampala Central");
+    setNewType("supermarket");
+    setNewCreditLimit("10000000");
+    setNewCreditTerms("15 Days");
+    setNewInitialBalance("0");
+    setNewIsParent(false);
+    setLogoOption("text");
+    setLogoText("");
+    setUploadedLogoLetter("");
+    setUploadedLogoColor("");
+
+    setShowAddModal(false);
+  };
 
   const toggleParent = (parentId: string) => {
     setExpandedParents(prev => 
@@ -186,7 +298,7 @@ export default function CustomersPage() {
   };
 
   // Filter logic
-  const filteredCustomers = mockCustomers.filter(customer => {
+  const filteredCustomers = customers.filter(customer => {
     const matchesSearch = 
       customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.contact_person.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -212,7 +324,10 @@ export default function CustomersPage() {
             <h1 className="text-2xl font-bold text-brand-forest font-heading">Customer Directory & Branches</h1>
             <p className="text-gray-500 font-body">Manage unified corporate customer structures, branches, balances and credit limits</p>
           </div>
-          <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs">
+          <Button 
+            onClick={() => setShowAddModal(true)}
+            className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs"
+          >
             <Plus size={15} />
             Add HQ / Customer
           </Button>
@@ -277,8 +392,8 @@ export default function CustomersPage() {
                   <div className="bg-gray-50/50 px-6 py-4.5 border-b border-brand-sage/20 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                     {/* Left Column: Name & Account Level */}
                     <div className="flex items-start gap-3.5">
-                      <div className="p-2.5 bg-brand-forest/10 rounded-xl mt-0.5 text-brand-forest">
-                        {customer.isParent ? <Building2 size={20} /> : <User size={20} />}
+                      <div className={`h-11 w-11 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${customer.logoColor || "bg-brand-forest text-brand-yellow"}`}>
+                        {customer.logoLetter || customer.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -421,6 +536,326 @@ export default function CustomersPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ADD HQ / CUSTOMER MODAL OVERLAY */}
+        {showAddModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Register New Customer Profile</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Setup standalone clients or corporate consolidated headquarters</p>
+                </div>
+                <Button 
+                  onClick={() => setShowAddModal(false)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleAddCustomerSubmit} className="p-6 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  
+                  {/* LEFT COLUMN: PRIMARY DETAILS */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Company / Customer Name *</label>
+                      <Input 
+                        placeholder="e.g. Shoprite Kampala" 
+                        required 
+                        value={newCustomerName}
+                        onChange={(e) => setNewCustomerName(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 placeholder:text-gray-300 font-bold text-gray-800"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Account Level</label>
+                        <select 
+                          value={newIsParent ? "hq" : "standalone"}
+                          onChange={(e) => setNewIsParent(e.target.value === "hq")}
+                          className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                        >
+                          <option value="standalone">Standalone client</option>
+                          <option value="hq">Corporate HQ Parent</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Client Type</label>
+                        <select 
+                          value={newType}
+                          onChange={(e) => setNewType(e.target.value)}
+                          className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                        >
+                          <option value="supermarket">Supermarket</option>
+                          <option value="restaurant">Restaurant</option>
+                          <option value="hotel">Hotel/Hospitality</option>
+                          <option value="retail">Retail Shop</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Account Manager / Contact Person</label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                        <Input 
+                          placeholder="e.g. Sarah Jane" 
+                          value={newContactPerson}
+                          onChange={(e) => setNewContactPerson(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Financial Email</label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                          <Input 
+                            type="email"
+                            placeholder="billing@company.co.ug" 
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                            className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Contact Phone</label>
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                          <Input 
+                            placeholder="e.g. 0700 123 456" 
+                            value={newPhone}
+                            onChange={(e) => setNewPhone(e.target.value)}
+                            className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fulfillment Delivery Zone</label>
+                      <select 
+                        value={newZone}
+                        onChange={(e) => setNewZone(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="Kampala Central">Kampala Central</option>
+                        <option value="Kololo">Kololo / Acacia</option>
+                        <option value="Nakasero">Nakasero Hill</option>
+                        <option value="Bukoto">Bukoto / Kamwokya</option>
+                        <option value="Oasis Mall">Oasis Mall Zone</option>
+                        <option value="Entebbe">Entebbe Route</option>
+                        <option value="Mukono">Mukono Highway</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Billing Address</label>
+                      <Input 
+                        placeholder="e.g. Plot 4, Acacia Avenue, Kampala" 
+                        value={newAddress}
+                        onChange={(e) => setNewAddress(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* RIGHT COLUMN: BRANDING & FINANCIAL DETAILS */}
+                  <div className="space-y-4 border-l border-brand-sage/20 pl-0 md:pl-5">
+                    
+                    {/* CUSTOM BRANDING LOGO ZONE */}
+                    <div className="bg-gray-50/50 p-4 rounded-xl border border-brand-sage/30">
+                      <label className="text-[10px] text-brand-forest font-black uppercase tracking-wider block mb-2">Corporate Brand Identity Logo</label>
+                      
+                      {/* Logo Type Selector Tabs */}
+                      <div className="flex bg-gray-150 p-1 rounded-lg text-[10px] font-extrabold uppercase mb-3">
+                        <button 
+                          type="button"
+                          onClick={() => setLogoOption("text")}
+                          className={`flex-1 py-1 rounded-md transition-all ${logoOption === "text" ? "bg-white text-brand-forest shadow-sm" : "text-gray-400"}`}
+                        >
+                          📝 Designed Text Logo
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setLogoOption("upload")}
+                          className={`flex-1 py-1 rounded-md transition-all ${logoOption === "upload" ? "bg-white text-brand-forest shadow-sm" : "text-gray-400"}`}
+                        >
+                          📤 Upload Logo File
+                        </button>
+                      </div>
+
+                      {/* Display Preview + Inputs Side-by-Side */}
+                      <div className="flex gap-4 items-center">
+                        {/* Live Designed Logo Preview */}
+                        <div className="flex flex-col items-center gap-1">
+                          <div className={`h-16 w-16 rounded-2xl font-heading font-black text-sm flex items-center justify-center shadow-md select-none border border-black/10 shrink-0 transition-all ${
+                            logoOption === "text" 
+                              ? logoBgColor 
+                              : (uploadedLogoColor || "bg-[#1E293B] text-white border-2 border-brand-sage/50 shadow-md")
+                          }`}>
+                            {logoOption === "text" 
+                              ? (logoText.toUpperCase() || (newCustomerName ? newCustomerName.charAt(0).toUpperCase() : "C"))
+                              : (uploadedLogoLetter || (newCustomerName ? newCustomerName.charAt(0).toUpperCase() : "C"))
+                            }
+                          </div>
+                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wide">Logo Preview</span>
+                        </div>
+
+                        {/* Configuration inputs */}
+                        <div className="flex-1 space-y-2.5">
+                          {logoOption === "text" ? (
+                            <>
+                              <div>
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Logo Abbreviation (Max 3 Chars)</label>
+                                <Input 
+                                  maxLength={3}
+                                  placeholder={newCustomerName ? newCustomerName.slice(0, 2).toUpperCase() : "C"} 
+                                  value={logoText}
+                                  onChange={(e) => setLogoText(e.target.value)}
+                                  className="h-8 text-xs rounded-lg border-brand-sage/40 font-extrabold text-brand-forest uppercase tracking-wider"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Select Designed Theme Color</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {[
+                                    { class: "bg-red-600 text-white", label: "Red" },
+                                    { class: "bg-red-800 text-white", label: "Maroon" },
+                                    { class: "bg-brand-forest text-brand-yellow border border-brand-yellow/30", label: "Forest" },
+                                    { class: "bg-blue-600 text-white", label: "Blue" },
+                                    { class: "bg-amber-600 text-white", label: "Gold" },
+                                    { class: "bg-[#1E293B] text-white", label: "Slate" },
+                                  ].map((theme) => (
+                                    <button
+                                      key={theme.label}
+                                      type="button"
+                                      onClick={() => setLogoBgColor(theme.class)}
+                                      className={`h-4.5 w-4.5 rounded-full border border-black/10 transition-transform ${theme.class} ${logoBgColor === theme.class ? "scale-125 ring-2 ring-brand-forest/60" : "hover:scale-110"}`}
+                                      title={theme.label}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="space-y-2">
+                              <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Select Corporate Logo File</label>
+                              
+                              {modalUploading ? (
+                                <div className="space-y-1.5">
+                                  <div className="flex justify-between items-center text-[9px] font-bold text-brand-forest uppercase">
+                                    <span>Uploading File...</span>
+                                    <span>{modalUploadProgress}%</span>
+                                  </div>
+                                  <div className="w-full bg-gray-200 h-1 rounded-full overflow-hidden">
+                                    <div className="bg-brand-yellow h-full transition-all duration-200" style={{ width: `${modalUploadProgress}%` }} />
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <label htmlFor="modal-logo-input" className="cursor-pointer h-8 px-3 bg-white hover:bg-brand-sage/20 text-brand-forest font-extrabold rounded-lg text-[10px] flex items-center justify-center gap-1 transition-colors border border-brand-sage/50 shadow-sm">
+                                    <Upload size={12} />
+                                    Browse Corporate File
+                                  </label>
+                                  <input 
+                                    type="file" 
+                                    id="modal-logo-input" 
+                                    accept="image/*" 
+                                    onChange={handleModalSimulatedUpload}
+                                    className="hidden" 
+                                  />
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FINANCIAL AUDIT INFO */}
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Credit Terms</label>
+                        <select 
+                          value={newCreditTerms}
+                          onChange={(e) => setNewCreditTerms(e.target.value)}
+                          className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                        >
+                          <option value="7 Days">7 Days Net Terms</option>
+                          <option value="15 Days">15 Days Net Terms</option>
+                          <option value="30 Days">30 Days Net Terms</option>
+                          <option value="Cash Only">Immediate Cash / Cash On Delivery</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Approved Corporate Credit Limit (UGX)</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                          <Input 
+                            type="number"
+                            placeholder="e.g. 10,000,000" 
+                            value={newCreditLimit}
+                            onChange={(e) => setNewCreditLimit(e.target.value)}
+                            className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50 font-mono text-brand-forest font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Opening Outstanding Balance (UGX)</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                          <Input 
+                            type="number"
+                            placeholder="e.g. 0 (Set opening unpaid balance)" 
+                            value={newInitialBalance}
+                            onChange={(e) => setNewInitialBalance(e.target.value)}
+                            className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50 font-mono text-red-500 font-bold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Modal Footer / Actions */}
+                <div className="flex justify-end gap-3 pt-3 border-t border-gray-150/70">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setShowAddModal(false)}
+                    className="h-9.5 px-4.5 rounded-xl text-xs font-bold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10"
+                  >
+                    Cancel Setup
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    className="h-9.5 px-5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs"
+                  >
+                    Confirm & Register Customer
+                  </Button>
+                </div>
+              </form>
+
+            </div>
           </div>
         )}
 

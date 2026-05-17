@@ -287,8 +287,33 @@ export default function CustomerDetailPage() {
             >
               <ChevronLeft size={24} />
             </Button>
+            {/* Circular Corporate Logo Badge */}
+            <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
+              customerLogo 
+                ? customerLogo.color 
+                : customer ? (
+                    customer.id === "parent-shoprite" || customer.id === "shoprite-lugogo" || customer.id === "shoprite-acacia" ? "bg-red-600 text-white" :
+                    customer.id === "parent-mega" || customer.id === "mega-downtown" || customer.id === "mega-nakasero" || customer.id === "mega-entebbe" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                    customer.id === "cust-kfc" ? "bg-red-800 text-white" :
+                    customer.id === "cust-cj" ? "bg-amber-800 text-white" :
+                    customer.id === "cust-carrefour" ? "bg-blue-800 text-white" :
+                    "bg-brand-forest text-brand-yellow"
+                  ) : "bg-brand-forest text-brand-yellow"
+            }`}>
+              {customerLogo 
+                ? customerLogo.letter 
+                : customer ? (
+                    customer.id === "parent-shoprite" || customer.id === "shoprite-lugogo" || customer.id === "shoprite-acacia" ? "S" :
+                    customer.id === "parent-mega" || customer.id === "mega-downtown" || customer.id === "mega-nakasero" || customer.id === "mega-entebbe" ? "M" :
+                    customer.id === "cust-kfc" ? "K" :
+                    customer.id === "cust-cj" ? "CJ" :
+                    customer.id === "cust-carrefour" ? "C" :
+                    customer.name.charAt(0).toUpperCase()
+                  ) : "C"}
+            </div>
+
             <div>
-              <h1 className="text-2xl font-bold text-brand-forest font-heading">{customer.name}</h1>
+              <h1 className="text-2xl font-black text-brand-forest font-heading leading-none">{customer.name}</h1>
               <div className="flex items-center gap-2 mt-1">
                 {customer.isParent ? (
                   <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[10px]">
