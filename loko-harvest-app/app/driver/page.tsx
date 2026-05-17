@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 
 const mockAssignedDeliveries = [
@@ -23,6 +24,12 @@ const mockAssignedDeliveries = [
 
 export default function DriverDashboard() {
   const { user, clearAuth } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    clearAuth();
+    router.push("/login");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-body pb-20">
@@ -43,7 +50,7 @@ export default function DriverDashboard() {
               <Bell size={20} />
               <span className="absolute top-2 right-2 h-2 w-2 bg-brand-yellow rounded-full" />
             </button>
-            <button onClick={clearAuth} className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-red-300">
+            <button onClick={handleLogout} className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-red-300">
               <LogOut size={20} />
             </button>
           </div>
@@ -132,9 +139,9 @@ export default function DriverDashboard() {
           <Bell size={24} />
           <span className="text-[10px] font-bold uppercase">Alerts</span>
         </button>
-        <button className="text-gray-300 flex flex-col items-center gap-1">
+        <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors flex flex-col items-center gap-1">
           <LogOut size={24} />
-          <span className="text-[10px] font-bold uppercase">Profile</span>
+          <span className="text-[10px] font-bold uppercase">Logout</span>
         </button>
       </nav>
     </div>

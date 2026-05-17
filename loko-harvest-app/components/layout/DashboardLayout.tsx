@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   LayoutDashboard, 
@@ -54,9 +54,15 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
   const { user, clearAuth } = useAuth();
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const handleLogout = () => {
+    clearAuth();
+    router.push("/login");
+  };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -119,7 +125,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="p-4 border-t border-white/10">
           <button 
-            onClick={clearAuth}
+            onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-white/70 hover:bg-red-500/10 hover:text-red-400 transition-colors"
           >
             <LogOut size={20} />
