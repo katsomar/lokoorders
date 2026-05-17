@@ -44,8 +44,15 @@ export default function LoginPage() {
       });
 
       if (response.data.success) {
-        setAuth(response.data.data.user, response.data.data.token);
-        router.push("/dashboard/admin"); // Default to admin for now, should be role-based
+        const user = response.data.data.user;
+        setAuth(user, response.data.data.token);
+        
+        // Role-based redirect
+        if (user.role === 'driver') {
+          router.push("/driver");
+        } else {
+          router.push("/dashboard/admin");
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Invalid credentials. Please try again.");

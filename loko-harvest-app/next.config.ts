@@ -10,4 +10,4 @@ const nextConfig: NextConfig = {
   /* config options here */
 };
 
-export default withPWA(nextConfig);
+module.exports = withPWA(nextConfig);
