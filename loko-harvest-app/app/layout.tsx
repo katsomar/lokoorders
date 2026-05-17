@@ -17,6 +17,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "LOKO Harvest ODS",
   description: "Orders & Delivery Management System for Loko Harvest Limited",
+  icons: {
+    icon: "/logo/loko.png",
+  },
 };
 
 export default function RootLayout({
