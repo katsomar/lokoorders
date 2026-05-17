@@ -117,10 +117,12 @@ export default function InvoicesPage() {
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                      <Eye size={18} className="text-brand-forest" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <Link href={`/invoices/${invoice.id}`}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-brand-sage/20 rounded-lg">
+                        <Eye size={18} className="text-brand-forest" />
+                      </Button>
+                    </Link>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-brand-sage/20 rounded-lg">
                       <Download size={18} className="text-gray-400" />
                     </Button>
                   </div>
