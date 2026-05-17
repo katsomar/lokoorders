@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { 
   ChevronLeft, 
   CreditCard, 
@@ -14,11 +15,15 @@ import {
   Mail,
   MapPin,
   Clock,
-  Printer
+  Printer,
+  Building2,
+  ListFilter,
+  DollarSign,
+  Briefcase
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { 
   Table, 
   TableBody, 
@@ -28,216 +33,662 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 
-const mockLedger = [
-  { id: "1", date: "2026-05-16", type: "invoice", ref: "LHI-2026-0042", description: "Order LHO-0042", debit: 4250000, credit: 0, balance: 12500000 },
-  { id: "2", date: "2026-05-15", type: "payment", ref: "LHP-2026-0515", description: "Payment via Bank Transfer", debit: 0, credit: 2000000, balance: 8250000 },
-  { id: "3", date: "2026-05-14", type: "invoice", ref: "LHI-2026-0041", description: "Order LHO-0041", debit: 3500000, credit: 0, balance: 10250000 },
-  { id: "4", date: "2026-05-12", type: "payment", ref: "LHP-2026-0512", description: "Payment via Cash", debit: 0, credit: 5000000, balance: 6750000 },
+// Mock customer directory including parents and standalone accounts
+const allCustomers = [
+  {
+    id: "parent-shoprite",
+    name: "Shoprite Supermarkets (HQ)",
+    contact_person: "John Okello (HQ Sales Manager)",
+    phone: "0772 123 456",
+    email: "corporate@shoprite.co.ug",
+    address: "Plot 3-5, Lugogo Bypass, Kampala",
+    zone: "Multiple Zones",
+    type: "supermarket",
+    credit_terms: "14 Days",
+    credit_limit: 30000000,
+    isParent: true,
+    branches: [
+      { id: "shoprite-lugogo", name: "Shoprite Lugogo Branch", balance: 12500000, zone: "Kampala Central", contact: "John Okello", credit_limit: 15000000 },
+      { id: "shoprite-acacia", name: "Shoprite Acacia Branch", balance: 3200000, zone: "Kololo", contact: "Agnes Nabeta", credit_limit: 15000000 }
+    ],
+    ledger: [
+      { id: "1", date: "2026-05-16", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0042", description: "Order delivery for Lugogo", debit: 4250000, credit: 0, balance: 15700000 },
+      { id: "2", date: "2026-05-15", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "payment", ref: "LHP-2026-0515", description: "Consolidated payment via Bank Transfer", debit: 0, credit: 2000000, balance: 11450000 },
+      { id: "3", date: "2026-05-14", branchId: "shoprite-acacia", branchName: "Acacia", type: "invoice", ref: "LHI-2026-0041", description: "Order delivery for Acacia", debit: 3200000, credit: 0, balance: 13450000 },
+      { id: "4", date: "2026-05-12", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0035", description: "Opening invoice setup", debit: 10250000, credit: 0, balance: 10250000 },
+    ]
+  },
+  {
+    id: "parent-mega",
+    name: "Mega Standard Supermarkets (HQ)",
+    contact_person: "Moses Mukasa (HQ Finance Director)",
+    phone: "0702 444 555",
+    email: "finance@megastandard.co.ug",
+    address: "Chase Complex, Kampala Rd, Kampala",
+    zone: "Multiple Zones",
+    type: "supermarket",
+    credit_terms: "30 Days",
+    credit_limit: 25000000,
+    isParent: true,
+    branches: [
+      { id: "mega-downtown", name: "Mega Standard Downtown", balance: 4500000, zone: "Kampala Central", contact: "Moses Mukasa", credit_limit: 10000000 },
+      { id: "mega-nakasero", name: "Mega Standard Nakasero", balance: 5000000, zone: "Nakasero", contact: "Daniel Lwanga", credit_limit: 10000000 },
+      { id: "mega-entebbe", name: "Mega Standard Entebbe", balance: 3000000, zone: "Entebbe", contact: "Sarah Namubiru", credit_limit: 5000000 }
+    ],
+    ledger: [
+      { id: "1", date: "2026-05-15", branchId: "mega-nakasero", branchName: "Nakasero", type: "invoice", ref: "LHI-2026-0045", description: "Deliveries for Nakasero Branch", debit: 5000000, credit: 0, balance: 12500000 },
+      { id: "2", date: "2026-05-13", branchId: "mega-downtown", branchName: "Downtown", type: "invoice", ref: "LHI-2026-0038", description: "Deliveries for Downtown Branch", debit: 4500000, credit: 0, balance: 7500000 },
+      { id: "3", date: "2026-05-12", branchId: "mega-entebbe", branchName: "Entebbe", type: "invoice", ref: "LHI-2026-0032", description: "Deliveries for Entebbe Branch", debit: 3000000, credit: 0, balance: 3000000 }
+    ]
+  },
+  {
+    id: "cust-kfc",
+    name: "KFC Bukoto",
+    contact_person: "Sarah Jane (Store Manager)",
+    phone: "0701 987 654",
+    email: "bukoto@kfc-uganda.co.ug",
+    address: "Bukoto Street, Kampala",
+    zone: "Bukoto",
+    type: "restaurant",
+    credit_terms: "7 Days",
+    credit_limit: 10000000,
+    isParent: false,
+    branches: [],
+    ledger: [
+      { id: "1", date: "2026-05-16", type: "invoice", ref: "LHI-2026-0043", description: "Dressed Chicken Order Delivery", debit: 5400000, credit: 0, balance: 8400000 },
+      { id: "2", date: "2026-05-14", type: "invoice", ref: "LHI-2026-0039", description: "Dressed Chicken Order Delivery", debit: 3000000, credit: 0, balance: 3000000 }
+    ]
+  },
+  {
+    id: "cust-cj",
+    name: "Café Javas Oasis Mall",
+    contact_person: "Musa Teko",
+    phone: "0755 444 333",
+    email: "oasis@javas.co.ug",
+    address: "Oasis Mall, Kampala Rd, Kampala",
+    zone: "Oasis Mall",
+    type: "restaurant",
+    credit_terms: "7 Days",
+    credit_limit: 8000000,
+    isParent: false,
+    branches: [],
+    ledger: [
+      { id: "1", date: "2026-05-15", type: "invoice", ref: "LHI-2026-0040", description: "Fresh Brown Egg Delivery", debit: 3200000, credit: 0, balance: 6200000 },
+      { id: "2", date: "2026-05-12", type: "invoice", ref: "LHI-2026-0031", description: "Fresh Brown Egg Delivery", debit: 3000000, credit: 0, balance: 3000000 }
+    ]
+  },
+  {
+    id: "cust-carrefour",
+    name: "Carrefour Oasis Mall",
+    contact_person: "Peter Pan",
+    phone: "0788 111 222",
+    email: "oasis@carrefour.co.ug",
+    address: "Oasis Mall Ground Floor, Kampala",
+    zone: "Kampala Central",
+    type: "supermarket",
+    credit_terms: "14 Days",
+    credit_limit: 20000000,
+    isParent: false,
+    branches: [],
+    ledger: []
+  }
 ];
 
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const parentIdParam = searchParams.get("parent");
 
-  const customer = {
-    id: "1",
-    name: "Shoprite Lugogo",
-    contact_person: "John Okello",
-    phone: "0772 123 456",
-    email: "accounts@shoprite.co.ug",
-    address: "Lugogo Bypass, Kampala",
-    zone: "Kampala Central",
-    type: "supermarket",
-    credit_terms: "14 Days",
-    credit_limit: 15000000,
-    current_balance: 12500000,
+  const [activeTab, setActiveTab] = useState<"ledger" | "branches">("ledger");
+  const [ledgerFilter, setLedgerFilter] = useState<string>("all");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentBranch, setPaymentBranch] = useState("all");
+  const [paymentNotes, setPaymentNotes] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Find customer by ID. If it's a branch, we construct its branch record.
+  const customerId = params.id as string;
+  let customer: any = allCustomers.find(c => c.id === customerId);
+  let parentCustomer: any = null;
+
+  if (parentIdParam) {
+    parentCustomer = allCustomers.find(c => c.id === parentIdParam);
+    if (parentCustomer) {
+      const branchInfo = parentCustomer.branches.find((b: any) => b.id === customerId);
+      if (branchInfo) {
+        customer = {
+          id: branchInfo.id,
+          name: branchInfo.name,
+          contact_person: branchInfo.contact,
+          phone: parentCustomer.phone,
+          email: parentCustomer.email,
+          address: `Delivery point at ${branchInfo.zone}`,
+          zone: branchInfo.zone,
+          type: parentCustomer.type,
+          credit_terms: parentCustomer.credit_terms,
+          credit_limit: branchInfo.credit_limit,
+          current_balance: branchInfo.balance,
+          isParent: false,
+          isBranch: true,
+          parentId: parentCustomer.id,
+          parentName: parentCustomer.name,
+          ledger: parentCustomer.ledger.filter((l: any) => l.branchId === branchInfo.id)
+        };
+      }
+    }
+  }
+
+  // Fallback default customer structure
+  if (!customer) {
+    customer = allCustomers[0];
+  }
+
+  // Compute roll-up balance for parent accounts
+  const consolidatedBalance = customer.isParent 
+    ? customer.branches.reduce((acc: number, br: any) => acc + br.balance, 0)
+    : customer.current_balance || 0;
+
+  // Filtered ledger transactions
+  const getFilteredLedger = () => {
+    const rawLedger = customer.ledger || [];
+    if (ledgerFilter === "all") return rawLedger;
+    return rawLedger.filter((tx: any) => tx.branchId === ledgerFilter);
+  };
+
+  const handleRecordPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    setTimeout(() => {
+      // Add transaction locally
+      const debitVal = 0;
+      const creditVal = parseFloat(paymentAmount) || 0;
+      
+      const newTx = {
+        id: Math.random().toString(),
+        date: new Date().toISOString().split("T")[0],
+        branchId: paymentBranch === "all" ? undefined : paymentBranch,
+        branchName: paymentBranch === "all" ? "HQ Consolidated" : customer.branches.find((b: any) => b.id === paymentBranch)?.name?.replace("Branch", "").trim(),
+        type: "payment",
+        ref: `LHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        description: `Payment recorded via portal: ${paymentNotes || "No notes"}`,
+        debit: debitVal,
+        credit: creditVal,
+        balance: consolidatedBalance - creditVal
+      };
+
+      if (customer.ledger) {
+        customer.ledger.unshift(newTx);
+      }
+      
+      // Update local balances
+      if (customer.isParent && paymentBranch !== "all") {
+        const targetBranch = customer.branches.find((b: any) => b.id === paymentBranch);
+        if (targetBranch) {
+          targetBranch.balance = Math.max(0, targetBranch.balance - creditVal);
+        }
+      } else if (!customer.isParent) {
+        customer.current_balance = Math.max(0, customer.current_balance - creditVal);
+      }
+
+      setIsSubmitting(false);
+      setShowPaymentModal(false);
+      setPaymentAmount("");
+      setPaymentNotes("");
+    }, 1200);
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 pb-12">
+      <div className="space-y-6 pb-12 max-w-6xl mx-auto">
+        
+        {/* Top Breadcrumb & Action bar */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => router.push("/customers")}
+              className="text-white hover:bg-white/20 h-10 w-10 rounded-full"
+            >
               <ChevronLeft size={24} />
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-brand-forest font-heading">{customer.name}</h1>
+              <h1 className="text-2xl font-bold text-white font-heading">{customer.name}</h1>
               <div className="flex items-center gap-2 mt-1">
-                <Badge variant="pending" className="bg-brand-sage/50 text-brand-forest">ID: CUST-001</Badge>
-                <Badge variant="processing" className="bg-blue-50 text-blue-600 capitalize">{customer.type}</Badge>
+                {customer.isParent ? (
+                  <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[10px]">
+                    <Building2 size={10} className="mr-1" /> HQ Corporate Account
+                  </Badge>
+                ) : customer.isBranch ? (
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-brand-sage text-brand-forest border-none font-semibold text-[10px]">
+                      Branch Location
+                    </Badge>
+                    <span className="text-white/60 text-xs font-semibold">
+                      of <Link href={`/customers/${customer.parentId}`} className="underline hover:text-brand-yellow">{customer.parentName}</Link>
+                    </span>
+                  </div>
+                ) : (
+                  <Badge className="bg-gray-100/20 text-white border-none font-medium text-[10px]">
+                    Standalone Client
+                  </Badge>
+                )}
+                <Badge className="bg-white/10 text-white border-none text-[10px] capitalize">{customer.type}</Badge>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 border-white/20 text-white hover:bg-white/10">
               <Printer size={18} />
-              Statement
+              Print Ledger Statement
             </Button>
-            <Button className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none">
+            <Button 
+              onClick={() => setShowPaymentModal(true)}
+              className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold shadow-md"
+            >
               <Plus size={18} />
-              Record Payment
+              Record Payment Receipt
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Stats */}
-          <Card className="border-none shadow-sm bg-brand-forest text-white">
+        {/* Dynamic Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          
+          {/* Outstanding Balance card */}
+          <Card className="border-none shadow-xl bg-brand-forest text-white">
             <CardContent className="pt-6">
-              <p className="text-white/60 text-xs font-bold uppercase tracking-wider">Current Balance</p>
-              <h3 className="text-3xl font-bold font-heading mt-1">UGX {customer.current_balance.toLocaleString()}</h3>
-              <div className="mt-4 flex items-center gap-2 text-sm">
-                <Clock size={14} className="text-brand-yellow" />
-                <span className="text-white/80">Next due in 4 days</span>
+              <p className="text-white/60 text-xs font-bold uppercase tracking-wider">
+                {customer.isParent ? "Consolidated Balance" : "Outstanding Balance"}
+              </p>
+              <h3 className="text-3xl font-black font-heading mt-1.5">
+                UGX {consolidatedBalance.toLocaleString()}
+              </h3>
+              
+              <div className="mt-4 flex items-center gap-2 text-xs">
+                <Clock size={14} className="text-brand-yellow animate-pulse" />
+                <span className="text-white/80 font-medium">
+                  {customer.isParent 
+                    ? `Consolidated from ${customer.branches.length} active branches` 
+                    : "Payment due within normal credit cycle"}
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          {/* Credit Limit */}
+          <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Credit Limit</p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1">UGX {customer.credit_limit.toLocaleString()}</h3>
+              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
+                {customer.isParent ? "Group Credit Limit" : "Branch Credit Limit"}
+              </p>
+              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
+                UGX {(customer.credit_limit || 0).toLocaleString()}
+              </h3>
+              
               <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div 
-                  className="bg-brand-amber h-full" 
-                  style={{ width: `${(customer.current_balance / customer.credit_limit) * 100}%` }}
+                  className={`h-full rounded-full ${
+                    (customer.credit_limit || 0) > 0 && (consolidatedBalance / customer.credit_limit) > 0.8 ? "bg-red-500" : "bg-brand-forest"
+                  }`} 
+                  style={{ width: `${customer.credit_limit && customer.credit_limit > 0 ? Math.min(100, (consolidatedBalance / customer.credit_limit) * 100) : 0}%` }}
                 />
               </div>
-              <p className="text-[10px] text-gray-400 mt-2 text-right">83% utilized</p>
+              <p className="text-[10px] text-gray-400 mt-2 font-bold text-right">
+                {customer.credit_limit && customer.credit_limit > 0 ? Math.round((consolidatedBalance / customer.credit_limit) * 100) : 0}% credit utilization
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          {/* Credit terms */}
+          <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Credit Terms</p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1">{customer.credit_terms}</h3>
-              <p className="text-xs text-brand-mid font-medium mt-4">Good Standing</p>
+              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">{customer.credit_terms}</h3>
+              <p className="text-xs text-brand-forest font-bold mt-5 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                Account in Good Standing
+              </p>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-sm">
+          {/* Total Branches / Standalone details */}
+          <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Sales (YTD)</p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1">UGX 45.2M</h3>
-              <p className="text-xs text-green-600 font-medium mt-4 flex items-center gap-1">
-                <Plus size={10} /> 12% vs last year
+              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
+                {customer.isParent ? "Active Branches" : "Account Level"}
+              </p>
+              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
+                {customer.isParent ? `${customer.branches.length} Branches` : "Standalone Point"}
+              </h3>
+              <p className="text-xs text-gray-400 mt-5 font-semibold">
+                {customer.isParent ? "Click 'Branches' tab to view breakdown" : "Accumulates personal outstanding dues"}
               </p>
             </CardContent>
           </Card>
         </div>
 
+        {/* Tab Toggle (Only for Parent Accounts) */}
+        {customer.isParent && (
+          <div className="flex gap-2 border-b border-brand-sage/40 pb-px">
+            <button
+              onClick={() => setActiveTab("ledger")}
+              className={`pb-3 text-sm font-bold border-b-2 px-4 transition-all ${
+                activeTab === "ledger" 
+                  ? "border-brand-forest text-brand-forest" 
+                  : "border-transparent text-gray-500 hover:text-brand-forest"
+              }`}
+            >
+              Consolidated Account Ledger
+            </button>
+            <button
+              onClick={() => setActiveTab("branches")}
+              className={`pb-3 text-sm font-bold border-b-2 px-4 transition-all ${
+                activeTab === "branches" 
+                  ? "border-brand-forest text-brand-forest" 
+                  : "border-transparent text-gray-500 hover:text-brand-forest"
+              }`}
+            >
+              Branch Breakdown ({customer.branches.length})
+            </button>
+          </div>
+        )}
+
+        {/* Content Section based on selected tab */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            {/* Account Ledger */}
-            <Card className="border-none shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between border-b border-brand-sage pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <History size={20} className="text-brand-forest" />
-                  Account Ledger
+          
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* LEDGER TAB */}
+            {activeTab === "ledger" && (
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="bg-gray-50/50 border-b border-brand-sage pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-4">
+                  <div>
+                    <CardTitle className="text-base font-bold text-brand-forest font-heading flex items-center gap-2">
+                      <History size={18} className="text-brand-forest" />
+                      {customer.isParent ? "Consolidated Corporate Ledger" : "Account Transaction Ledger"}
+                    </CardTitle>
+                    <CardDescription className="text-xs">Audit ledger of in-store delivery debits and receipt credits</CardDescription>
+                  </div>
+                  
+                  {/* Branch filter for parents */}
+                  {customer.isParent && (
+                    <div className="flex items-center gap-2">
+                      <ListFilter size={14} className="text-gray-400" />
+                      <select 
+                        value={ledgerFilter} 
+                        onChange={(e) => setLedgerFilter(e.target.value)}
+                        className="text-xs font-bold text-brand-forest border border-brand-sage/60 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="all">All Branches Ledger</option>
+                        {customer.branches.map((b: any) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </CardHeader>
+                
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
+                      <TableRow>
+                        <TableHead className="text-xs font-bold text-brand-forest pl-6">Date</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Ref #</TableHead>
+                        {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
+                        <TableHead className="text-xs font-bold text-brand-forest">Description</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-brand-forest">Debit</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-brand-forest">Credit</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Balance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {getFilteredLedger().length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={customer.isParent ? 7 : 6} className="text-center py-8 text-gray-500 font-body text-xs">
+                            No ledger transactions recorded.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        getFilteredLedger().map((tx: any) => (
+                          <TableRow key={tx.id} className="hover:bg-brand-sage/5 transition-colors">
+                            <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
+                            <TableCell className="font-mono text-xs font-bold text-brand-forest">{tx.ref}</TableCell>
+                            {customer.isParent && (
+                              <TableCell>
+                                <Badge className="bg-brand-sage/30 text-brand-forest text-[9px] border-none font-bold">
+                                  {tx.branchName || "HQ Consolidated"}
+                                </Badge>
+                              </TableCell>
+                            )}
+                            <TableCell className="text-xs text-gray-600 font-medium">{tx.description}</TableCell>
+                            <TableCell className="text-right text-xs font-bold text-red-600">
+                              {tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "-"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-bold text-green-600">
+                              {tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "-"}
+                            </TableCell>
+                            <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading">
+                              UGX {tx.balance.toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* BRANCHES TAB (Only parents) */}
+            {customer.isParent && activeTab === "branches" && (
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+                <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-6 py-4">
+                  <CardTitle className="text-base font-bold text-brand-forest font-heading flex items-center gap-2">
+                    <Building2 size={18} className="text-brand-forest" />
+                    Corporate Branch Allocation Dues
+                  </CardTitle>
+                  <CardDescription className="text-xs">Outstanding ledger balances breakdown by individual delivery point</CardDescription>
+                </CardHeader>
+                
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
+                      <TableRow>
+                        <TableHead className="text-xs font-bold text-brand-forest pl-6">Branch Name</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Delivery Zone</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Branch Contact</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Outstanding Balance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customer.branches.map((branch: any) => (
+                        <TableRow key={branch.id} className="hover:bg-brand-sage/5 transition-colors">
+                          <TableCell className="pl-6 font-bold text-brand-forest">
+                            <Link href={`/customers/${branch.id}?parent=${customer.id}`} className="hover:underline">
+                              {branch.name}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{branch.zone}</TableCell>
+                          <TableCell className="text-xs font-medium text-gray-700">{branch.contact}</TableCell>
+                          <TableCell className="text-right pr-6">
+                            <span className={`font-extrabold text-xs ${branch.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                              UGX {branch.balance.toLocaleString()}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+
+          </div>
+
+          {/* Contact info sidebar */}
+          <div className="space-y-6">
+            
+            {/* HQ Contact Info */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  {customer.isBranch ? "Branch Head Office Contact" : "HQ Corporate Office Details"}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
-                      <TableHead className="text-right">Balance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockLedger.map((tx) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="text-xs whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
-                        <TableCell className="font-mono text-xs font-semibold text-brand-forest">{tx.ref}</TableCell>
-                        <TableCell className="text-xs">{tx.description}</TableCell>
-                        <TableCell className="text-right text-xs font-medium text-red-600">
-                          {tx.debit > 0 ? tx.debit.toLocaleString() : "-"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-medium text-green-600">
-                          {tx.credit > 0 ? tx.credit.toLocaleString() : "-"}
-                        </TableCell>
-                        <TableCell className="text-right text-xs font-bold">
-                          {tx.balance.toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                <button className="w-full py-4 text-sm font-semibold text-brand-forest hover:bg-brand-sage/20 transition-colors">
-                  Load More Transactions
-                </button>
-              </CardContent>
-            </Card>
-          </div>
+              <CardContent className="space-y-5 p-5">
+                <div className="flex gap-3">
+                  <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <User size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Account Manager</p>
+                    <p className="text-xs font-bold text-gray-800">{customer.contact_person}</p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <Phone size={16} />
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Contact Phone</p>
+                    <p className="text-xs font-bold text-gray-800">{customer.phone}</p>
+                  </div>
+                </div>
 
-          <div className="space-y-6">
-            {/* Contact Info */}
-            <Card className="border-none shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Contact Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest">
-                    <User size={20} />
+                <div className="flex gap-3">
+                  <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <Mail size={16} />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">Primary Contact</p>
-                    <p className="text-sm font-bold text-gray-900">{customer.contact_person}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Financial Email</p>
+                    <p className="text-xs font-bold text-gray-800">{customer.email}</p>
                   </div>
                 </div>
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest">
-                    <Phone size={20} />
+
+                <div className="flex gap-3">
+                  <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <MapPin size={16} />
                   </div>
                   <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">Phone Number</p>
-                    <p className="text-sm font-bold text-gray-900">{customer.phone}</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest">
-                    <Mail size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">Email Address</p>
-                    <p className="text-sm font-bold text-gray-900">{customer.email}</p>
-                  </div>
-                </div>
-                <div className="flex gap-4">
-                  <div className="h-10 w-10 rounded-full bg-brand-sage flex items-center justify-center text-brand-forest">
-                    <MapPin size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase">Delivery Zone</p>
-                    <p className="text-sm font-bold text-brand-forest">{customer.zone}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Billing/Intake HQ Address</p>
+                    <p className="text-xs font-bold text-brand-forest">{customer.address}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Quick Actions */}
+            {/* Quick configuration settings */}
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start gap-3 h-12">
-                <CreditCard size={18} className="text-brand-mid" />
-                Adjust Credit Limit
+              <Button variant="outline" className="w-full justify-start gap-3 h-11 border-brand-sage text-brand-forest font-semibold hover:bg-brand-sage/10 text-xs rounded-xl">
+                <CreditCard size={16} className="text-brand-mid" />
+                Adjust General Credit Limits
               </Button>
-              <Button variant="outline" className="w-full justify-start gap-3 h-12">
-                <History size={18} className="text-brand-mid" />
-                Change Credit Terms
+              <Button variant="outline" className="w-full justify-start gap-3 h-11 border-brand-sage text-brand-forest font-semibold hover:bg-brand-sage/10 text-xs rounded-xl">
+                <History size={16} className="text-brand-mid" />
+                Alter Corporate Credit Terms
               </Button>
             </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* RECORD PAYMENT MODAL (WITH BRANCH ROUTING SUPPORT) */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center gap-2">
+              <DollarSign size={20} className="text-brand-yellow" />
+              <div>
+                <h3 className="font-heading font-bold text-base">Record Payment Receipt</h3>
+                <p className="text-[10px] text-white/70">Register incoming customer funds to credit outstanding accounts</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
+              
+              {/* Payment Amount */}
+              <Input
+                label="Received Payment Amount (UGX)"
+                type="number"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+                placeholder="Enter exact receipt value"
+                required
+              />
+
+              {/* Branch Selector (Only if Parent corporate) */}
+              {customer.isParent ? (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-brand-forest block mb-1">
+                    Apply Credit to Branch Account
+                  </label>
+                  <select 
+                    value={paymentBranch}
+                    onChange={(e) => setPaymentBranch(e.target.value)}
+                    className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                  >
+                    <option value="all">Consolidated Payment (Apply to Parent Account)</option>
+                    {customer.branches.map((b: any) => (
+                      <option key={b.id} value={b.id}>{b.name} (Outstanding: UGX {b.balance.toLocaleString()})</option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-gray-400 font-medium mt-1">
+                    Selecting a branch directly decreases that specific branch's balance on seed statement ledgering.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 bg-gray-50 border border-gray-150 rounded-xl text-xs text-gray-500 leading-normal">
+                  Posting directly to outstanding branch statement: <span className="font-bold text-brand-forest">{customer.name}</span>
+                </div>
+              )}
+
+              {/* Notes */}
+              <Input
+                label="Payment Description / Receipt Reference"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                placeholder="E.g. Bank Transfer Ref: #TXN-90234"
+              />
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowPaymentModal(false)}
+                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-bold border-none text-xs rounded-xl h-10 px-6"
+                  isLoading={isSubmitting}
+                >
+                  Post Payment Credit
+                </Button>
+              </div>
+
+            </form>
+
           </div>
         </div>
-      </div>
+      )}
+
     </DashboardLayout>
   );
 }
