@@ -46,6 +46,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-stock', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'index']);
         Route::get('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'snapshots']);
         Route::post('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'createSnapshot']);
+        Route::put('/production-stock/{id}', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'update']);
+        Route::delete('/production-stock/{id}', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'destroy']);
         Route::get('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'index']);
         Route::post('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'store']);
         

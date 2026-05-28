@@ -50,4 +50,30 @@ class ProductionStoreStockController extends Controller
 
         return $this->success(null, 'Daily snapshots generated for ' . $date);
     }
+
+    public function update(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'current_quantity' => 'required|numeric|min:0',
+            'valuation_price' => 'required|numeric|min:0',
+        ]);
+
+        $stock = ProductionStoreStock::findOrFail($id);
+        $stock->update([
+            'current_quantity' => $validated['current_quantity'],
+            'valuation_price' => $validated['valuation_price'],
+            'updated_by' => auth()->id(),
+            'last_updated' => now(),
+        ]);
+
+        return $this->success($stock->load('product'), 'Stock updated successfully');
+    }
+
+    public function destroy($id)
+    {
+        $stock = ProductionStoreStock::findOrFail($id);
+        $stock->delete();
+
+        return $this->success(null, 'Stock record removed successfully');
+    }
 }

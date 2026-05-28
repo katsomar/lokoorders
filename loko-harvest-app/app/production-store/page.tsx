@@ -15,7 +15,8 @@ import {
   TrendingDown,
   Activity,
   CheckCircle,
-  Trash2
+  Trash2,
+  Edit2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,50 @@ export default function ProductionStorePage() {
   const [transferType, setTransferType] = useState<"cream" | "white" | "brown" | "damaged">("cream");
   const [transferQty, setTransferQty] = useState("");
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+
+  // Edit state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<ProductionStockItem | null>(null);
+  const [editQty, setEditQty] = useState("");
+  const [editPrice, setEditPrice] = useState("");
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const handleStartEdit = (item: ProductionStockItem) => {
+    setEditingItem(item);
+    setEditQty(item.quantity.toString());
+    setEditPrice(item.unitValuePrice.toString());
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    setIsSubmittingEdit(true);
+    try {
+      await api.put(`/production-stock/${editingItem.id}`, {
+        current_quantity: parseFloat(editQty) || 0,
+        valuation_price: parseFloat(editPrice) || 0,
+      });
+      alert("Stock updated successfully!");
+      setShowEditModal(false);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update stock.");
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteStock = async (item: ProductionStockItem) => {
+    if (!confirm(`Are you sure you want to delete the stock record for ${item.product}? This will remove it from the table.`)) return;
+    try {
+      await api.delete(`/production-stock/${item.id}`);
+      alert("Stock record deleted successfully!");
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete stock.");
+    }
+  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -323,7 +368,8 @@ export default function ProductionStorePage() {
                     <TableHead className="text-xs font-bold text-brand-forest">Stock Code</TableHead>
                     <TableHead className="text-right text-xs font-bold text-brand-forest">Stock Quantity</TableHead>
                     <TableHead className="text-right text-xs font-bold text-brand-forest">Valuation Price</TableHead>
-                    <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Total Dues Value</TableHead>
+                    <TableHead className="text-right text-xs font-bold text-brand-forest">Total Dues Value</TableHead>
+                    <TableHead className="text-center text-xs font-bold text-brand-forest pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -352,8 +398,26 @@ export default function ProductionStorePage() {
                         <TableCell className="text-right font-bold text-xs text-gray-500">
                           UGX {item.unitValuePrice.toLocaleString()}{" "}<span className="text-[10px] text-gray-400 font-normal">/ {item.unit.replace("s", "")}</span>
                         </TableCell>
-                        <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-sm">
+                        <TableCell className="text-right font-black text-brand-forest font-heading text-sm">
                           UGX {itemValue.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center pr-6">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => handleStartEdit(item)}
+                              className="p-1.5 text-gray-500 hover:text-brand-forest hover:bg-gray-100 rounded-lg transition-colors animate-pulse-subtle"
+                              title="Edit Stock"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStock(item)}
+                              className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Record"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -521,6 +585,62 @@ export default function ProductionStorePage() {
                   isLoading={isSubmittingTransfer}
                 >
                   Confirm Transfer Request
+                </Button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {showEditModal && editingItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center gap-2">
+              <Edit2 size={20} className="text-brand-yellow" />
+              <div>
+                <h3 className="font-heading font-bold text-base">Edit Product Stock Details</h3>
+                <p className="text-[10px] text-white/70">Modify current quantity and active valuation price for {editingItem.product}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
+              
+              <Input
+                label={`Current Stock Quantity (${editingItem.unit})`}
+                type="number"
+                step="0.01"
+                value={editQty}
+                onChange={(e) => setEditQty(e.target.value)}
+                required
+              />
+
+              <Input
+                label="Valuation Price (UGX)"
+                type="number"
+                step="1"
+                value={editPrice}
+                onChange={(e) => setEditPrice(e.target.value)}
+                required
+              />
+
+              <div className="flex justify-end gap-2.5 pt-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowEditModal(false)}
+                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-bold border-none text-xs rounded-xl h-10 px-6 shadow-md"
+                  isLoading={isSubmittingEdit}
+                >
+                  Save Changes
                 </Button>
               </div>
 
