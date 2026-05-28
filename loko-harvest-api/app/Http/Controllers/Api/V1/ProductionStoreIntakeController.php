@@ -50,7 +50,10 @@ class ProductionStoreIntakeController extends Controller
 
             // Update Production Store Stock
             $stock = ProductionStoreStock::firstOrCreate(
-                ['product_id' => $validated['product_id']],
+                [
+                    'product_id' => $validated['product_id'],
+                    'batch_reference' => $validated['batch_number'] ?? null
+                ],
                 ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $validated['valuation_price']]
             );
 

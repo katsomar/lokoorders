@@ -43,6 +43,7 @@ interface ProductionStockItem {
   capacity: number;
   unitValuePrice: number; // Valuation per tray/unit
   category: "cream" | "white" | "brown" | "damaged" | "poultry";
+  batch_reference?: string;
 }
 
 export default function ProductionStorePage() {
@@ -56,6 +57,9 @@ export default function ProductionStorePage() {
   const [transferType, setTransferType] = useState<"cream" | "white" | "brown" | "damaged">("cream");
   const [transferQty, setTransferQty] = useState("");
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+
+  // Batch Filter state
+  const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
 
   // Edit state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -132,7 +136,8 @@ export default function ProductionStorePage() {
           unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
           capacity: cap,
           unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.default_unit_price),
-          category: cat as any
+          category: cat as any,
+          batch_reference: item.batch_reference || 'N/A'
         };
       });
       setStockItems(mappedStock);
@@ -166,11 +171,18 @@ export default function ProductionStorePage() {
     return stockItems.reduce((acc, item) => acc + (item.quantity * item.unitValuePrice), 0);
   };
 
+  const getUniqueBatches = () => {
+    const batches = stockItems.map(item => item.batch_reference || 'N/A');
+    return ["all", ...Array.from(new Set(batches))];
+  };
+
   const getFilteredStock = () => {
-    return stockItems.filter(item => 
-      item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.code.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    return stockItems.filter(item => {
+      const matchesSearch = item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            item.code.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesBatch = selectedBatchFilter === "all" || (item.batch_reference || 'N/A') === selectedBatchFilter;
+      return matchesSearch && matchesBatch;
+    });
   };
 
   // Live Conversion Previews for the transfer dialog
@@ -349,14 +361,27 @@ export default function ProductionStorePage() {
                 <CardDescription className="text-xs">Real-time stock list and corresponding monetary valuation sheet</CardDescription>
               </div>
               
-              <div className="relative w-full sm:w-60">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <Input 
-                  placeholder="Search bulk products..." 
-                  className="pl-9 h-9 text-xs border-brand-sage" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+              <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                <select
+                  value={selectedBatchFilter}
+                  onChange={(e) => setSelectedBatchFilter(e.target.value)}
+                  className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-40"
+                >
+                  <option value="all">All Batches</option>
+                  {getUniqueBatches().filter(b => b !== "all").map(batch => (
+                    <option key={batch} value={batch}>Batch: {batch}</option>
+                  ))}
+                </select>
+
+                <div className="relative w-full sm:w-60">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Input 
+                    placeholder="Search bulk products..." 
+                    className="pl-9 h-9 text-xs border-brand-sage rounded-xl" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
               </div>
             </CardHeader>
             
@@ -364,7 +389,8 @@ export default function ProductionStorePage() {
               <Table>
                 <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
                   <TableRow>
-                    <TableHead className="text-xs font-bold text-brand-forest pl-6">Bulk Product</TableHead>
+                    <TableHead className="text-xs font-bold text-brand-forest pl-6">Batch No</TableHead>
+                    <TableHead className="text-xs font-bold text-brand-forest">Bulk Product</TableHead>
                     <TableHead className="text-xs font-bold text-brand-forest">Stock Code</TableHead>
                     <TableHead className="text-right text-xs font-bold text-brand-forest">Stock Quantity</TableHead>
                     <TableHead className="text-right text-xs font-bold text-brand-forest">Valuation Price</TableHead>
@@ -377,7 +403,12 @@ export default function ProductionStorePage() {
                     const itemValue = item.quantity * item.unitValuePrice;
                     return (
                       <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
-                        <TableCell className="pl-6 font-bold text-brand-forest text-sm">
+                        <TableCell className="pl-6 font-mono text-xs text-gray-700 font-bold">
+                          <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
+                            {item.batch_reference || "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-bold text-brand-forest text-sm">
                           {item.product}
                         </TableCell>
                         <TableCell className="font-mono text-xs text-gray-400 font-bold">{item.code}</TableCell>
