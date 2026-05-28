@@ -10,5 +10,5 @@ class ProductionStoreIntake extends Model
     protected $guarded = [];
 
     public function product() { return $this->belongsTo(Product::class); }
-    public function user() { return $this->belongsTo(User::class, "recorded_by"); }
+    public function user() { return $this->belongsTo(User::class, "received_by"); }
 }

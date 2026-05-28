@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   ArrowDownToLine, 
@@ -30,9 +30,11 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import api from "@/lib/api";
 
 interface ProductionStockItem {
   id: string;
+  product_id: string;
   product: string;
   code: string;
   quantity: number;
@@ -42,32 +44,77 @@ interface ProductionStockItem {
   category: "cream" | "white" | "brown" | "damaged" | "poultry";
 }
 
-const mockProductionStock: ProductionStockItem[] = [
-  { id: "1", product: "Bulk White Eggs", code: "EGG-WHT-BULK", quantity: 2100, unit: "Trays", capacity: 4000, unitValuePrice: 12000, category: "white" },
-  { id: "2", product: "Bulk Cream Eggs", code: "EGG-CRM-BULK", quantity: 1200, unit: "Trays", capacity: 3000, unitValuePrice: 11500, category: "cream" },
-  { id: "3", product: "Bulk Brown Eggs", code: "EGG-BRN-BULK", quantity: 850, unit: "Trays", capacity: 2000, unitValuePrice: 12500, category: "brown" },
-  { id: "4", product: "Loose Damaged Eggs", code: "EGG-DMG-LOOSE", quantity: 4500, unit: "Eggs", capacity: 10000, unitValuePrice: 200, category: "damaged" },
-  { id: "5", product: "Dressed Chicken", code: "POU-DRS-BULK", quantity: 350, unit: "Units", capacity: 1000, unitValuePrice: 22000, category: "poultry" },
-];
-
-const mockIntakes = [
-  { id: "1", date: "2026-05-17 09:30 AM", product: "Bulk White Eggs", quantity: 400, unit: "Trays", batch: "B-0517-A", recorded_by: "Grace Namuli" },
-  { id: "2", date: "2026-05-17 08:00 AM", product: "Loose Damaged Eggs", quantity: 300, unit: "Eggs", batch: "D-0517-A", recorded_by: "Grace Namuli" },
-  { id: "3", date: "2026-05-16 04:00 PM", product: "Bulk Cream Eggs", quantity: 250, unit: "Trays", batch: "B-0516-C", recorded_by: "Grace Namuli" },
-  { id: "4", date: "2026-05-16 02:15 PM", product: "Dressed Chicken", quantity: 120, unit: "Units", batch: "C-0516-X", recorded_by: "Grace Namuli" },
-  { id: "5", date: "2026-05-15 11:30 AM", product: "Bulk Brown Eggs", quantity: 150, unit: "Trays", batch: "B-0515-B", recorded_by: "Grace Namuli" },
-];
-
 export default function ProductionStorePage() {
-  const [stockItems, setStockItems] = useState<ProductionStockItem[]>(mockProductionStock);
-  const [intakeLogs, setIntakeLogs] = useState(mockIntakes);
+  const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
+  const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Transfer state
   const [transferType, setTransferType] = useState<"cream" | "white" | "brown" | "damaged">("cream");
   const [transferQty, setTransferQty] = useState("");
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [stockRes, intakeRes] = await Promise.all([
+        api.get('/production-stock'),
+        api.get('/production-intakes')
+      ]);
+      
+      const stockData = stockRes.data.data || [];
+      const mappedStock: ProductionStockItem[] = stockData.map((item: any) => {
+        let cat = "damaged";
+        if (item.product.code.includes("WHT")) cat = "white";
+        else if (item.product.code.includes("CRM")) cat = "cream";
+        else if (item.product.code.includes("BRN")) cat = "brown";
+        else if (item.product.category === "poultry") cat = "poultry";
+        
+        let cap = 5000;
+        if (cat === "white") cap = 4000;
+        else if (cat === "cream") cap = 3000;
+        else if (cat === "brown") cap = 2000;
+        else if (cat === "damaged") cap = 10000;
+
+        return {
+          id: item.id,
+          product_id: item.product_id,
+          product: item.product.name,
+          code: item.product.code,
+          quantity: parseFloat(item.current_quantity),
+          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
+          capacity: cap,
+          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.default_unit_price),
+          category: cat as any
+        };
+      });
+      setStockItems(mappedStock);
+
+      const mappedIntakes = (intakeRes.data.data.data || []).map((intake: any) => ({
+        id: intake.id,
+        date: new Date(intake.intake_date || intake.created_at).toLocaleString('en-US', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+        }),
+        product: intake.product?.name,
+        quantity: parseFloat(intake.quantity),
+        unit: intake.product?.unit_of_measure === 'trays' ? 'Trays' : intake.product?.unit_of_measure === 'units' ? 'Units' : 'Kg',
+        batch: intake.batch_number || intake.batch_reference || 'N/A',
+        recorded_by: intake.user?.name || 'System'
+      }));
+      setIntakeLogs(mappedIntakes);
+      
+    } catch (err) {
+      console.error("Failed to fetch production store data", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   // Compute valuations
   const calculateTotalValuation = () => {
@@ -120,17 +167,17 @@ export default function ProductionStorePage() {
     }
   };
 
-  const handlePostTransfer = (e: React.FormEvent) => {
+  const handlePostTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseFloat(transferQty) || 0;
     if (qty <= 0) return;
 
     // Verify stock availability
-    const targetCode = transferType === "cream" ? "EGG-CRM-BULK" : 
-                       transferType === "white" ? "EGG-WHT-BULK" :
-                       transferType === "brown" ? "EGG-BRN-BULK" : "EGG-DMG-LOOSE";
+    const targetCode = transferType === "cream" ? "EGG-CRM" : 
+                       transferType === "white" ? "EGG-WHT" :
+                       transferType === "brown" ? "EGG-BRN" : "EGG-DMG";
     
-    const targetItem = stockItems.find(item => item.code === targetCode);
+    const targetItem = stockItems.find(item => item.code.includes(targetCode));
     if (!targetItem || targetItem.quantity < qty) {
       alert(`Insufficient stock! Only ${targetItem?.quantity || 0} ${targetItem?.unit || "items"} available in Production Store.`);
       return;
@@ -138,31 +185,25 @@ export default function ProductionStorePage() {
 
     setIsSubmittingTransfer(true);
     
-    setTimeout(() => {
-      // Deduct from Production Stock
-      setStockItems(prev => prev.map(item => 
-        item.code === targetCode 
-          ? { ...item, quantity: item.quantity - qty } 
-          : item
-      ));
+    try {
+      const response = await api.post("/store-transfers", {
+        product_id: targetItem.product_id,
+        quantity: qty,
+        transfer_date: new Date().toISOString().split('T')[0],
+        notes: `Transfer requested from Production Store UI for ${transferType}`
+      });
 
-      // Append dummy intake/transfer log
-      const newLog = {
-        id: Math.random().toString(),
-        date: new Date().toISOString().replace("T", " ").substring(0, 16),
-        product: `Transfer out: ${targetItem.product}`,
-        quantity: -qty,
-        unit: targetItem.unit,
-        batch: `TRF-${Math.floor(1000 + Math.random() * 9000)}`,
-        recorded_by: "Grace Namuli"
-      };
-      
-      setIntakeLogs(prev => [newLog, ...prev]);
+      if (response.data.success) {
+        alert("Transfer request successful! Converted packaged products are now pending receipt at the Sales Store.");
+        setShowTransferModal(false);
+        setTransferQty("");
+        fetchData(); // Refresh stock and logs
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to process transfer. Please try again.");
+    } finally {
       setIsSubmittingTransfer(false);
-      setShowTransferModal(false);
-      setTransferQty("");
-      alert("Transfer request successful! Converted packaged products are now pending receipt at the Sales Store.");
-    }, 1200);
+    }
   };
 
   return (
@@ -240,10 +281,10 @@ export default function ProductionStorePage() {
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Loose Damaged Eggs</p>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
-                {stockItems.find(item => item.code === "EGG-DMG-LOOSE")?.quantity.toLocaleString()} Eggs
+                {stockItems.find(item => item.code.includes("EGG-DMG"))?.quantity.toLocaleString() || "0"} Eggs
               </h3>
               <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1">
-                Worth UGX {((stockItems.find(item => item.code === "EGG-DMG-LOOSE")?.quantity || 0) * 200).toLocaleString()}
+                Worth UGX {((stockItems.find(item => item.code.includes("EGG-DMG"))?.quantity || 0) * 200).toLocaleString()}
               </p>
             </CardContent>
           </Card>

@@ -29,28 +29,37 @@ class ProductionStoreIntakeController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'intake_date' => 'required|date',
+            'valuation_price' => 'required|numeric|min:0',
             'batch_number' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
         return DB::transaction(function () use ($validated) {
+            $product = \App\Models\Product::findOrFail($validated['product_id']);
+
             $intake = ProductionStoreIntake::create([
                 'intake_date' => $validated['intake_date'],
                 'product_id' => $validated['product_id'],
                 'quantity' => $validated['quantity'],
-                'batch_number' => $validated['batch_number'],
-                'notes' => $validated['notes'],
-                'recorded_by' => auth()->id(),
+                'valuation_price' => $validated['valuation_price'],
+                'unit_of_measure' => $product->unit_of_measure,
+                'batch_reference' => $validated['batch_number'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'received_by' => auth()->id(),
             ]);
 
             // Update Production Store Stock
             $stock = ProductionStoreStock::firstOrCreate(
                 ['product_id' => $validated['product_id']],
-                ['current_quantity' => 0, 'updated_by' => auth()->id()]
+                ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $validated['valuation_price']]
             );
 
             $stock->increment('current_quantity', $validated['quantity']);
-            $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+            $stock->update([
+                'valuation_price' => $validated['valuation_price'],
+                'updated_by' => auth()->id(),
+                'last_updated' => now()
+            ]);
 
             return $this->success($intake->load('product'), 'Intake recorded successfully', 201);
         });
