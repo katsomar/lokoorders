@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   ArrowRightLeft, 
@@ -31,6 +31,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import api from "@/lib/api";
 
 interface SalesStockItem {
   id: string;
@@ -75,7 +76,9 @@ const mockMovements = [
 ];
 
 export default function SalesStorePage() {
-  const [stockItems, setStockItems] = useState<SalesStockItem[]>(mockStock);
+  const [stockItems, setStockItems] = useState<SalesStockItem[]>([]);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "cream" | "white" | "brown" | "other">("all");
   
@@ -86,6 +89,71 @@ export default function SalesStorePage() {
   
   const [calcPacksType, setCalcPacksType] = useState<"single" | "15pack" | "6pack">("15pack");
   const [calcPacksInput, setCalcPacksInput] = useState("40");
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [stockRes, movementsRes] = await Promise.all([
+        api.get('/sales-stock'),
+        api.get('/sales-movements')
+      ]);
+
+      const stockData = stockRes.data.data || [];
+      const mappedStock: SalesStockItem[] = stockData.map((item: any) => {
+        let cat = "other";
+        if (item.product.code.includes("CRM")) cat = "cream";
+        else if (item.product.code.includes("WHT")) cat = "white";
+        else if (item.product.code.includes("BRN")) cat = "brown";
+        else if (item.product.code.includes("DMG")) cat = "damaged";
+        else if (item.product.category === "poultry") cat = "poultry";
+        else if (item.product.category === "by_products") cat = "manure";
+
+        let cap = 1000;
+        if (item.product.code.includes("SGL")) cap = 1500;
+        else if (item.product.code.includes("15P")) cap = 1000;
+        else if (item.product.code.includes("06P")) cap = 2500;
+        else if (item.product.code.includes("TRYS")) cap = 1500;
+        else if (item.product.code.includes("LOOSE")) cap = 5000;
+        else if (item.product.code.includes("DRS")) cap = 500;
+        else if (item.product.code.includes("MNR")) cap = 3000;
+
+        return {
+          id: item.id,
+          product: item.product.name,
+          code: item.product.code,
+          quantity: parseFloat(item.current_quantity),
+          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : item.product.unit_of_measure === 'kg' ? 'Kg' : 'Packs',
+          unitPrice: parseFloat(item.product.default_unit_price),
+          status: parseFloat(item.current_quantity) < 50 ? "low" : "good",
+          category: cat as any,
+          capacity: cap
+        };
+      });
+      setStockItems(mappedStock);
+
+      const movementsData = movementsRes.data.data.data || [];
+      const mappedMovements = movementsData.map((move: any) => ({
+        id: move.id,
+        date: new Date(move.movement_date || move.created_at).toLocaleString('en-US', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+        }),
+        product: move.product?.name,
+        type: move.movement_type,
+        quantity: parseFloat(move.quantity),
+        unit: move.product?.unit_of_measure === 'trays' ? 'Trays' : move.product?.unit_of_measure === 'units' ? 'Units' : 'Packs',
+        ref: move.reference_id ? `REF-${move.reference_id.substring(0, 6)}` : 'N/A'
+      }));
+      setMovements(mappedMovements);
+    } catch (err) {
+      console.error("Failed to fetch sales store data", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const getFilteredStock = () => {
     return stockItems.filter(item => {
@@ -146,6 +214,16 @@ export default function SalesStorePage() {
       };
     }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-forest"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -507,12 +585,12 @@ export default function SalesStorePage() {
               </CardHeader>
               
               <CardContent className="p-0 divide-y divide-brand-sage/30">
-                {mockMovements.map((move) => (
+                {movements.slice(0, 5).map((move) => (
                   <div key={move.id} className="p-3.5 hover:bg-brand-sage/5 transition-colors flex flex-col gap-1 text-xs">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-brand-forest text-xs">{move.product}</span>
-                      <span className={`font-black text-xs ${move.type === 'transfer_in' ? 'text-green-600' : 'text-amber-600'}`}>
-                        {move.type === 'transfer_in' ? '+' : '-'}{move.quantity} {move.unit.toLowerCase()}
+                      <span className={`font-black text-xs ${move.type === 'transfer_in' || move.type === 'return_in' ? 'text-green-600' : 'text-amber-600'}`}>
+                        {move.type === 'transfer_in' || move.type === 'return_in' ? '+' : '-'}{move.quantity} {move.unit.toLowerCase()}
                       </span>
                     </div>
                     

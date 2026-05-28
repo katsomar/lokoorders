@@ -51,6 +51,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'index']);
         Route::post('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'store']);
         
+        // Sales Store
+        Route::get('/sales-stock', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'index']);
+        Route::get('/sales-movements', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'movements']);
+        
         // Notifications
         Route::get('/notifications', [App\Http\Controllers\Api\V1\NotificationController::class, 'index']);
         Route::post('/notifications/{id}/read', [App\Http\Controllers\Api\V1\NotificationController::class, 'markAsRead']);

@@ -34,12 +34,12 @@ class StoreTransferController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            // 1. Check production stock
-            $prodStock = ProductionStoreStock::where('product_id', $validated['product_id'])->first();
+            // 1. Check total production stock
+            $totalQuantity = ProductionStoreStock::where('product_id', $validated['product_id'])->sum('current_quantity');
             
-            if (!$prodStock || $prodStock->current_quantity < $validated['quantity']) {
+            if ($totalQuantity < $validated['quantity']) {
                 return $this->error('Insufficient production store stock', 422, [
-                    'available' => $prodStock->current_quantity ?? 0
+                    'available' => $totalQuantity
                 ]);
             }
 
@@ -52,9 +52,22 @@ class StoreTransferController extends Controller
                 'notes' => $validated['notes'],
             ]);
 
-            // 3. Debit production stock
-            $prodStock->decrement('current_quantity', $validated['quantity']);
-            $prodStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+            // 3. Debit production stock using FIFO (First In First Out)
+            $remainingToDebit = $validated['quantity'];
+            $stocks = ProductionStoreStock::where('product_id', $validated['product_id'])
+                ->where('current_quantity', '>', 0)
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            foreach ($stocks as $stock) {
+                if ($remainingToDebit <= 0) break;
+
+                $debitAmount = min($stock->current_quantity, $remainingToDebit);
+                $stock->decrement('current_quantity', $debitAmount);
+                $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                
+                $remainingToDebit -= $debitAmount;
+            }
 
             // 4. Credit sales stock
             $salesStock = SalesStoreStock::firstOrCreate(
