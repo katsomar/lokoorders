@@ -26,6 +26,7 @@ class ProductionStoreIntakeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'production_store_id' => 'required|exists:production_stores,id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'intake_date' => 'required|date',
@@ -39,6 +40,7 @@ class ProductionStoreIntakeController extends Controller
 
             $intake = ProductionStoreIntake::create([
                 'intake_date' => $validated['intake_date'],
+                'production_store_id' => $validated['production_store_id'],
                 'product_id' => $validated['product_id'],
                 'quantity' => $validated['quantity'],
                 'valuation_price' => $validated['valuation_price'],
@@ -51,6 +53,7 @@ class ProductionStoreIntakeController extends Controller
             // Update Production Store Stock
             $stock = ProductionStoreStock::firstOrCreate(
                 [
+                    'production_store_id' => $validated['production_store_id'],
                     'product_id' => $validated['product_id'],
                     'batch_reference' => $validated['batch_number'] ?? null
                 ],

@@ -27,6 +27,7 @@ class StoreTransferController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'production_store_id' => 'required|exists:production_stores,id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'transfer_date' => 'required|date',
@@ -34,11 +35,13 @@ class StoreTransferController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            // 1. Check total production stock
-            $totalQuantity = ProductionStoreStock::where('product_id', $validated['product_id'])->sum('current_quantity');
+            // 1. Check production stock for this specific store
+            $totalQuantity = ProductionStoreStock::where('production_store_id', $validated['production_store_id'])
+                ->where('product_id', $validated['product_id'])
+                ->sum('current_quantity');
             
             if ($totalQuantity < $validated['quantity']) {
-                return $this->error('Insufficient production store stock', 422, [
+                return $this->error('Insufficient production store stock at the specified store', 422, [
                     'available' => $totalQuantity
                 ]);
             }
@@ -46,15 +49,17 @@ class StoreTransferController extends Controller
             // 2. Create transfer record
             $transfer = StoreTransfer::create([
                 'transfer_date' => $validated['transfer_date'],
+                'production_store_id' => $validated['production_store_id'],
                 'product_id' => $validated['product_id'],
                 'quantity' => $validated['quantity'],
                 'transferred_by' => auth()->id(),
                 'notes' => $validated['notes'],
             ]);
 
-            // 3. Debit production stock using FIFO (First In First Out)
+            // 3. Debit production stock using FIFO (First In First Out) from specified store
             $remainingToDebit = $validated['quantity'];
-            $stocks = ProductionStoreStock::where('product_id', $validated['product_id'])
+            $stocks = ProductionStoreStock::where('production_store_id', $validated['production_store_id'])
+                ->where('product_id', $validated['product_id'])
                 ->where('current_quantity', '>', 0)
                 ->orderBy('created_at', 'asc')
                 ->get();

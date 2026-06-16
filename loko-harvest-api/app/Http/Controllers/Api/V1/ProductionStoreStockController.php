@@ -12,9 +12,11 @@ class ProductionStoreStockController extends Controller
 {
     use ApiResponses;
 
-    public function index()
+    public function index(Request $request)
     {
-        $stock = ProductionStoreStock::with('product')->get();
+        $stock = ProductionStoreStock::with(['product', 'productionStore'])
+            ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id))
+            ->get();
         return $this->success($stock);
     }
 
@@ -36,14 +38,22 @@ class ProductionStoreStockController extends Controller
 
         foreach ($stocks as $stock) {
             DailyStoreSnapshot::updateOrCreate(
-                ['snapshot_date' => $date, 'product_id' => $stock->product_id, 'store_type' => 'production'],
                 [
-                    'opening_quantity' => $stock->current_quantity, // Simplified for now
+                    'snapshot_date' => $date, 
+                    'product_id' => $stock->product_id, 
+                    'store_type' => 'production',
+                    'production_store_id' => $stock->production_store_id
+                ],
+                [
+                    'opening_quantity' => $stock->current_quantity,
+                    'received_quantity' => 0,
+                    'transferred_out_quantity' => 0,
+                    'transferred_in_quantity' => 0,
+                    'dispatched_quantity' => 0,
+                    'returns_in_quantity' => 0,
+                    'wastage_quantity' => 0,
                     'closing_quantity' => $stock->current_quantity,
-                    'intake_quantity' => 0,
-                    'transfer_out_quantity' => 0,
-                    'adjustment_quantity' => 0,
-                    'created_by' => auth()->id() ?? null,
+                    'generated_by' => auth()->id() ?? \App\Models\User::first()?->id,
                 ]
             );
         }

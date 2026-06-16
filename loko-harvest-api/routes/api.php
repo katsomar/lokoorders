@@ -43,6 +43,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/accounts/{customerId}/ledger', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'ledger']);
         
         // Production Store
+        Route::apiResource('production-stores', App\Http\Controllers\Api\V1\ProductionStoreController::class);
+        Route::get('/production-store-transfers', [App\Http\Controllers\Api\V1\ProductionStoreTransferController::class, 'index']);
+        Route::post('/production-store-transfers', [App\Http\Controllers\Api\V1\ProductionStoreTransferController::class, 'store']);
+
         Route::get('/production-stock', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'index']);
         Route::get('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'snapshots']);
         Route::post('/production-stock/snapshots', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'createSnapshot']);

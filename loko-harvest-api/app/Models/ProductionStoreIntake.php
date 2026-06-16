@@ -11,4 +11,5 @@ class ProductionStoreIntake extends Model
 
     public function product() { return $this->belongsTo(Product::class); }
     public function user() { return $this->belongsTo(User::class, "received_by"); }
+    public function productionStore() { return $this->belongsTo(ProductionStore::class); }
 }

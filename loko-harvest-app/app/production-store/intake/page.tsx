@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import api from "@/lib/api";
 
 const intakeSchema = z.object({
+  production_store_id: z.string().min(1, "Production store is required"),
   product_id: z.string().min(1, "Product is required"),
   quantity: z.number().min(0.01, "Quantity must be > 0"),
   intake_date: z.string(),
@@ -38,17 +39,22 @@ export default function ProductionIntakePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+  const [productionStores, setProductionStores] = useState<any[]>([]);
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchData = async () => {
       try {
-        const res = await api.get("/products");
-        setProducts(res.data.data || []);
+        const [prodRes, storeRes] = await Promise.all([
+          api.get("/products"),
+          api.get("/production-stores")
+        ]);
+        setProducts(prodRes.data.data || []);
+        setProductionStores(storeRes.data.data || []);
       } catch (err) {
-        console.error("Failed to fetch products", err);
+        console.error("Failed to fetch products or stores", err);
       }
     };
-    fetchProducts();
+    fetchData();
   }, []);
 
   const {
@@ -69,6 +75,12 @@ export default function ProductionIntakePage() {
   const watchQty = watch("quantity") || 0;
   const watchPrice = watch("valuation_price") || 0;
   const watchBatch = watch("batch_number") || "";
+
+  useEffect(() => {
+    if (productionStores.length > 0) {
+      setValue("production_store_id", productionStores[0].id);
+    }
+  }, [productionStores, setValue]);
 
   useEffect(() => {
     if (watchProductId && products.length > 0) {
@@ -147,10 +159,10 @@ export default function ProductionIntakePage() {
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Select
-                    label="Product Type"
-                    options={productOptions}
-                    {...register("product_id")}
-                    error={errors.product_id?.message}
+                    label="Destination Production Store"
+                    options={productionStores.map((s) => ({ label: `${s.name} (${s.code})`, value: s.id }))}
+                    {...register("production_store_id")}
+                    error={errors.production_store_id?.message}
                     required
                   />
                   <Input
@@ -163,6 +175,13 @@ export default function ProductionIntakePage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Select
+                    label="Product Type"
+                    options={productOptions}
+                    {...register("product_id")}
+                    error={errors.product_id?.message}
+                    required
+                  />
                   <Input
                     label="Quantity Received"
                     type="number"
@@ -172,6 +191,9 @@ export default function ProductionIntakePage() {
                     error={errors.quantity?.message}
                     required
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input
                     label="Valuation Price (UGX)"
                     type="number"
@@ -181,14 +203,14 @@ export default function ProductionIntakePage() {
                     error={errors.valuation_price?.message}
                     required
                   />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Input
                     label="Batch Number"
                     placeholder="e.g. B-0516-A"
                     {...register("batch_number")}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
                   <Input
                     label="Notes / Observations"
                     placeholder="Any quality notes or specific details..."
