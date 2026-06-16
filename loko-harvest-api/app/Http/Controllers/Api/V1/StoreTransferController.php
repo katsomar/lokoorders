@@ -47,13 +47,24 @@ class StoreTransferController extends Controller
                 ]);
             }
 
-            // 2. Create transfer record
+            // 2. Resolve transfer unit price (production valuation rate)
+            $firstStock = ProductionStoreStock::where('production_store_id', $validated['production_store_id'])
+                ->where('product_id', $validated['product_id'])
+                ->where('current_quantity', '>', 0)
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+            $product = \App\Models\Product::findOrFail($validated['product_id']);
+            $transferPrice = $firstStock && $firstStock->valuation_price ? $firstStock->valuation_price : ($product->production_unit_price ?? $product->default_unit_price);
+
+            // Create transfer record
             $transfer = StoreTransfer::create([
                 'transfer_date' => $validated['transfer_date'],
                 'production_store_id' => $validated['production_store_id'],
                 'sales_store_id' => $validated['sales_store_id'],
                 'product_id' => $validated['product_id'],
                 'quantity' => $validated['quantity'],
+                'unit_price' => $transferPrice,
                 'transferred_by' => auth()->id(),
                 'notes' => $validated['notes'],
             ]);

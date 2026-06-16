@@ -52,11 +52,13 @@ interface ProductionStockItem {
 }
 
 export default function ProductionStorePage() {
-  const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
   const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
   const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [productionStores, setProductionStores] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
   
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -134,11 +136,12 @@ export default function ProductionStorePage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [stockRes, intakeRes, storesRes, interRes] = await Promise.all([
+      const [stockRes, intakeRes, storesRes, interRes, productsRes] = await Promise.all([
         api.get('/production-stock'),
         api.get('/production-intakes'),
         api.get('/production-stores'),
-        api.get('/production-store-transfers')
+        api.get('/production-store-transfers'),
+        api.get('/products')
       ]);
       
       const stockData = stockRes.data.data || [];
@@ -163,7 +166,7 @@ export default function ProductionStorePage() {
           quantity: parseFloat(item.current_quantity),
           unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
           capacity: cap,
-          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.default_unit_price),
+          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.production_unit_price || item.product.default_unit_price),
           category: cat as any,
           batch_reference: item.batch_reference || 'N/A',
           production_store_id: item.production_store_id,
@@ -188,6 +191,7 @@ export default function ProductionStorePage() {
 
       setProductionStores(storesRes.data.data || []);
       setInterTransfers(interRes.data.data.data || []);
+      setProducts(productsRes.data.data || []);
       
     } catch (err) {
       console.error("Failed to fetch production store data", err);
@@ -199,6 +203,20 @@ export default function ProductionStorePage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleUpdatePrice = async (productId: string, priceType: "production" | "sales", newPrice: number) => {
+    try {
+      const payload = priceType === "production" 
+        ? { production_unit_price: newPrice }
+        : { sales_unit_price: newPrice };
+      
+      await api.put(`/products/${productId}`, payload);
+      alert("Product price updated successfully!");
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update product price.");
+    }
+  };
 
   // Compute valuations
   const calculateTotalValuation = () => {
@@ -525,6 +543,16 @@ export default function ProductionStorePage() {
             </span>
             {activeTab === "transfers" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-brand-forest rounded-full" />}
           </button>
+          <button 
+            onClick={() => setActiveTab("prices")}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "prices" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+          >
+            <span className="flex items-center gap-1.5">
+              <DollarSign size={16} />
+              Product Prices
+            </span>
+            {activeTab === "prices" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-brand-forest rounded-full" />}
+          </button>
         </div>
 
         {/* TAB CONTENTS */}
@@ -798,7 +826,7 @@ export default function ProductionStorePage() {
             </Card>
 
           </div>
-        ) : (
+        ) : activeTab === "transfers" ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             
             {/* List of completed inter-store transfers */}
@@ -964,6 +992,79 @@ export default function ProductionStorePage() {
               </CardContent>
             </Card>
 
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4">
+                <div>
+                  <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
+                    <DollarSign size={18} className="text-brand-forest" />
+                    Manage Product Production Prices
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Set the internal production/valuation unit prices for products. These are used when calculating production inventory worth and transfer valuations.
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
+                    <TableRow>
+                      <TableHead className="pl-6 text-xs font-bold text-brand-forest">Product Code</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Product Name</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Category</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Unit</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest w-60">Production Price (UGX)</TableHead>
+                      <TableHead className="text-center text-xs font-bold text-brand-forest pr-6 w-32">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {products.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-10 text-gray-400 font-medium">
+                          No products found.
+                        </TableCell>
+                      </TableRow>
+                    ) : products.map((product) => {
+                      const currentVal = editingPrices[product.id] !== undefined
+                        ? editingPrices[product.id]
+                        : (product.production_unit_price !== undefined ? product.production_unit_price : product.default_unit_price).toString();
+                      
+                      return (
+                        <TableRow key={product.id} className="hover:bg-brand-sage/5 transition-colors">
+                          <TableCell className="pl-6 font-mono text-xs font-bold text-gray-505">{product.code}</TableCell>
+                          <TableCell className="font-bold text-sm text-brand-forest">{product.name}</TableCell>
+                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.category}</TableCell>
+                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.unit_of_measure}</TableCell>
+                          <TableCell className="text-right pr-4">
+                            <Input
+                              type="number"
+                              value={currentVal}
+                              onChange={(e) => setEditingPrices({
+                                ...editingPrices,
+                                [product.id]: e.target.value
+                              })}
+                              className="text-right h-9 w-40 ml-auto border-brand-sage rounded-xl font-bold"
+                              placeholder="0.00"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center pr-6">
+                            <Button
+                              onClick={() => handleUpdatePrice(product.id, "production", parseFloat(currentVal) || 0)}
+                              className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-9 px-4 text-xs border-none cursor-pointer"
+                              disabled={parseFloat(currentVal) === (product.production_unit_price !== undefined ? parseFloat(product.production_unit_price) : parseFloat(product.default_unit_price))}
+                            >
+                              Save
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </div>
         )}
 

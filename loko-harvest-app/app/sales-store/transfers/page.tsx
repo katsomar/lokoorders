@@ -116,7 +116,7 @@ export default function StockTransferPage() {
         stockData.forEach((item: any) => {
           const prodId = item.product_id;
           const qty = parseFloat(item.current_quantity) || 0;
-          const price = parseFloat(item.valuation_price) || parseFloat(item.product.default_unit_price) || 0;
+          const price = parseFloat(item.valuation_price) || parseFloat(item.product.production_unit_price) || parseFloat(item.product.default_unit_price) || 0;
           if (aggregated[prodId]) {
             aggregated[prodId].available += qty;
           } else {

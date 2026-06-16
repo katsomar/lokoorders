@@ -19,6 +19,7 @@ Route::prefix('v1')->group(function () {
         // Products
         Route::get('/products', [App\Http\Controllers\Api\V1\ProductController::class, 'index']);
         Route::get('/products/{id}', [App\Http\Controllers\Api\V1\ProductController::class, 'show']);
+        Route::put('/products/{id}', [App\Http\Controllers\Api\V1\ProductController::class, 'update']);
         
         // Customers
         Route::get('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'index']);

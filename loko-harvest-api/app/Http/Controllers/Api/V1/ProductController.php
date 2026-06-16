@@ -34,4 +34,22 @@ class ProductController extends Controller
         $product = Product::create($validated);
         return $this->success($product, 'Product created successfully', 201);
     }
+
+    public function update(Request $request, $id)
+    {
+        $product = Product::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string',
+            'category' => 'sometimes|required|in:eggs,poultry,by_products',
+            'unit_of_measure' => 'sometimes|required|in:trays,kg,units',
+            'default_unit_price' => 'sometimes|required|numeric|min:0',
+            'production_unit_price' => 'sometimes|required|numeric|min:0',
+            'sales_unit_price' => 'sometimes|required|numeric|min:0',
+            'is_active' => 'sometimes|required|boolean',
+        ]);
+
+        $product->update($validated);
+        return $this->success($product, 'Product updated successfully');
+    }
 }
