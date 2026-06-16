@@ -12,7 +12,4 @@ class Invoice extends Model
     public function order() { return $this->belongsTo(Order::class); }
     public function customer() { return $this->belongsTo(Customer::class); }
     public function allocations() { return $this->hasMany(PaymentInvoiceAllocation::class); }
-
-    public function order() { return $this->belongsTo(Order::class); }
-    public function customer() { return $this->belongsTo(Customer::class); }
 }

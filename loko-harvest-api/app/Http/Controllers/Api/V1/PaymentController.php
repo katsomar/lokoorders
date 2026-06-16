@@ -64,12 +64,13 @@ class PaymentController extends Controller
             // Log Transaction
             AccountTransaction::create([
                 'customer_id' => $validated['customer_id'],
+                'type' => 'payment_received',
+                'reference_number' => $payment->payment_number,
+                'description' => "Payment received via " . str_replace('_', ' ', $validated['payment_method']) . ($validated['reference_number'] ? " (#{$validated['reference_number']})" : ""),
+                'debit_amount' => 0.00,
+                'credit_amount' => $validated['amount'],
+                'running_balance' => $account->current_balance,
                 'transaction_date' => $validated['payment_date'],
-                'transaction_type' => 'payment',
-                'amount' => $validated['amount'],
-                'balance_after' => $account->current_balance,
-                'reference_id' => $payment->id,
-                'description' => "Payment received via {$validated['payment_method']}",
                 'created_by' => auth()->id(),
             ]);
 

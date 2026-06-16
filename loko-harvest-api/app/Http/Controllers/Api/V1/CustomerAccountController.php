@@ -33,12 +33,12 @@ class CustomerAccountController extends Controller
     {
         $summary = [
             'total_receivables' => CustomerAccount::sum('current_balance'),
-            'total_invoiced_mtd' => AccountTransaction::where('transaction_type', 'invoice')
+            'total_invoiced_mtd' => AccountTransaction::where('type', 'invoice_raised')
                 ->whereMonth('transaction_date', now()->month)
-                ->sum('amount'),
-            'total_collected_mtd' => AccountTransaction::where('transaction_type', 'payment')
+                ->sum('debit_amount'),
+            'total_collected_mtd' => AccountTransaction::where('type', 'payment_received')
                 ->whereMonth('transaction_date', now()->month)
-                ->sum('amount'),
+                ->sum('credit_amount'),
             'top_debtors' => Customer::with('account')
                 ->get()
                 ->sortByDesc('account.current_balance')

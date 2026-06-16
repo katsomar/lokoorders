@@ -13,7 +13,7 @@ class CustomerController extends Controller
 
     public function index(Request $request)
     {
-        $customers = Customer::with('zone')
+        $customers = Customer::with(['zone', 'account'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('name', 'like', "%{$request->search}%")
                   ->orWhere('contact_person', 'like', "%{$request->search}%");

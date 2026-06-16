@@ -1,22 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Plus, 
   Search, 
-  Filter, 
   MoreVertical, 
   Eye, 
-  FileText, 
-  Truck,
-  ArrowRight,
   Download,
-  Building2
+  Loader2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { 
   Table, 
   TableBody, 
@@ -27,75 +24,94 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-
-const mockOrders = [
-  { 
-    id: "1", 
-    order_number: "LHO-2026-0042", 
-    customer: { name: "Shoprite Lugogo", logoColor: "bg-red-600 text-white", logoLetter: "S" }, 
-    order_date: "2026-05-16", 
-    required_delivery_date: "2026-05-18",
-    urgency: "urgent",
-    status: "pending",
-    total_amount: 4250000
-  },
-  { 
-    id: "2", 
-    order_number: "LHO-2026-0041", 
-    customer: { name: "KFC Bukoto", logoColor: "bg-red-800 text-white", logoLetter: "K" }, 
-    order_date: "2026-05-15", 
-    required_delivery_date: "2026-05-17",
-    urgency: "normal",
-    status: "processing",
-    total_amount: 2100000
-  },
-  { 
-    id: "3", 
-    order_number: "LHO-2026-0040", 
-    customer: { name: "Café Javas", logoColor: "bg-amber-800 text-white", logoLetter: "CJ" }, 
-    order_date: "2026-05-15", 
-    required_delivery_date: "2026-05-17",
-    urgency: "critical",
-    status: "ready_for_dispatch",
-    total_amount: 8500000
-  },
-  { 
-    id: "4", 
-    order_number: "LHO-2026-0039", 
-    customer: { name: "Carrefour Oasis", logoColor: "bg-blue-800 text-white", logoLetter: "C" }, 
-    order_date: "2026-05-14", 
-    required_delivery_date: "2026-05-16",
-    urgency: "normal",
-    status: "dispatched",
-    total_amount: 5400000
-  },
-  { 
-    id: "5", 
-    order_number: "LHO-2026-0038", 
-    customer: { name: "Quality Supermarket", logoColor: "bg-green-700 text-white", logoLetter: "Q" }, 
-    order_date: "2026-05-14", 
-    required_delivery_date: "2026-05-16",
-    urgency: "normal",
-    status: "delivered",
-    total_amount: 3200000
-  },
-];
+import api from "@/lib/api";
 
 export default function OrdersPage() {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [urgencyFilter, setUrgencyFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [perPage, setPerPage] = useState(15);
 
-  // Dynamic order metrics calculations
-  const totalUrgent = mockOrders.filter(o => o.urgency === "urgent" || o.urgency === "critical").length;
-  const totalPending = mockOrders.filter(o => o.status === "pending").length;
-  const totalDispatched = mockOrders.filter(o => o.status === "dispatched").length;
-  const totalDelivered = mockOrders.filter(o => o.status === "delivered").length;
-  const totalUndelivered = mockOrders.filter(o => o.status !== "delivered").length;
+  const [metrics, setMetrics] = useState({
+    totalUrgent: 0,
+    totalPending: 0,
+    totalDispatched: 0,
+    totalDelivered: 0,
+    totalUndelivered: 0
+  });
+
+  // Debounce search term to prevent duplicate API hits
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setCurrentPage(1);
+    }, 450);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  const fetchOrders = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get("/orders", {
+        params: {
+          search: debouncedSearch,
+          status: statusFilter || undefined,
+          urgency: urgencyFilter || undefined,
+          page: currentPage,
+          per_page: 15,
+        }
+      });
+      const responseData = res.data.data;
+      if (responseData) {
+        setOrders(responseData.data || []);
+        setCurrentPage(responseData.current_page || 1);
+        setTotalPages(responseData.last_page || 1);
+        setTotalItems(responseData.total || 0);
+        setPerPage(responseData.per_page || 15);
+      }
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      // Query a larger batch to determine stats across active orders
+      const res = await api.get("/orders", { params: { per_page: 1000 } });
+      const allOrders = res.data.data?.data || [];
+      setMetrics({
+        totalUrgent: allOrders.filter((o: any) => o.urgency === "urgent" || o.urgency === "critical").length,
+        totalPending: allOrders.filter((o: any) => o.status === "pending").length,
+        totalDispatched: allOrders.filter((o: any) => o.status === "dispatched").length,
+        totalDelivered: allOrders.filter((o: any) => o.status === "delivered").length,
+        totalUndelivered: allOrders.filter((o: any) => o.status !== "delivered").length,
+      });
+    } catch (err) {
+      console.error("Failed to load metrics:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
+
+  useEffect(() => {
+    fetchMetrics();
+  }, [orders]);
 
   const getUrgencyBadge = (urgency: string) => {
-    switch (urgency.toLowerCase()) {
-      case 'critical':
+    switch ((urgency || "").toLowerCase()) {
+      case "critical":
         return <Badge className="bg-red-100 text-red-700 border-none text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Critical</Badge>;
-      case 'urgent':
+      case "urgent":
         return <Badge className="bg-orange-100 text-orange-700 border-none text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Urgent</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-600 border-none text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Normal</Badge>;
@@ -103,20 +119,55 @@ export default function OrdersPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pending':
+    switch ((status || "").toLowerCase()) {
+      case "pending":
         return <Badge className="bg-gray-100 text-gray-500 border border-gray-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Pending</Badge>;
-      case 'processing':
+      case "processing":
         return <Badge className="bg-blue-100 text-blue-700 border border-blue-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Processing</Badge>;
-      case 'ready_for_dispatch':
+      case "ready_for_dispatch":
         return <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Ready</Badge>;
-      case 'dispatched':
+      case "dispatched":
         return <Badge className="bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Dispatched</Badge>;
-      case 'delivered':
+      case "delivered":
         return <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Delivered</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700 text-[10px] font-bold py-0.5 px-2 rounded-lg">{status}</Badge>;
     }
+  };
+
+  const getLogoColor = (name: string = "") => {
+    const lower = name.toLowerCase();
+    if (lower.includes("shoprite")) return "bg-red-600 text-white";
+    if (lower.includes("kfc")) return "bg-red-800 text-white";
+    if (lower.includes("javas")) return "bg-amber-800 text-white";
+    if (lower.includes("mega")) return "bg-blue-800 text-white";
+    return "bg-brand-forest text-brand-yellow";
+  };
+
+  const exportCSV = () => {
+    if (orders.length === 0) return;
+    const headers = ["Order Number", "Customer", "Fulfillment Store", "Urgency", "Status", "Order Date", "Required Delivery", "Total Amount"];
+    const rows = orders.map(o => [
+      o.order_number,
+      o.customer?.name || "N/A",
+      o.sales_store?.name || "N/A",
+      o.urgency,
+      o.status,
+      o.order_date,
+      o.required_delivery_date,
+      o.total_amount
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `orders_pipeline_${format(new Date(), "yyyy-MM-dd")}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -144,10 +195,10 @@ export default function OrdersPage() {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Urgent Action</span>
-              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <span className={`h-2 w-2 rounded-full bg-red-500 ${metrics.totalUrgent > 0 ? "animate-pulse" : ""}`} />
             </div>
             <div className="mt-3">
-              <h3 className="text-2xl font-black text-red-600 font-heading leading-none">{totalUrgent}</h3>
+              <h3 className="text-2xl font-black text-red-600 font-heading leading-none">{metrics.totalUrgent}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Critical & Urgent</p>
             </div>
           </div>
@@ -159,7 +210,7 @@ export default function OrdersPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
             </div>
             <div className="mt-3">
-              <h3 className="text-2xl font-black text-gray-700 font-heading leading-none">{totalPending}</h3>
+              <h3 className="text-2xl font-black text-gray-700 font-heading leading-none">{metrics.totalPending}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Awaiting Review</p>
             </div>
           </div>
@@ -168,10 +219,10 @@ export default function OrdersPage() {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Dispatched</span>
-              <span className="h-1.5 w-1.5 rounded-full bg-purple-500 animate-pulse" />
+              <span className={`h-1.5 w-1.5 rounded-full bg-purple-500 ${metrics.totalDispatched > 0 ? "animate-pulse" : ""}`} />
             </div>
             <div className="mt-3">
-              <h3 className="text-2xl font-black text-purple-600 font-heading leading-none">{totalDispatched}</h3>
+              <h3 className="text-2xl font-black text-purple-600 font-heading leading-none">{metrics.totalDispatched}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">In Transit</p>
             </div>
           </div>
@@ -183,7 +234,7 @@ export default function OrdersPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
             </div>
             <div className="mt-3">
-              <h3 className="text-2xl font-black text-green-600 font-heading leading-none">{totalDelivered}</h3>
+              <h3 className="text-2xl font-black text-green-600 font-heading leading-none">{metrics.totalDelivered}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Fulfillments Cleared</p>
             </div>
           </div>
@@ -195,7 +246,7 @@ export default function OrdersPage() {
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
             </div>
             <div className="mt-3">
-              <h3 className="text-2xl font-black text-brand-forest font-heading leading-none">{totalUndelivered}</h3>
+              <h3 className="text-2xl font-black text-brand-forest font-heading leading-none">{metrics.totalUndelivered}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Active Operations</p>
             </div>
           </div>
@@ -204,22 +255,52 @@ export default function OrdersPage() {
 
         {/* Standardized Filters Panel */}
         <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <Input 
-              placeholder="Search by order # or customer..." 
-              className="pl-10 h-10 text-xs rounded-xl border-brand-sage/50"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex flex-col md:flex-row gap-3 w-full lg:max-w-3xl items-stretch md:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Input 
+                placeholder="Search by order # or customer..." 
+                className="pl-10 h-10 text-xs rounded-xl border-brand-sage/50"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            
+            <div className="w-[160px]">
+              <Select
+                value={statusFilter}
+                onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
+                options={[
+                  { label: "All Statuses", value: "" },
+                  { label: "Pending", value: "pending" },
+                  { label: "Processing", value: "processing" },
+                  { label: "Ready", value: "ready_for_dispatch" },
+                  { label: "Dispatched", value: "dispatched" },
+                  { label: "Delivered", value: "delivered" }
+                ]}
+              />
+            </div>
+
+            <div className="w-[160px]">
+              <Select
+                value={urgencyFilter}
+                onChange={(e) => { setUrgencyFilter(e.target.value); setCurrentPage(1); }}
+                options={[
+                  { label: "All Urgencies", value: "" },
+                  { label: "Normal", value: "normal" },
+                  { label: "Urgent", value: "urgent" },
+                  { label: "Critical", value: "critical" }
+                ]}
+              />
+            </div>
           </div>
           
           <div className="flex items-center gap-3 w-full lg:w-auto">
-            <Button variant="outline" className="gap-1.5 h-9.5 px-4 text-xs font-bold rounded-xl border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 w-full lg:w-auto">
-              <Filter size={14} />
-              Filter Pipeline
-            </Button>
-            <Button variant="outline" className="gap-1.5 h-9.5 px-4 text-xs font-bold rounded-xl border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 w-full lg:w-auto">
+            <Button 
+              variant="outline" 
+              onClick={exportCSV} 
+              className="gap-1.5 h-9.5 px-4 text-xs font-bold rounded-xl border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 w-full lg:w-auto"
+            >
               <Download size={14} />
               Export CSV
             </Button>
@@ -227,84 +308,125 @@ export default function OrdersPage() {
         </div>
 
         {/* Improved Orders Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-brand-sage/40 overflow-hidden">
-          <Table>
-            <TableHeader className="bg-gray-50/70 border-b border-brand-sage/30">
-              <TableRow>
-                <TableHead className="text-xs font-bold text-brand-forest pl-6">Order #</TableHead>
-                <TableHead className="text-xs font-bold text-brand-forest">Customer Details</TableHead>
-                <TableHead className="text-xs font-bold text-brand-forest">Order Date</TableHead>
-                <TableHead className="text-xs font-bold text-brand-forest">Required Delivery</TableHead>
-                <TableHead className="text-xs font-bold text-brand-forest">Urgency</TableHead>
-                <TableHead className="text-xs font-bold text-brand-forest">Status</TableHead>
-                <TableHead className="text-right text-xs font-bold text-brand-forest">Total Value</TableHead>
-                <TableHead className="text-right text-xs font-bold text-brand-forest pr-6 w-[100px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {mockOrders.length === 0 ? (
+        <div className="bg-white rounded-xl shadow-sm border border-brand-sage/40 overflow-hidden min-h-[200px] flex flex-col justify-between">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-gray-50/70 border-b border-brand-sage/30">
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500 font-body text-xs">
-                    No orders recorded in the system.
-                  </TableCell>
+                  <TableHead className="text-xs font-bold text-brand-forest pl-6">Order #</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Customer Details</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Fulfillment Store</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Order Date</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Required Delivery</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Urgency</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Status</TableHead>
+                  <TableHead className="text-right text-xs font-bold text-brand-forest">Total Value</TableHead>
+                  <TableHead className="text-right text-xs font-bold text-brand-forest pr-6 w-[80px]"></TableHead>
                 </TableRow>
-              ) : (
-                mockOrders.map((order) => (
-                  <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                    <TableCell className="pl-6 font-mono text-xs font-bold text-brand-forest">
-                      {order.order_number}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        {/* Circular Corporate Logo Badge */}
-                        <div className={`h-8 w-8 rounded-xl font-heading font-black text-xs flex items-center justify-center shadow-sm select-none shrink-0 ${order.customer.logoColor}`}>
-                          {order.customer.logoLetter}
-                        </div>
-                        <span className="font-bold text-gray-800 text-xs">{order.customer.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500 font-medium">
-                      {format(new Date(order.order_date), "dd/MM/yyyy")}
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-700 font-semibold">
-                      {format(new Date(order.required_delivery_date), "dd/MM/yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      {getUrgencyBadge(order.urgency)}
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(order.status)}
-                    </TableCell>
-                    <TableCell className="text-right text-xs font-extrabold text-brand-forest font-heading">
-                      UGX {order.total_amount.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <div className="flex justify-end gap-1.5">
-                        <Link href={`/orders/${order.id}`}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
-                            <Eye size={14} />
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
-                          <MoreVertical size={14} />
-                        </Button>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12">
+                      <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
+                        <Loader2 className="animate-spin text-brand-forest" size={24} />
+                        Loading orders pipeline...
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                ) : orders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12 text-gray-500 font-body text-xs">
+                      No orders found matching the filter criteria.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orders.map((order) => {
+                    const name = order.customer?.name || "Unknown Customer";
+                    const storeName = order.sales_store?.name || "Main Sales Store";
+                    const logoLetter = name.toLowerCase().includes("shoprite") ? "S" :
+                                       name.toLowerCase().includes("kfc") ? "K" :
+                                       name.toLowerCase().includes("javas") ? "CJ" :
+                                       name.toLowerCase().includes("mega") ? "M" :
+                                       name.charAt(0).toUpperCase();
 
-        {/* Standardized Pagination Bar */}
-        <div className="flex items-center justify-between px-2 pt-2">
-          <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Showing 1 to 5 of 42 orders</p>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 text-xs font-bold rounded-lg border-brand-sage" disabled>Previous</Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs font-bold rounded-lg border-brand-sage">Next</Button>
+                    return (
+                      <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
+                        <TableCell className="pl-6 font-mono text-xs font-bold text-brand-forest">
+                          {order.order_number}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className={`h-8 w-8 rounded-xl font-heading font-black text-xs flex items-center justify-center shadow-sm select-none shrink-0 ${getLogoColor(name)}`}>
+                              {logoLetter}
+                            </div>
+                            <span className="font-bold text-gray-800 text-xs">{name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-gray-700">
+                          {storeName}
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500 font-medium">
+                          {format(new Date(order.order_date), "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-700 font-semibold">
+                          {format(new Date(order.required_delivery_date), "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          {getUrgencyBadge(order.urgency)}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(order.status)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-extrabold text-brand-forest font-heading">
+                          UGX {parseFloat(order.total_amount).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Link href={`/orders/${order.id}`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
+                              <Eye size={14} />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Standardized Pagination Bar */}
+          <div className="flex items-center justify-between px-6 py-4 border-t border-brand-sage/30 bg-gray-50/30">
+            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">
+              {totalItems > 0 
+                ? `Showing ${(currentPage - 1) * perPage + 1} to ${Math.min(currentPage * perPage, totalItems)} of ${totalItems} orders`
+                : "No orders to display"
+              }
+            </p>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-xs font-bold rounded-lg border-brand-sage bg-white" 
+                disabled={currentPage === 1 || isLoading}
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              >
+                Previous
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 text-xs font-bold rounded-lg border-brand-sage bg-white" 
+                disabled={currentPage === totalPages || isLoading}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         </div>
+
       </div>
     </DashboardLayout>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +13,7 @@ import {
   Save,
   AlertCircle,
   Building2,
-  MapPin
+  Warehouse
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -28,21 +28,23 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import api from "@/lib/api";
 
 const orderSchema = z.object({
   customer_id: z.string().min(1, "Customer HQ is required"),
+  sales_store_id: z.string().min(1, "Sales store is required"),
   branch_id: z.string().optional(),
   order_date: z.string(),
   required_delivery_date: z.string(),
   urgency: z.enum(["normal", "urgent", "critical"]),
   order_notes: z.string().optional(),
+  admin_override_reason: z.string().optional(),
   items: z.array(z.object({
     product_id: z.string().min(1, "Product is required"),
     quantity: z.number().min(0.01, "Quantity must be > 0"),
     unit_price: z.number().min(0, "Price must be >= 0"),
   })).min(1, "At least one item is required"),
 }).superRefine((data, ctx) => {
-  // If the customer selected has branches in our DB model, branch_id becomes strictly required
   const customerHasBranches = ["shoprite", "mega"].includes(data.customer_id);
   if (customerHasBranches && !data.branch_id) {
     ctx.addIssue({
@@ -58,28 +60,11 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function NewOrderPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-
-  // Unified corporate customer records with branches
-  const customers = [
-    { label: "Shoprite Supermarkets (HQ)", value: "shoprite", hasBranches: true, branches: [
-      { label: "Shoprite Lugogo Branch", value: "shoprite-lugogo" },
-      { label: "Shoprite Acacia Branch", value: "shoprite-acacia" }
-    ]},
-    { label: "Mega Standard Supermarkets (HQ)", value: "mega", hasBranches: true, branches: [
-      { label: "Mega Standard Downtown", value: "mega-downtown" },
-      { label: "Mega Standard Nakasero", value: "mega-nakasero" },
-      { label: "Mega Standard Entebbe", value: "mega-entebbe" }
-    ]},
-    { label: "KFC Bukoto (Standalone)", value: "kfc", hasBranches: false, branches: [] },
-    { label: "Café Javas Oasis Mall (Standalone)", value: "cj", hasBranches: false, branches: [] },
-  ];
-
-  const products = [
-    { label: "White Eggs (Trays)", value: "p1", price: 12000 },
-    { label: "Brown Eggs (Trays)", value: "p2", price: 13500 },
-    { label: "Dressed Chicken (Unit)", value: "p3", price: 25000 },
-    { label: "Chicken Manure (Kg)", value: "p4", price: 1500 },
-  ];
+  
+  const [salesStores, setSalesStores] = useState<any[]>([]);
+  const [dbCustomers, setDbCustomers] = useState<any[]>([]);
+  const [productsList, setProductsList] = useState<any[]>([]);
+  const [salesStock, setSalesStock] = useState<any[]>([]);
 
   const {
     register,
@@ -95,6 +80,7 @@ export default function NewOrderPage() {
       required_delivery_date: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
       urgency: "normal",
       items: [{ product_id: "", quantity: 1, unit_price: 0 }],
+      admin_override_reason: "",
     },
   });
 
@@ -105,27 +91,140 @@ export default function NewOrderPage() {
 
   const watchedItems = watch("items");
   const selectedCustomerId = watch("customer_id");
-  
-  const selectedCustomerObj = customers.find(c => c.value === selectedCustomerId);
+  const watchSalesStoreId = watch("sales_store_id");
+  const adminOverrideValue = watch("admin_override_reason");
+
+  // Load baseline resources
+  useEffect(() => {
+    const initPage = async () => {
+      try {
+        const [storesRes, customersRes, productsRes] = await Promise.all([
+          api.get('/sales-stores'),
+          api.get('/customers'),
+          api.get('/products')
+        ]);
+        
+        const stores = storesRes.data.data || [];
+        setSalesStores(stores);
+        if (stores.length > 0) {
+          setValue("sales_store_id", stores[0].id);
+        }
+        
+        setDbCustomers(customersRes.data.data.data || customersRes.data.data || []);
+        setProductsList(productsRes.data.data || []);
+      } catch (err) {
+        console.error("Failed to load page data", err);
+      }
+    };
+    initPage();
+  }, [setValue]);
+
+  // Load sales stock when sales store changes
+  useEffect(() => {
+    if (!watchSalesStoreId) {
+      setSalesStock([]);
+      return;
+    }
+    const loadStock = async () => {
+      try {
+        const res = await api.get('/sales-stock', {
+          params: { sales_store_id: watchSalesStoreId }
+        });
+        setSalesStock(res.data.data || []);
+      } catch (err) {
+        console.error("Failed to fetch sales stock", err);
+      }
+    };
+    loadStock();
+  }, [watchSalesStoreId]);
+
+  // Group DB customers into HQ / Branches
+  const parsedCustomers = React.useMemo(() => {
+    const shopriteBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("shoprite")).map(c => ({ label: c.name, value: c.id }));
+    const megaBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("mega")).map(c => ({ label: c.name, value: c.id }));
+    const standalones = dbCustomers.filter(c => !c.name.toLowerCase().includes("shoprite") && !c.name.toLowerCase().includes("mega"));
+
+    const list: any[] = [];
+    if (shopriteBranches.length > 0) {
+      list.push({ label: "Shoprite Supermarkets (HQ)", value: "shoprite", hasBranches: true, branches: shopriteBranches });
+    }
+    if (megaBranches.length > 0) {
+      list.push({ label: "Mega Standard Supermarkets (HQ)", value: "mega", hasBranches: true, branches: megaBranches });
+    }
+    standalones.forEach(c => {
+      list.push({ label: c.name, value: c.id, hasBranches: false, branches: [] });
+    });
+    return list;
+  }, [dbCustomers]);
+
+  const selectedCustomerObj = parsedCustomers.find(c => c.value === selectedCustomerId);
   const showBranchSelector = selectedCustomerObj?.hasBranches || false;
   const branchOptions = selectedCustomerObj?.branches || [];
 
+  const getAvailableStock = (productId: string) => {
+    const stockItem = salesStock.find(s => s.product_id === productId);
+    return stockItem ? parseFloat(stockItem.current_quantity) : 0;
+  };
+
+  const productOptions = React.useMemo(() => {
+    return productsList.map(p => {
+      const avail = getAvailableStock(p.id);
+      return {
+        label: `${p.name} (${avail} available)`,
+        value: p.id
+      };
+    });
+  }, [productsList, salesStock]);
+
   const totalAmount = watchedItems.reduce((acc, item) => acc + (item.quantity * item.unit_price || 0), 0);
 
+  // Check if any quantity exceeds stock levels
+  const isAnyItemExceeding = React.useMemo(() => {
+    return watchedItems.some(item => {
+      if (!item.product_id) return false;
+      const avail = getAvailableStock(item.product_id);
+      return (item.quantity || 0) > avail;
+    });
+  }, [watchedItems, salesStock]);
+
   const onSubmit = async (data: OrderFormValues) => {
+    if (isAnyItemExceeding && !data.admin_override_reason) {
+      alert("Order quantity exceeds available store stock. An Admin Override Reason is required.");
+      return;
+    }
+
     setIsLoading(true);
-    // Simulate API call
-    console.log("Submitting branch-aware order:", data);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const finalCustomerId = selectedCustomerObj?.hasBranches ? data.branch_id : data.customer_id;
+
+      await api.post("/orders", {
+        customer_id: finalCustomerId,
+        sales_store_id: data.sales_store_id,
+        order_date: data.order_date,
+        required_delivery_date: data.required_delivery_date,
+        urgency: data.urgency,
+        order_notes: data.order_notes || null,
+        admin_override_reason: data.admin_override_reason || null,
+        items: data.items.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+        })),
+      });
+
+      alert("Order created successfully!");
       router.push("/orders");
-    }, 1500);
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to process stock transfer. Please check stock balances.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleProductChange = (index: number, productId: string) => {
-    const product = products.find(p => p.value === productId);
+    const product = productsList.find(p => p.id === productId);
     if (product) {
-      setValue(`items.${index}.unit_price`, product.price);
+      setValue(`items.${index}.unit_price`, parseFloat(product.sales_unit_price || product.default_unit_price) || 0);
     }
   };
 
@@ -138,12 +237,13 @@ export default function NewOrderPage() {
             size="icon" 
             onClick={() => router.back()}
             className="text-brand-forest hover:bg-brand-sage/25 h-10 w-10 rounded-full"
+            type="button"
           >
             <ChevronLeft size={24} />
           </Button>
           <div>
             <h1 className="text-2xl font-bold text-brand-forest font-heading">Record New Order</h1>
-            <p className="text-gray-500 font-body">Capture intake orders under corporate or standalone customer accounts</p>
+            <p className="text-gray-500 font-body text-sm mt-0.5">Capture intake orders and direct dispatch stock deduction logic</p>
           </div>
         </div>
 
@@ -159,7 +259,7 @@ export default function NewOrderPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select
                     label="Customer Headquarters (HQ)"
-                    options={customers.map(c => ({ label: c.label, value: c.value }))}
+                    options={parsedCustomers.map(c => ({ label: c.label, value: c.value }))}
                     {...register("customer_id")}
                     error={errors.customer_id?.message}
                     required
@@ -184,6 +284,14 @@ export default function NewOrderPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select
+                    label="Fulfillment Sales Store"
+                    options={salesStores.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
+                    {...register("sales_store_id")}
+                    error={errors.sales_store_id?.message}
+                    required
+                  />
+
+                  <Select
                     label="Urgency Level"
                     options={[
                       { label: "Normal Delivery", value: "normal" },
@@ -193,6 +301,9 @@ export default function NewOrderPage() {
                     {...register("urgency")}
                     error={errors.urgency?.message}
                   />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Order Date"
                     type="date"
@@ -200,9 +311,6 @@ export default function NewOrderPage() {
                     error={errors.order_date?.message}
                     required
                   />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Required Delivery Date"
                     type="date"
@@ -210,6 +318,9 @@ export default function NewOrderPage() {
                     error={errors.required_delivery_date?.message}
                     required
                   />
+                </div>
+
+                <div>
                   <Input
                     label="Order Delivery Notes"
                     placeholder="Optional gate instructions or contact numbers..."
@@ -220,7 +331,7 @@ export default function NewOrderPage() {
             </Card>
 
             {/* Line Items */}
-            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-bold text-brand-forest">Ordered Farm Items</CardTitle>
                 <Button 
@@ -247,51 +358,65 @@ export default function NewOrderPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fields.map((field, index) => (
-                      <TableRow key={field.id} className="hover:bg-brand-sage/5">
-                        <TableCell>
-                          <Select
-                            options={products}
-                            {...register(`items.${index}.product_id` as const)}
-                            onChange={(e) => {
-                              register(`items.${index}.product_id`).onChange(e);
-                              handleProductChange(index, e.target.value);
-                            }}
-                            error={errors.items?.[index]?.product_id?.message}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
-                            error={errors.items?.[index]?.quantity?.message}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            {...register(`items.${index}.unit_price` as const, { valueAsNumber: true })}
-                            error={errors.items?.[index]?.unit_price?.message}
-                          />
-                        </TableCell>
-                        <TableCell className="font-bold text-brand-forest text-xs whitespace-nowrap">
-                          UGX {((watchedItems[index]?.quantity || 0) * (watchedItems[index]?.unit_price || 0)).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => remove(index)}
-                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8"
-                            disabled={fields.length === 1}
-                          >
-                            <Trash2 size={15} />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {fields.map((field, index) => {
+                      const selectedProdId = watchedItems[index]?.product_id;
+                      const avail = selectedProdId ? getAvailableStock(selectedProdId) : 0;
+                      const quantityValue = watchedItems[index]?.quantity || 0;
+                      const isExceeding = quantityValue > avail;
+
+                      return (
+                        <TableRow key={field.id} className="hover:bg-brand-sage/5">
+                          <TableCell>
+                            <Select
+                              options={productOptions}
+                              {...register(`items.${index}.product_id` as const)}
+                              onChange={(e) => {
+                                register(`items.${index}.product_id`).onChange(e);
+                                handleProductChange(index, e.target.value);
+                              }}
+                              error={errors.items?.[index]?.product_id?.message}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
+                                error={errors.items?.[index]?.quantity?.message}
+                              />
+                              {selectedProdId && (
+                                <div className={`text-[10px] font-bold ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
+                                  {isExceeding ? `Exceeds stock! (${avail} avail)` : `${avail} available`}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              {...register(`items.${index}.unit_price` as const, { valueAsNumber: true })}
+                              error={errors.items?.[index]?.unit_price?.message}
+                            />
+                          </TableCell>
+                          <TableCell className="font-bold text-brand-forest text-xs whitespace-nowrap pt-4">
+                            UGX {((watchedItems[index]?.quantity || 0) * (watchedItems[index]?.unit_price || 0)).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => remove(index)}
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 mt-1"
+                              disabled={fields.length === 1}
+                            >
+                              <Trash2 size={15} />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 
@@ -325,11 +450,29 @@ export default function NewOrderPage() {
                   <span>Total Order Dues</span>
                   <span>UGX {totalAmount.toLocaleString()}</span>
                 </div>
+
+                {isAnyItemExceeding && (
+                  <div className="space-y-2 pt-2 border-t border-white/10">
+                    <Input
+                      label="Admin Override Reason"
+                      placeholder="Explain override reason..."
+                      className="bg-white/5 border-white/25 text-white placeholder:text-white/40 focus-visible:ring-brand-yellow"
+                      {...register("admin_override_reason")}
+                      error={errors.admin_override_reason?.message}
+                      required
+                    />
+                    <p className="text-[10px] text-brand-yellow font-bold flex items-center gap-1">
+                      <AlertCircle size={12} />
+                      Exceeds available stock. Reason is required.
+                    </p>
+                  </div>
+                )}
                 
                 <Button 
                   type="submit" 
-                  className="w-full bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none mt-6 font-bold h-11 text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
+                  className="w-full bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none mt-6 font-bold h-11 text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer"
                   isLoading={isLoading}
+                  disabled={isAnyItemExceeding && !adminOverrideValue}
                 >
                   <Save size={16} />
                   Record & Commit Order
@@ -337,11 +480,11 @@ export default function NewOrderPage() {
               </CardContent>
             </Card>
 
-            <Card className="border border-brand-sage/40 shadow-sm rounded-xl">
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl bg-white">
               <CardContent className="pt-6 p-5">
                 <div className="flex items-start gap-2.5 text-xs text-gray-500 font-body leading-normal">
                   <Calculator size={16} className="text-brand-forest mt-0.5 flex-shrink-0" />
-                  <p>Commiting this form schedules warehouse stock deductions, drafts delivery fulfillment sheets and posts pending ledger balances immediately.</p>
+                  <p>Committing this form schedules warehouse stock deductions, drafts delivery fulfillment sheets and posts pending ledger balances immediately.</p>
                 </div>
               </CardContent>
             </Card>

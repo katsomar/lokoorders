@@ -19,6 +19,11 @@ class Order extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function salesStore()
+    {
+        return $this->belongsTo(SalesStore::class);
+    }
+
     public function invoice()
     {
         return $this->hasOne(Invoice::class);
