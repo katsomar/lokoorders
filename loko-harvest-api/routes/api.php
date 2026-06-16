@@ -62,6 +62,8 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/sales-stock', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'index']);
         Route::get('/sales-movements', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'movements']);
+        Route::get('/sales-store-conversions', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'index']);
+        Route::post('/sales-store-conversions', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'store']);
         
         // Notifications
         Route::get('/notifications', [App\Http\Controllers\Api\V1\NotificationController::class, 'index']);

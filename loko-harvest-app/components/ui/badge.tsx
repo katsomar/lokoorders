@@ -7,7 +7,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: "pending" | "processing" | "ready" | "dispatched" | "delivered" | "urgent" | "critical" | "return";
+  variant?: "pending" | "processing" | "ready" | "dispatched" | "delivered" | "urgent" | "critical" | "return" | "outline";
 }
 
 const Badge = ({ className, variant = "pending", ...props }: BadgeProps) => {
@@ -20,6 +20,7 @@ const Badge = ({ className, variant = "pending", ...props }: BadgeProps) => {
     urgent: "bg-amber-50 text-amber-700",
     critical: "bg-red-50 text-red-700",
     return: "bg-rose-50 text-rose-700",
+    outline: "border border-gray-200 text-gray-700",
   };
 
   return (

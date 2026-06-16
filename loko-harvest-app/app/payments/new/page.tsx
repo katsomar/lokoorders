@@ -26,7 +26,7 @@ const paymentSchema = z.object({
   payment_method: z.enum(["cash", "bank_transfer", "mobile_money", "cheque"]),
   reference_number: z.string().optional(),
   notes: z.string().optional(),
-  auto_allocate: z.boolean().default(true),
+  auto_allocate: z.boolean(),
 });
 
 type PaymentFormValues = z.infer<typeof paymentSchema>;

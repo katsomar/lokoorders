@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { useAuth } from "@/store/useAuth";
 
 interface SalesStockItem {
   id: string;
@@ -53,11 +54,13 @@ interface SalesStockItem {
 }
 
 export default function SalesStorePage() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers">("inventory");
   const [stockItems, setStockItems] = useState<SalesStockItem[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
   const [salesStores, setSalesStores] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -80,7 +83,15 @@ export default function SalesStorePage() {
   const [interNotes, setInterNotes] = useState("");
   const [isSubmittingInter, setIsSubmittingInter] = useState(false);
 
-  // State for interactive calculator
+  // Packaging Conversion State
+  const [convStoreId, setConvStoreId] = useState("");
+  const [convFromProductId, setConvFromProductId] = useState("");
+  const [convToProductId, setConvToProductId] = useState("");
+  const [convQty, setConvQty] = useState("");
+  const [convNotes, setConvNotes] = useState("");
+  const [isSubmittingConv, setIsSubmittingConv] = useState(false);
+
+  // State for interactive calculator (Packs to Trays Estimator)
   const [calcEggType, setCalcEggType] = useState<"cream" | "white">("cream");
   const [calcDirection, setCalcDirection] = useState<"trays-to-packs" | "packs-to-trays">("trays-to-packs");
   const [calcTraysInput, setCalcTraysInput] = useState("10");
@@ -90,11 +101,12 @@ export default function SalesStorePage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [stockRes, movementsRes, storesRes, interRes] = await Promise.all([
+      const [stockRes, movementsRes, storesRes, interRes, productsRes] = await Promise.all([
         api.get('/sales-stock'),
         api.get('/sales-movements'),
         api.get('/sales-stores'),
-        api.get('/sales-store-transfers')
+        api.get('/sales-store-transfers'),
+        api.get('/products')
       ]);
 
       const stockData = stockRes.data.data || [];
@@ -148,9 +160,14 @@ export default function SalesStorePage() {
       }));
       setMovements(mappedMovements);
 
-      setSalesStores(storesRes.data.data || []);
+      const storesList = storesRes.data.data || [];
+      setSalesStores(storesList);
       setInterTransfers(interRes.data.data.data || []);
+      setProducts(productsRes.data.data || []);
 
+      if (storesList.length > 0 && !convStoreId) {
+        setConvStoreId(storesList[0].id);
+      }
     } catch (err) {
       console.error("Failed to fetch sales store data", err);
     } finally {
@@ -261,7 +278,64 @@ export default function SalesStorePage() {
     return getSourceStoreProducts().find(p => p.product_id === interProductId);
   };
 
-  // Calculator Conversion Live Logic
+  // Conversion Helpers
+  const getBulkProductsInStore = () => {
+    if (!convStoreId) return [];
+    return stockItems.filter(item => 
+      item.sales_store_id === convStoreId && 
+      (item.code === "EGG-CRM" || item.code === "EGG-WHT" || item.code === "EGG-BRN")
+    );
+  };
+
+  const getTargetPackagedProducts = () => {
+    if (!convFromProductId) return [];
+    const sourceProduct = stockItems.find(item => item.product_id === convFromProductId);
+    if (!sourceProduct) return [];
+    const prefix = sourceProduct.code; // e.g. "EGG-CRM", "EGG-WHT", "EGG-BRN"
+    return products.filter(p => p.code.startsWith(prefix) && p.code !== prefix);
+  };
+
+  const getSelectedSourceStockItem = () => {
+    return stockItems.find(item => item.sales_store_id === convStoreId && item.product_id === convFromProductId);
+  };
+
+  const selectedTargetProduct = products.find(p => p.id === convToProductId);
+
+  const getConversionYield = () => {
+    const qty = parseFloat(convQty) || 0;
+    if (!selectedTargetProduct) return 0;
+    if (selectedTargetProduct.code.endsWith('-15P')) return qty * 2;
+    if (selectedTargetProduct.code.endsWith('-06P')) return qty * 5;
+    return qty; // Single Pack / Plain Trays ratio is 1:1
+  };
+
+  const handlePostConversion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const qty = parseFloat(convQty) || 0;
+    if (qty <= 0 || !convStoreId || !convFromProductId || !convToProductId) return;
+
+    setIsSubmittingConv(true);
+    try {
+      await api.post('/sales-store-conversions', {
+        sales_store_id: convStoreId,
+        from_product_id: convFromProductId,
+        to_product_id: convToProductId,
+        from_quantity: qty,
+        notes: convNotes || `Conversion by operator: ${user?.name || 'Administrator'}`
+      });
+
+      alert("Conversion completed successfully!");
+      setConvQty("");
+      setConvNotes("");
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to complete conversion. Please try again.");
+    } finally {
+      setIsSubmittingConv(false);
+    }
+  };
+
+  // Calculator Conversion Live Logic (Packs to Trays Estimator)
   const getCalcResults = () => {
     if (calcDirection === "trays-to-packs") {
       const trays = parseFloat(calcTraysInput) || 0;
@@ -420,7 +494,11 @@ export default function SalesStorePage() {
         </div>
 
         {/* TAB CONTENTS */}
-        {activeTab === "inventory" ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-10 h-10 border-4 border-brand-forest border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : activeTab === "inventory" ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             {/* Inventory Breakdown Table */}
@@ -552,8 +630,10 @@ export default function SalesStorePage() {
               </CardContent>
             </Card>
 
-            {/* Interactive Pack & Tray Converter and movements Sidebar */}
+            {/* Packaging Converter Card & Movements log */}
             <div className="space-y-6">
+              
+              {/* LIVE STORE PACK & TRAY CONVERTER */}
               <Card className="border border-brand-sage shadow-md rounded-xl overflow-hidden bg-white">
                 <CardHeader className="bg-brand-forest text-white py-4 px-5">
                   <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
@@ -561,13 +641,15 @@ export default function SalesStorePage() {
                     Store Pack & Tray Converter
                   </CardTitle>
                   <CardDescription className="text-white/60 text-[10px]">
-                    Calculate bulk tray inputs to finished packaging packs, or trace carton stocks back to tray equivalence
+                    Convert bulk trays in stock into packaging cartons or vice-versa
                   </CardDescription>
                 </CardHeader>
                 
                 <CardContent className="p-5 space-y-4">
+                  {/* Mode select tabs */}
                   <div className="grid grid-cols-2 gap-2 p-1 bg-gray-50 border border-gray-150 rounded-xl">
                     <button
+                      type="button"
                       onClick={() => setCalcDirection("trays-to-packs")}
                       className={`py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
                         calcDirection === "trays-to-packs"
@@ -578,6 +660,7 @@ export default function SalesStorePage() {
                       Trays ➜ Packs
                     </button>
                     <button
+                      type="button"
                       onClick={() => setCalcDirection("packs-to-trays")}
                       className={`py-1.5 text-[10px] font-black rounded-lg transition-all cursor-pointer ${
                         calcDirection === "packs-to-trays"
@@ -589,83 +672,157 @@ export default function SalesStorePage() {
                     </button>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-brand-forest block">Egg Category</label>
-                    <select 
-                      value={calcEggType}
-                      onChange={(e) => setCalcEggType(e.target.value as any)}
-                      className="w-full text-xs font-bold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
-                    >
-                      <option value="cream">Cream Eggs</option>
-                      <option value="white">White Eggs</option>
-                    </select>
-                  </div>
-
                   {calcDirection === "trays-to-packs" ? (
-                    <Input
-                      label="Quantity in Bulk Trays (30 Eggs/Tray)"
-                      type="number"
-                      value={calcTraysInput}
-                      onChange={(e) => setCalcTraysInput(e.target.value)}
-                      placeholder="Enter trays count"
-                    />
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
+                    // Trays to Packs Conversion Transaction Form
+                    <form onSubmit={handlePostConversion} className="space-y-4">
+                      {/* Sales Store Dropdown */}
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-brand-forest block">Pack Type</label>
-                        <select 
-                          value={calcPacksType}
-                          onChange={(e) => setCalcPacksType(e.target.value as any)}
+                        <label className="text-[10px] font-bold text-brand-forest block">Sales Store</label>
+                        <select
+                          value={convStoreId}
+                          onChange={(e) => {
+                            setConvStoreId(e.target.value);
+                            setConvFromProductId("");
+                            setConvToProductId("");
+                          }}
                           className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                          required
                         >
-                          <option value="single">Single Pack (Tray)</option>
-                          <option value="15pack">15-Egg Pack</option>
-                          <option value="6pack">6-Egg Pack</option>
+                          <option value="">Select store...</option>
+                          {salesStores.map(store => (
+                            <option key={store.id} value={store.id}>{store.name}</option>
+                          ))}
                         </select>
                       </div>
-                      <Input
-                        label="Packs Count"
-                        type="number"
-                        value={calcPacksInput}
-                        onChange={(e) => setCalcPacksInput(e.target.value)}
-                        placeholder="Enter packs count"
-                      />
-                    </div>
-                  )}
 
-                  <div className="bg-brand-sage/10 rounded-xl p-4 border border-brand-sage/20 space-y-3">
-                    <div className="flex items-center justify-between border-b border-brand-sage/20 pb-1.5">
-                      <span className="text-[10px] font-bold text-brand-forest uppercase tracking-wider">Conversion Results</span>
-                      <RefreshCw size={12} className="text-brand-mid animate-spin-slow" />
-                    </div>
-
-                    {calcDirection === "trays-to-packs" ? (
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-500 font-semibold">Single Pack (Tray) Equivalent:</span>
-                          <span className="font-extrabold text-brand-forest">
-                            {getCalcResults().singlePacks?.toLocaleString()} Trays
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-500 font-semibold">15-Egg Carton Packs:</span>
-                          <span className="font-extrabold text-brand-forest">
-                            {getCalcResults().pack15?.toLocaleString()} Packs
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-500 font-semibold">6-Egg Carton Packs:</span>
-                          <span className="font-extrabold text-brand-forest">
-                            {getCalcResults().pack6?.toLocaleString()} Packs
-                          </span>
-                        </div>
-                        <div className="border-t border-brand-sage/20 pt-2 flex justify-between items-center text-[10px] text-gray-400 font-bold">
-                          <span>Total Loose Eggs:</span>
-                          <span>{getCalcResults().eggs?.toLocaleString()} Eggs</span>
-                        </div>
+                      {/* From Product (Bulk) */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-brand-forest block">Convert From Product (Bulk Trays)</label>
+                        <select
+                          value={convFromProductId}
+                          onChange={(e) => {
+                            setConvFromProductId(e.target.value);
+                            setConvToProductId("");
+                          }}
+                          className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                          disabled={!convStoreId}
+                          required
+                        >
+                          <option value="">Choose bulk product...</option>
+                          {getBulkProductsInStore().map(p => (
+                            <option key={p.product_id} value={p.product_id}>
+                              {p.product} ({p.quantity} Trays available)
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    ) : (
-                      <div className="space-y-2.5">
+
+                      {/* To Product (Packaged) */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-brand-forest block">Convert To Product (Packaged Carton)</label>
+                        <select
+                          value={convToProductId}
+                          onChange={(e) => setConvToProductId(e.target.value)}
+                          className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                          disabled={!convFromProductId}
+                          required
+                        >
+                          <option value="">Choose packaged product...</option>
+                          {getTargetPackagedProducts().map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Input Trays Quantity */}
+                      <Input
+                        label="Number of Trays to Convert"
+                        type="number"
+                        step="1"
+                        value={convQty}
+                        onChange={(e) => setConvQty(e.target.value)}
+                        placeholder="Enter tray count"
+                        disabled={!convToProductId}
+                        required
+                      />
+
+                      {/* Live Yield & Operator Details */}
+                      {parseFloat(convQty) > 0 && selectedTargetProduct && (
+                        <div className="bg-brand-sage/10 rounded-xl p-3 border border-brand-sage/20 space-y-2 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-500 font-semibold">Yield Output Estimate:</span>
+                            <strong className="text-brand-forest text-sm">
+                              {getConversionYield().toLocaleString()} {selectedTargetProduct.unit_of_measure === 'trays' ? 'Trays' : 'Packs'}
+                            </strong>
+                          </div>
+                          <div className="text-[9px] text-gray-400 font-medium">
+                            Formula: 1 tray yields {selectedTargetProduct.code.endsWith('-15P') ? '2 x 15-Packs' : selectedTargetProduct.code.endsWith('-06P') ? '5 x 6-Packs' : '1 x Single Pack'}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="border-t border-brand-sage/20 pt-2 flex justify-between items-center text-[10px] text-gray-400 font-bold">
+                        <span>Operator:</span>
+                        <span className="text-brand-forest">{user?.name || "Administrator"}</span>
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-black rounded-xl h-10 shadow cursor-pointer text-xs border-none"
+                        isLoading={isSubmittingConv}
+                        disabled={!convQty || parseFloat(convQty) <= 0 || (getSelectedSourceStockItem() && parseFloat(convQty) > (getSelectedSourceStockItem()?.quantity || 0))}
+                      >
+                        Complete
+                      </Button>
+                      {getSelectedSourceStockItem() && parseFloat(convQty) > (getSelectedSourceStockItem()?.quantity || 0) && (
+                        <p className="text-center text-[10px] text-red-500 font-bold mt-1">
+                          Exceeds available stock of {getSelectedSourceStockItem()?.quantity} trays.
+                        </p>
+                      )}
+                    </form>
+                  ) : (
+                    // Packs to Trays Calculator Estimator (static calculator tab)
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-brand-forest block">Egg Category</label>
+                        <select 
+                          value={calcEggType}
+                          onChange={(e) => setCalcEggType(e.target.value as any)}
+                          className="w-full text-xs font-bold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                        >
+                          <option value="cream">Cream Eggs</option>
+                          <option value="white">White Eggs</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-brand-forest block">Pack Type</label>
+                          <select 
+                            value={calcPacksType}
+                            onChange={(e) => setCalcPacksType(e.target.value as any)}
+                            className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                          >
+                            <option value="single">Single Pack (Tray)</option>
+                            <option value="15pack">15-Egg Pack</option>
+                            <option value="6pack">6-Egg Pack</option>
+                          </select>
+                        </div>
+                        <Input
+                          label="Packs Count"
+                          type="number"
+                          value={calcPacksInput}
+                          onChange={(e) => setCalcPacksInput(e.target.value)}
+                          placeholder="Enter packs count"
+                        />
+                      </div>
+
+                      <div className="bg-brand-sage/10 rounded-xl p-4 border border-brand-sage/20 space-y-2.5">
+                        <div className="flex items-center justify-between border-b border-brand-sage/20 pb-1.5">
+                          <span className="text-[10px] font-bold text-brand-forest uppercase tracking-wider">Conversion Results</span>
+                          <RefreshCw size={12} className="text-brand-mid animate-spin-slow" />
+                        </div>
+                        
                         <div className="text-center p-2 bg-white rounded-lg shadow-sm border border-brand-sage/20">
                           <p className="text-[9px] text-gray-400 font-bold uppercase">Bulk Trays Consumed</p>
                           <p className="text-base font-black text-brand-forest mt-1">
@@ -678,8 +835,8 @@ export default function SalesStorePage() {
                           <span>{getCalcResults().totalEggs?.toLocaleString()} Eggs</span>
                         </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -796,7 +953,7 @@ export default function SalesStorePage() {
                   />
                   <Button 
                     type="submit" 
-                    className="w-full bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl mt-2 h-10 shadow cursor-pointer"
+                    className="w-full bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl mt-2 h-10 shadow cursor-pointer border-none"
                     isLoading={isSubmittingStore}
                   >
                     Create Store
@@ -951,7 +1108,7 @@ export default function SalesStorePage() {
 
                   <Button 
                     type="submit" 
-                    className="w-full bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl mt-2 h-10 shadow cursor-pointer"
+                    className="w-full bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl mt-2 h-10 shadow cursor-pointer border-none"
                     isLoading={isSubmittingInter}
                     disabled={getSelectedSourceProduct() && parseFloat(interQty) > (getSelectedSourceProduct()?.quantity || 0)}
                   >
