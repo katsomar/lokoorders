@@ -24,6 +24,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import api from "@/lib/api";
 
 const transferSchema = z.object({
+  production_store_id: z.string().min(1, "Source production store is required"),
+  sales_store_id: z.string().min(1, "Target sales store is required"),
   product_id: z.string().min(1, "Product is required"),
   quantity: z.number().min(0.01, "Quantity must be > 0"),
   transfer_date: z.string(),
@@ -36,14 +38,77 @@ export default function StockTransferPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  
+  const [productionStores, setProductionStores] = useState<any[]>([]);
+  const [salesStores, setSalesStores] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [isLoadingStores, setIsLoadingStores] = useState(true);
 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<TransferFormValues>({
+    resolver: zodResolver(transferSchema),
+    defaultValues: {
+      transfer_date: new Date().toISOString().split("T")[0],
+    },
+  });
+
+  const watchProductionStoreId = watch("production_store_id");
+  const watchSalesStoreId = watch("sales_store_id");
+  const selectedProductId = watch("product_id");
+  const selectedProduct = productsList.find(p => p.value === selectedProductId);
+  const watchQty = watch("quantity") || 0;
+
+  // Load stores on mount
   useEffect(() => {
+    const loadStores = async () => {
+      setIsLoadingStores(true);
+      try {
+        const [prodStoresRes, salesStoresRes] = await Promise.all([
+          api.get('/production-stores'),
+          api.get('/sales-stores')
+        ]);
+        
+        const prodData = prodStoresRes.data.data || [];
+        const salesData = salesStoresRes.data.data || [];
+        
+        setProductionStores(prodData);
+        setSalesStores(salesData);
+
+        if (prodData.length > 0) {
+          setValue("production_store_id", prodData[0].id);
+        }
+        if (salesData.length > 0) {
+          setValue("sales_store_id", salesData[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to load stores", err);
+      } finally {
+        setIsLoadingStores(false);
+      }
+    };
+    loadStores();
+  }, [setValue]);
+
+  // Load product stock when production store changes
+  useEffect(() => {
+    if (!watchProductionStoreId) {
+      setProductsList([]);
+      return;
+    }
+    
     const loadProductionStock = async () => {
       setIsLoadingData(true);
       try {
-        const res = await api.get('/production-stock');
+        const res = await api.get('/production-stock', {
+          params: { production_store_id: watchProductionStoreId }
+        });
         const stockData = res.data.data || [];
         
         // Aggregate by product to handle different batches
@@ -72,6 +137,11 @@ export default function StockTransferPage() {
           rate: aggregated[prodId].rate
         }));
         setProductsList(list);
+        
+        // Reset product selection if previous product is not in the new store list
+        if (selectedProductId && !list.find(p => p.value === selectedProductId)) {
+          setValue("product_id", "");
+        }
       } catch (err) {
         console.error("Failed to load production stock", err);
       } finally {
@@ -79,23 +149,7 @@ export default function StockTransferPage() {
       }
     };
     loadProductionStock();
-  }, []);
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-  } = useForm<TransferFormValues>({
-    resolver: zodResolver(transferSchema),
-    defaultValues: {
-      transfer_date: new Date().toISOString().split("T")[0],
-    },
-  });
-
-  const selectedProductId = watch("product_id");
-  const selectedProduct = productsList.find(p => p.value === selectedProductId);
-  const watchQty = watch("quantity") || 0;
+  }, [watchProductionStoreId, setValue]);
 
   const getTransferPreview = () => {
     if (!selectedProduct) return null;
@@ -128,6 +182,8 @@ export default function StockTransferPage() {
     setIsLoading(true);
     try {
       await api.post("/store-transfers", {
+        production_store_id: data.production_store_id,
+        sales_store_id: data.sales_store_id,
         product_id: data.product_id,
         quantity: data.quantity,
         transfer_date: data.transfer_date,
@@ -166,7 +222,7 @@ export default function StockTransferPage() {
         
         {/* Header */}
         <div className="flex items-center gap-4">
-          <button onClick={() => router.back()} className="text-brand-forest flex items-center justify-center h-10 w-10 hover:bg-brand-sage/20 rounded-xl transition-colors">
+          <button onClick={() => router.back()} className="text-brand-forest flex items-center justify-center h-10 w-10 hover:bg-brand-sage/20 rounded-xl transition-colors cursor-pointer">
             <ChevronLeft size={24} />
           </button>
           <div>
@@ -200,19 +256,38 @@ export default function StockTransferPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-8 px-6 pb-6">
-              {isLoadingData ? (
+              {isLoadingStores ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-brand-forest"></div>
-                  <p className="text-xs text-gray-400 font-semibold">Loading live production store balances...</p>
+                  <p className="text-xs text-gray-400 font-semibold">Loading facilities...</p>
                 </div>
               ) : (
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                  {/* Store Selectors */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Select
+                      label="Source Production Store"
+                      options={productionStores.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                      {...register("production_store_id")}
+                      error={errors.production_store_id?.message}
+                      required
+                    />
+                    <Select
+                      label="Destination Sales Store"
+                      options={salesStores.map(s => ({ value: s.id, label: `${s.name} (${s.code})` }))}
+                      {...register("sales_store_id")}
+                      error={errors.sales_store_id?.message}
+                      required
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Select
                       label="Product to Transfer"
                       options={productsList}
                       {...register("product_id")}
                       error={errors.product_id?.message}
+                      disabled={isLoadingData || !watchProductionStoreId}
                       required
                     />
                     <Input
@@ -224,17 +299,26 @@ export default function StockTransferPage() {
                     />
                   </div>
 
-                  {selectedProduct && (
+                  {isLoadingData ? (
+                    <div className="p-4 bg-brand-sage/10 rounded-xl flex items-center justify-center gap-2 border border-dashed border-brand-sage">
+                      <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-brand-forest"></div>
+                      <span className="text-xs text-brand-forest font-semibold">Loading product stock...</span>
+                    </div>
+                  ) : selectedProduct ? (
                     <div className="p-4 bg-brand-sage/30 rounded-xl flex items-center justify-between border border-brand-sage">
                       <div className="flex items-center gap-3">
                         <Info size={18} className="text-brand-forest" />
-                        <span className="text-sm font-medium text-brand-forest">Current Production Stock:</span>
+                        <span className="text-sm font-medium text-brand-forest">Current Production Stock in Selected Store:</span>
                       </div>
                       <span className="text-lg font-bold text-brand-forest">
                         {selectedProduct.available.toLocaleString()} {selectedProduct.unit}
                       </span>
                     </div>
-                  )}
+                  ) : watchProductionStoreId && productsList.length === 0 ? (
+                    <div className="p-4 bg-yellow-50 rounded-xl text-center text-xs text-yellow-700 font-semibold border border-yellow-200">
+                      ⚠️ No active stock found in the selected production store. Please log harvest intake first.
+                    </div>
+                  ) : null}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Input
@@ -248,7 +332,7 @@ export default function StockTransferPage() {
                     />
                     <Input
                       label="Internal Notes"
-                      placeholder="Batch number or handling notes..."
+                      placeholder="Handling or transfer instructions..."
                       {...register("notes")}
                     />
                   </div>
@@ -256,7 +340,7 @@ export default function StockTransferPage() {
                   <div className="pt-4">
                     <Button 
                       type="submit" 
-                      className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md" 
+                      className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md cursor-pointer" 
                       isLoading={isLoading}
                       disabled={selectedProduct && watchQty > selectedProduct.available}
                     >

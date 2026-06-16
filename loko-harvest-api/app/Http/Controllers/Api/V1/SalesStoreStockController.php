@@ -12,15 +12,18 @@ class SalesStoreStockController extends Controller
 {
     use ApiResponses;
 
-    public function index()
+    public function index(Request $request)
     {
-        $stock = SalesStoreStock::with('product')->get();
+        $stock = SalesStoreStock::with(['product', 'salesStore'])
+            ->when($request->sales_store_id, fn($q) => $q->where('sales_store_id', $request->sales_store_id))
+            ->get();
         return $this->success($stock);
     }
 
     public function movements(Request $request)
     {
-        $movements = SalesStoreMovement::with(['product', 'user'])
+        $movements = SalesStoreMovement::with(['product', 'user', 'salesStore'])
+            ->when($request->sales_store_id, fn($q) => $q->where('sales_store_id', $request->sales_store_id))
             ->latest()
             ->paginate($request->per_page ?? 15);
 

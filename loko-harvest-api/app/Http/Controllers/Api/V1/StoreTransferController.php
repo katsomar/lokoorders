@@ -28,6 +28,7 @@ class StoreTransferController extends Controller
     {
         $validated = $request->validate([
             'production_store_id' => 'required|exists:production_stores,id',
+            'sales_store_id' => 'required|exists:sales_stores,id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
             'transfer_date' => 'required|date',
@@ -50,6 +51,7 @@ class StoreTransferController extends Controller
             $transfer = StoreTransfer::create([
                 'transfer_date' => $validated['transfer_date'],
                 'production_store_id' => $validated['production_store_id'],
+                'sales_store_id' => $validated['sales_store_id'],
                 'product_id' => $validated['product_id'],
                 'quantity' => $validated['quantity'],
                 'transferred_by' => auth()->id(),
@@ -74,9 +76,12 @@ class StoreTransferController extends Controller
                 $remainingToDebit -= $debitAmount;
             }
 
-            // 4. Credit sales stock
+            // 4. Credit sales stock of specified sales store
             $salesStock = SalesStoreStock::firstOrCreate(
-                ['product_id' => $validated['product_id']],
+                [
+                    'sales_store_id' => $validated['sales_store_id'],
+                    'product_id' => $validated['product_id']
+                ],
                 ['current_quantity' => 0, 'updated_by' => auth()->id()]
             );
             $salesStock->increment('current_quantity', $validated['quantity']);
@@ -85,6 +90,7 @@ class StoreTransferController extends Controller
             // 5. Log movement in sales store
             SalesStoreMovement::create([
                 'movement_date' => $validated['transfer_date'],
+                'sales_store_id' => $validated['sales_store_id'],
                 'product_id' => $validated['product_id'],
                 'movement_type' => 'transfer_in',
                 'quantity' => $validated['quantity'],

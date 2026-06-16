@@ -56,6 +56,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/production-intakes', [App\Http\Controllers\Api\V1\ProductionStoreIntakeController::class, 'store']);
         
         // Sales Store
+        Route::apiResource('sales-stores', App\Http\Controllers\Api\V1\SalesStoreController::class);
+        Route::get('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'index']);
+        Route::post('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'store']);
+
         Route::get('/sales-stock', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'index']);
         Route::get('/sales-movements', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'movements']);
         

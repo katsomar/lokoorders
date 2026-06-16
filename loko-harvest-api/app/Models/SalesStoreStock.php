@@ -11,4 +11,5 @@ class SalesStoreStock extends Model
     protected $guarded = [];
 
     public function product() { return $this->belongsTo(Product::class); }
+    public function salesStore() { return $this->belongsTo(SalesStore::class); }
 }
