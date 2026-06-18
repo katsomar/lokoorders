@@ -114,4 +114,30 @@ class DriverController extends Controller
             return $this->success($driver, 'Driver registered successfully', 201);
         });
     }
+
+    public function shifts($driverId)
+    {
+        $shifts = \App\Models\DriverShift::with(['vehicle'])
+            ->where('driver_id', $driverId)
+            ->latest('shift_date')
+            ->latest('start_time')
+            ->get();
+
+        $data = $shifts->map(function ($shift) {
+            return [
+                'id' => $shift->id,
+                'shift_date' => $shift->shift_date,
+                'start_time' => $shift->start_time,
+                'end_time' => $shift->end_time,
+                'status' => $shift->status,
+                'deliveries_count' => $shift->deliveries_count,
+                'crates_delivered' => $shift->crates_delivered,
+                'notes' => $shift->notes,
+                'vehicle_registration' => $shift->vehicle ? $shift->vehicle->registration_number : 'N/A',
+                'vehicle_make' => $shift->vehicle ? ($shift->vehicle->make . ' ' . $shift->vehicle->model) : 'N/A',
+            ];
+        });
+
+        return $this->success($data);
+    }
 }

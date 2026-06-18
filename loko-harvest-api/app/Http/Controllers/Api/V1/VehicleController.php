@@ -53,4 +53,36 @@ class VehicleController extends Controller
 
         return $this->success($vehicle, 'Vehicle registered successfully', 201);
     }
+
+    public function updateLogistics(Request $request, $id)
+    {
+        $vehicle = Vehicle::findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'required|in:active,maintenance,inactive',
+            'fuel_level' => 'required|integer|between:0,100',
+            'driver_ids' => 'present|array',
+            'driver_ids.*' => 'exists:drivers,id',
+        ]);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle, $validated) {
+            $vehicle->update([
+                'status' => $validated['status'],
+                'fuel_level' => $validated['fuel_level'],
+            ]);
+
+            // Disassociate drivers who were previously assigned to this vehicle but not in new list
+            \App\Models\Driver::where('vehicle_id', $vehicle->id)
+                ->whereNotIn('id', $validated['driver_ids'])
+                ->update(['vehicle_id' => null]);
+
+            // Associate the selected drivers
+            if (!empty($validated['driver_ids'])) {
+                \App\Models\Driver::whereIn('id', $validated['driver_ids'])
+                    ->update(['vehicle_id' => $vehicle->id]);
+            }
+
+            return $this->success($vehicle, 'Vehicle logistics updated successfully');
+        });
+    }
 }
