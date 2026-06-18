@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/table";
 import api from "@/lib/api";
 
+let globalCustomers: any[] = [];
+
 const orderSchema = z.object({
   customer_id: z.string().min(1, "Customer HQ is required"),
   sales_store_id: z.string().min(1, "Sales store is required"),
@@ -46,8 +48,8 @@ const orderSchema = z.object({
     unit_price: z.number().min(0, "Price must be >= 0"),
   })).min(1, "At least one item is required"),
 }).superRefine((data, ctx) => {
-  const customerHasBranches = ["shoprite", "mega"].includes(data.customer_id);
-  if (customerHasBranches && !data.branch_id) {
+  const hasBranches = globalCustomers.some(c => c.parent_id === data.customer_id);
+  if (hasBranches && !data.branch_id) {
     ctx.addIssue({
       path: ["branch_id"],
       code: z.ZodIssueCode.custom,
@@ -55,6 +57,7 @@ const orderSchema = z.object({
     });
   }
 });
+
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
@@ -95,13 +98,18 @@ export default function NewOrderPage() {
   const watchSalesStoreId = watch("sales_store_id");
   const adminOverrideValue = watch("admin_override_reason");
 
+  // Sync dbCustomers with globalCustomers for access inside the static zod schema
+  useEffect(() => {
+    globalCustomers = dbCustomers;
+  }, [dbCustomers]);
+
   // Load baseline resources
   useEffect(() => {
     const initPage = async () => {
       try {
         const [storesRes, customersRes, productsRes] = await Promise.all([
           api.get('/sales-stores'),
-          api.get('/customers'),
+          api.get('/customers', { params: { per_page: 1000 } }),
           api.get('/products')
         ]);
         
@@ -139,22 +147,36 @@ export default function NewOrderPage() {
     loadStock();
   }, [watchSalesStoreId]);
 
-  // Group DB customers into HQ / Branches
+  // Group DB customers into HQ / Branches dynamically
   const parsedCustomers = React.useMemo(() => {
-    const shopriteBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("shoprite")).map(c => ({ label: c.name, value: c.id }));
-    const megaBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("mega")).map(c => ({ label: c.name, value: c.id }));
-    const standalones = dbCustomers.filter(c => !c.name.toLowerCase().includes("shoprite") && !c.name.toLowerCase().includes("mega"));
+    const parents = dbCustomers.filter(c => !c.parent_id);
 
     const list: any[] = [];
-    if (shopriteBranches.length > 0) {
-      list.push({ label: "Shoprite Supermarkets (HQ)", value: "shoprite", hasBranches: true, branches: shopriteBranches });
-    }
-    if (megaBranches.length > 0) {
-      list.push({ label: "Mega Standard Supermarkets (HQ)", value: "mega", hasBranches: true, branches: megaBranches });
-    }
-    standalones.forEach(c => {
-      list.push({ label: c.name, value: c.id, hasBranches: false, branches: [] });
+    parents.forEach(p => {
+      const branches = dbCustomers
+        .filter(c => c.parent_id === p.id)
+        .map(c => ({ label: c.name, value: c.id }));
+
+      if (branches.length > 0) {
+        const label = p.name.toLowerCase().includes("(hq)") ? p.name : `${p.name} (HQ)`;
+        list.push({
+          label: label,
+          value: p.id,
+          hasBranches: true,
+          branches: branches
+        });
+      } else {
+        list.push({
+          label: p.name,
+          value: p.id,
+          hasBranches: false,
+          branches: []
+        });
+      }
     });
+
+    // Sort alphabetically by label for cleaner dropdown selection
+    list.sort((a, b) => a.label.localeCompare(b.label));
     return list;
   }, [dbCustomers]);
 
