@@ -176,6 +176,7 @@ class CustomerController extends Controller
 
             $itemsMapped = $order->items->map(fn($item) => [
                 'product_name' => $item->product?->name ?? 'Product',
+                'product_code' => $item->product?->code ?? '',
                 'quantity' => $item->quantity,
                 'unit' => $item->product?->unit_of_measure ?? 'units',
                 'unit_price' => (float) $item->unit_price,

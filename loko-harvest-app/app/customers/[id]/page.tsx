@@ -45,6 +45,53 @@ import {
   Legend
 } from "recharts";
 
+const CustomGeneralTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    if (!data) return null;
+    
+    return (
+      <div className="bg-white p-4 border border-brand-sage/60 rounded-xl shadow-xl font-body text-xs space-y-3 max-w-sm">
+        <div className="flex justify-between items-center border-b border-brand-sage/40 pb-2">
+          <span className="font-extrabold text-brand-forest">Order Date: {data.name}</span>
+          <span className="font-mono text-[10px] text-gray-400">
+            {data.date ? format(new Date(data.date), "dd MMM yyyy") : ""}
+          </span>
+        </div>
+        
+        <div className="space-y-2.5">
+          <div className="flex justify-between items-center text-xs font-black text-brand-forest">
+            <span>Total Orders:</span>
+            <span>{data.consolidated} Trays</span>
+          </div>
+          
+          {data.branchesList && data.branchesList.length > 0 && (
+            <div className="border-t border-dotted border-brand-sage/40 pt-2 space-y-3">
+              {data.branchesList.map((branch: any, bIdx: number) => (
+                <div key={bIdx} className="space-y-1">
+                  <div className="flex justify-between items-center font-bold text-[11px] text-brand-forest">
+                    <span>• {branch.branchName}</span>
+                    <span className="font-mono text-gray-700">{branch.totalTrays} Trays</span>
+                  </div>
+                  <div className="pl-3 space-y-0.5 text-[10px] text-gray-500 font-medium border-l border-brand-sage/20 ml-1">
+                    {branch.items && branch.items.map((item: any, iIdx: number) => (
+                      <div key={iIdx} className="flex justify-between">
+                        <span>{item.product_name}</span>
+                        <span className="pl-4">{item.quantity} {item.unit}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -58,6 +105,7 @@ export default function CustomerDetailPage() {
   const [ledgerFilter, setLedgerFilter] = useState<string>("all");
   const [consumptionData, setConsumptionData] = useState<any>(null);
   const [isConsumptionLoading, setIsConsumptionLoading] = useState(false);
+  const [generalTrendFilter, setGeneralTrendFilter] = useState<string>("consolidated");
   
   // Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -457,13 +505,98 @@ export default function CustomerDetailPage() {
     : getFilteredLedger();
 
   // 1. General Order Trend Data
+  const convertToTrays = (nameOrCode: string, quantityInput: any): number => {
+    const quantity = parseFloat(quantityInput || 0);
+    const term = (nameOrCode || "").toLowerCase();
+    if (term.includes("15-pack") || term.includes("15 pack") || term.endsWith("-15p")) {
+      return quantity / 2;
+    } else if (term.includes("6-pack") || term.includes("6 pack") || term.includes("06-pack") || term.endsWith("-06p")) {
+      return quantity / 5;
+    } else if (term.includes("single") || term.endsWith("-sgl")) {
+      return quantity / 30;
+    }
+    return quantity;
+  };
+
+  const datesList = Array.from(
+    new Set(
+      (consumptionData?.order_history || []).map((ord: any) => ord.order_date.split('T')[0])
+    )
+  ).sort() as string[];
+
+  const branchesInHistory = Array.from(
+    new Set(
+      (consumptionData?.order_history || [])
+        .map((ord: any) => ord.branch_name)
+        .filter((name: any) => !!name)
+    )
+  ) as string[];
+
+  const generalTrendData = datesList.map((dateStr: string) => {
+    const dateOrders = (consumptionData?.order_history || []).filter(
+      (ord: any) => ord.order_date.split('T')[0] === dateStr
+    );
+    
+    const formattedDate = format(new Date(dateStr), "dd/MM");
+    let consolidatedTrays = 0;
+    
+    const branchTrays: { [branchName: string]: number } = {};
+    branchesInHistory.forEach((bName: any) => {
+      branchTrays[bName] = 0;
+    });
+
+    const branchDetails: { 
+      [branchName: string]: { 
+        totalTrays: number; 
+        items: { product_name: string; quantity: number; unit: string }[] 
+      } 
+    } = {};
+
+    dateOrders.forEach((ord: any) => {
+      const bName = ord.branch_name || "Main Customer";
+      if (!branchDetails[bName]) {
+        branchDetails[bName] = { totalTrays: 0, items: [] };
+      }
+
+      (ord.items || []).forEach((it: any) => {
+        const parsedQty = parseFloat(it.quantity || 0);
+        const trays = convertToTrays(it.product_code || it.product_name, parsedQty);
+        consolidatedTrays += trays;
+        branchDetails[bName].totalTrays += trays;
+
+        const existingItem = branchDetails[bName].items.find(i => i.product_name === it.product_name);
+        if (existingItem) {
+          existingItem.quantity += parsedQty;
+        } else {
+          branchDetails[bName].items.push({
+            product_name: it.product_name,
+            quantity: parsedQty,
+            unit: it.unit
+          });
+        }
+      });
+    });
+
+    branchesInHistory.forEach((bName: any) => {
+      branchTrays[bName] = parseFloat((branchDetails[bName]?.totalTrays || 0).toFixed(2));
+    });
+
+    const branchesList = Object.entries(branchDetails).map(([bName, detail]) => ({
+      branchName: bName,
+      totalTrays: parseFloat(detail.totalTrays.toFixed(2)),
+      items: detail.items
+    }));
+
+    return {
+      date: dateStr,
+      name: formattedDate,
+      consolidated: parseFloat(consolidatedTrays.toFixed(2)),
+      ...branchTrays,
+      branchesList
+    };
+  });
+
   const chronologicalHistory = [...(consumptionData?.order_history || [])].reverse();
-  const generalTrendData = chronologicalHistory.map((ord: any) => ({
-    name: format(new Date(ord.order_date), "dd/MM"),
-    orderNumber: ord.order_number,
-    value: ord.total_value,
-    qty: ord.total_qty
-  }));
 
   // 2. Product-wise Trend Data
   const productNames = Array.from(
@@ -1038,11 +1171,31 @@ export default function CustomerDetailPage() {
                     </CardContent>
                   </Card>
 
-                  {/* General Order Value Trend */}
+                  {/* General Order Trend */}
                   <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm rounded-xl overflow-hidden flex flex-col justify-between">
-                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-3.5 px-6">
-                      <CardTitle className="text-xs font-bold text-brand-forest font-heading">General Order Value Trend</CardTitle>
-                      <CardDescription className="text-[10px]">Chronological trend of total order value (UGX) over time</CardDescription>
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-3.5 px-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-xs font-bold text-brand-forest font-heading">General Order Trend</CardTitle>
+                        <CardDescription className="text-[10px]">Chronological trend of total order volume in trays</CardDescription>
+                      </div>
+                      
+                      {/* Branch/Consolidated Filter for HQ Corporate */}
+                      {customer.isParent && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-gray-400">View:</span>
+                          <select 
+                            value={generalTrendFilter} 
+                            onChange={(e) => setGeneralTrendFilter(e.target.value)}
+                            className="text-[10px] font-extrabold text-brand-forest border border-brand-sage/60 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-7"
+                          >
+                            <option value="consolidated">Consolidated Total</option>
+                            <option value="all_branches">All Branches (Lines)</option>
+                            {branchesInHistory.map((branchName: string) => (
+                              <option key={branchName} value={branchName}>{branchName}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </CardHeader>
                     <CardContent className="p-6 flex-1">
                       {isConsumptionLoading ? (
@@ -1059,20 +1212,37 @@ export default function CustomerDetailPage() {
                                 axisLine={false} 
                                 tickLine={false} 
                                 tick={{ fontSize: 10, fill: '#6B7280' }} 
-                                tickFormatter={(val) => val >= 1000000 ? `UGX ${(val/1000000).toFixed(1)}M` : `UGX ${val/1000}k`}
+                                tickFormatter={(val) => `${val} Trays`}
                               />
-                              <Tooltip 
-                                contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '11px' }}
-                              />
-                              <Line 
-                                type="monotone" 
-                                dataKey="value" 
-                                stroke="#1A5C2A" 
-                                strokeWidth={3} 
-                                dot={{ r: 4, fill: "#1A5C2A", strokeWidth: 2 }}
-                                activeDot={{ r: 6 }}
-                                name="Order Value" 
-                              />
+                              <Tooltip content={<CustomGeneralTooltip />} />
+                              {generalTrendFilter === "all_branches" ? (
+                                branchesInHistory.map((bName: string, idx: number) => {
+                                  const colors = ["#1A5C2A", "#F5A800", "#2563EB", "#8B5CF6", "#E11D48", "#10B981"];
+                                  const color = colors[idx % colors.length];
+                                  return (
+                                    <Line 
+                                      key={bName}
+                                      type="monotone" 
+                                      dataKey={bName} 
+                                      stroke={color} 
+                                      strokeWidth={3} 
+                                      dot={{ r: 4, fill: color, strokeWidth: 2 }}
+                                      activeDot={{ r: 6 }}
+                                      name={bName} 
+                                    />
+                                  );
+                                })
+                              ) : (
+                                <Line 
+                                  type="monotone" 
+                                  dataKey={generalTrendFilter} 
+                                  stroke="#1A5C2A" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: "#1A5C2A", strokeWidth: 2 }}
+                                  activeDot={{ r: 6 }}
+                                  name={generalTrendFilter === "consolidated" ? "Consolidated Trays" : generalTrendFilter} 
+                                />
+                              )}
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
