@@ -445,6 +445,7 @@ export default function ProductionStoreActivityPage() {
                   <TableRow>
                     <TableHead className="pl-6 text-xs font-bold text-brand-forest">Date</TableHead>
                     <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
+                    <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
                     <TableHead className="text-xs font-bold text-brand-forest">From (Prod Store)</TableHead>
                     <TableHead className="text-xs font-bold text-brand-forest">To (Sales Store)</TableHead>
                     <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Transferred</TableHead>
@@ -457,7 +458,7 @@ export default function ProductionStoreActivityPage() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-16">
+                      <TableCell colSpan={10} className="text-center py-16">
                         <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
                           <Loader2 className="animate-spin text-brand-forest" size={24} />
                           Loading transaction records...
@@ -466,7 +467,7 @@ export default function ProductionStoreActivityPage() {
                     </TableRow>
                   ) : transfers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-16 text-gray-500 text-xs font-medium">
+                      <TableCell colSpan={10} className="text-center py-16 text-gray-500 text-xs font-medium">
                         No transfer activities found matching the filters.
                       </TableCell>
                     </TableRow>
@@ -482,7 +483,7 @@ export default function ProductionStoreActivityPage() {
                       const unitPrice = parseFloat(t.unit_price || t.product?.production_unit_price || t.product?.default_unit_price || 0);
                       const totalVal = qty * unitPrice;
                       const opName = t.user?.name || "System";
-
+ 
                       return (
                         <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
                           <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
@@ -498,6 +499,15 @@ export default function ProductionStoreActivityPage() {
                                 <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
                               </div>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-xs font-semibold whitespace-nowrap">
+                            {t.batch_reference ? (
+                              <Badge variant="outline" className="bg-brand-sage/15 text-brand-forest border-brand-sage/35 text-[10px] font-bold">
+                                {t.batch_reference}
+                              </Badge>
+                            ) : (
+                              <span className="text-gray-400 italic">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
                             {fromStore}

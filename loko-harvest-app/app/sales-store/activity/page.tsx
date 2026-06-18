@@ -531,6 +531,7 @@ export default function SalesStoreActivityPage() {
                     <TableRow>
                       <TableHead className="pl-6 text-xs font-bold text-brand-forest">Date</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">From Store</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">To Store</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Transferred</TableHead>
@@ -545,6 +546,7 @@ export default function SalesStoreActivityPage() {
                       <TableHead className="text-xs font-bold text-brand-forest">Order Ref</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Customer</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Sales Store</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Sold</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Sold Unit Price</TableHead>
@@ -556,7 +558,7 @@ export default function SalesStoreActivityPage() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={activityTab === "transfers" ? 9 : 9} className="text-center py-16">
+                      <TableCell colSpan={10} className="text-center py-16">
                         <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
                           <Loader2 className="animate-spin text-brand-forest" size={24} />
                           Loading transaction records...
@@ -565,7 +567,7 @@ export default function SalesStoreActivityPage() {
                     </TableRow>
                   ) : items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={activityTab === "transfers" ? 9 : 9} className="text-center py-16 text-gray-500 text-xs font-medium">
+                      <TableCell colSpan={10} className="text-center py-16 text-gray-500 text-xs font-medium">
                         No activity records found matching the filters.
                       </TableCell>
                     </TableRow>
@@ -576,102 +578,120 @@ export default function SalesStoreActivityPage() {
                       const qty = parseFloat(t.quantity) || 0;
                       const uom = t.product?.unit_of_measure === 'trays' ? 'Trays' : t.product?.unit_of_measure === 'kg' ? 'Kg' : 'Units';
                       
-                      if (activityTab === "transfers") {
-                        const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
-                        const fromStore = t.from_store?.name || "Main Sales Store";
-                        const toStore = t.to_store?.name || "Main Sales Store";
-                        const unitPrice = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
-                        const totalVal = qty * unitPrice;
-                        const opName = t.user?.name || "System";
-
-                        return (
-                          <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                            <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
-                              {format(new Date(dateStr), "dd/MM/yyyy")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2.5">
-                                <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
-                                  {prodCode.replace("EGG-", "")}
+                        if (activityTab === "transfers") {
+                          const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                          const fromStore = t.from_store?.name || "Main Sales Store";
+                          const toStore = t.to_store?.name || "Main Sales Store";
+                          const unitPrice = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+                          const totalVal = qty * unitPrice;
+                          const opName = t.user?.name || "System";
+ 
+                          return (
+                            <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
+                              <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
+                                {format(new Date(dateStr), "dd/MM/yyyy")}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
+                                    {prodCode.replace("EGG-", "")}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-brand-forest text-xs">{prodName}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="font-bold text-brand-forest text-xs">{prodName}</p>
-                                  <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold whitespace-nowrap">
+                                {t.batch_reference ? (
+                                  <span className="bg-brand-sage/15 text-brand-forest border border-brand-sage/35 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                    {t.batch_reference}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 italic">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-655 font-bold whitespace-nowrap">
+                                {fromStore}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-655 font-bold whitespace-nowrap">
+                                {toStore}
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
+                                {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
+                                UGX {unitPrice.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
+                                UGX {totalVal.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-555 font-bold whitespace-nowrap pl-6">
+                                {opName}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-500 font-medium max-w-[200px] truncate pr-6" title={t.notes}>
+                                {t.notes || "—"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        } else {
+                          const dateStr = t.order?.order_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                          const orderNum = t.order?.order_number || "N/A";
+                          const customerName = t.order?.customer?.name || "N/A";
+                          const salesStoreName = t.order?.sales_store?.name || "Main Sales Store";
+                          const unitPrice = parseFloat(t.unit_price || t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+                          const totalVal = qty * unitPrice;
+                          const opName = t.order?.user?.name || "System";
+ 
+                          return (
+                            <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
+                              <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
+                                {format(new Date(dateStr), "dd/MM/yyyy")}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap font-mono">
+                                {orderNum}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                                {customerName}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
+                                    {prodCode.replace("EGG-", "")}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-brand-forest text-xs">{prodName}</p>
+                                    <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                                  </div>
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                              {fromStore}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                              {toStore}
-                            </TableCell>
-                            <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
-                              {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
-                            </TableCell>
-                            <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
-                              UGX {unitPrice.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
-                              UGX {totalVal.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6">
-                              {opName}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-500 font-medium max-w-[200px] truncate pr-6" title={t.notes}>
-                              {t.notes || "—"}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      } else {
-                        const dateStr = t.order?.order_date || format(new Date(t.created_at), "yyyy-MM-dd");
-                        const orderNum = t.order?.order_number || "N/A";
-                        const customerName = t.order?.customer?.name || "N/A";
-                        const salesStoreName = t.order?.sales_store?.name || "Main Sales Store";
-                        const unitPrice = parseFloat(t.unit_price || t.product?.sales_unit_price || t.product?.default_unit_price || 0);
-                        const totalVal = qty * unitPrice;
-                        const opName = t.order?.user?.name || "System";
-
-                        return (
-                          <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                            <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
-                              {format(new Date(dateStr), "dd/MM/yyyy")}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap font-mono">
-                              {orderNum}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                              {customerName}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2.5">
-                                <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
-                                  {prodCode.replace("EGG-", "")}
-                                </div>
-                                <div>
-                                  <p className="font-bold text-brand-forest text-xs">{prodName}</p>
-                                  <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                              {salesStoreName}
-                            </TableCell>
-                            <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
-                              {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
-                            </TableCell>
-                            <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
-                              UGX {unitPrice.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
-                              UGX {totalVal.toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6 pr-6">
-                              {opName}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      }
+                              </TableCell>
+                              <TableCell className="text-xs font-semibold whitespace-nowrap">
+                                {t.batch_reference ? (
+                                  <span className="bg-brand-sage/15 text-brand-forest border border-brand-sage/35 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                    {t.batch_reference}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400 italic">—</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                                {salesStoreName}
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
+                                {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
+                                UGX {unitPrice.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
+                                UGX {totalVal.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6 pr-6">
+                                {opName}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        }
                     })
                   )}
                 </TableBody>
