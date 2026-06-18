@@ -29,7 +29,9 @@ class ProductionStoreTransferController extends Controller
             'to_production_store_id' => 'required|exists:production_stores,id|different:from_production_store_id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
-            'batch_reference' => 'nullable|string',
+            'from_batch_reference' => 'nullable|string',
+            'to_batch_reference' => 'nullable|string',
+            'batch_reference' => 'nullable|string', // backward compatibility
             'transfer_date' => 'required|date',
             'notes' => 'nullable|string',
         ]);
@@ -39,14 +41,16 @@ class ProductionStoreTransferController extends Controller
             $toStoreId = $validated['to_production_store_id'];
             $productId = $validated['product_id'];
             $qty = $validated['quantity'];
-            $batch = $validated['batch_reference'] ?? null;
+            
+            $fromBatch = $validated['from_batch_reference'] ?? $validated['batch_reference'] ?? null;
+            $toBatch = $validated['to_batch_reference'] ?? $fromBatch;
 
             // 1. Verify and debit stock
-            if ($batch) {
+            if ($fromBatch) {
                 // Transfer specific batch
                 $stock = ProductionStoreStock::where('production_store_id', $fromStoreId)
                     ->where('product_id', $productId)
-                    ->where('batch_reference', $batch)
+                    ->where('batch_reference', $fromBatch)
                     ->first();
 
                 if (!$stock || $stock->current_quantity < $qty) {
@@ -64,7 +68,7 @@ class ProductionStoreTransferController extends Controller
                     [
                         'production_store_id' => $toStoreId,
                         'product_id' => $productId,
-                        'batch_reference' => $batch,
+                        'batch_reference' => $toBatch,
                     ],
                     [
                         'current_quantity' => 0,
@@ -82,9 +86,9 @@ class ProductionStoreTransferController extends Controller
                     'from_production_store_id' => $fromStoreId,
                     'to_production_store_id' => $toStoreId,
                     'quantity' => $qty,
-                    'batch_reference' => $batch,
+                    'batch_reference' => $toBatch,
                     'transferred_by' => auth()->id(),
-                    'notes' => $validated['notes'] ?? null,
+                    'notes' => ($validated['notes'] ?? '') . ($fromBatch !== $toBatch ? " (Renamed from batch: {$fromBatch})" : ""),
                 ]);
 
                 return $this->success($transfer, 'Stock transferred successfully', 201);
@@ -116,12 +120,15 @@ class ProductionStoreTransferController extends Controller
                     $stock->decrement('current_quantity', $debitAmount);
                     $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
 
+                    // Determine destination batch reference: if to_batch_reference was provided, we rename all segments to it; otherwise preserve original segment batch
+                    $destSegmentBatch = $validated['to_batch_reference'] ?? $stock->batch_reference;
+
                     // Credit destination
                     $destStock = ProductionStoreStock::firstOrCreate(
                         [
                             'production_store_id' => $toStoreId,
                             'product_id' => $productId,
-                            'batch_reference' => $stock->batch_reference,
+                            'batch_reference' => $destSegmentBatch,
                         ],
                         [
                             'current_quantity' => 0,
@@ -139,7 +146,7 @@ class ProductionStoreTransferController extends Controller
                         'from_production_store_id' => $fromStoreId,
                         'to_production_store_id' => $toStoreId,
                         'quantity' => $debitAmount,
-                        'batch_reference' => $stock->batch_reference,
+                        'batch_reference' => $destSegmentBatch,
                         'transferred_by' => auth()->id(),
                         'notes' => ($validated['notes'] ?? '') . " (FIFO Split from batch: " . ($stock->batch_reference ?? 'N/A') . ")",
                     ]);

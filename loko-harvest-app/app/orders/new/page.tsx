@@ -41,6 +41,7 @@ const orderSchema = z.object({
   admin_override_reason: z.string().optional(),
   items: z.array(z.object({
     product_id: z.string().min(1, "Product is required"),
+    batch_reference: z.string().optional(),
     quantity: z.number().min(0.01, "Quantity must be > 0"),
     unit_price: z.number().min(0, "Price must be >= 0"),
   })).min(1, "At least one item is required"),
@@ -79,7 +80,7 @@ export default function NewOrderPage() {
       order_date: new Date().toISOString().split("T")[0],
       required_delivery_date: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
       urgency: "normal",
-      items: [{ product_id: "", quantity: 1, unit_price: 0 }],
+      items: [{ product_id: "", batch_reference: "", quantity: 1, unit_price: 0 }],
       admin_override_reason: "",
     },
   });
@@ -162,8 +163,23 @@ export default function NewOrderPage() {
   const branchOptions = selectedCustomerObj?.branches || [];
 
   const getAvailableStock = (productId: string) => {
-    const stockItem = salesStock.find(s => s.product_id === productId);
-    return stockItem ? parseFloat(stockItem.current_quantity) : 0;
+    return salesStock
+      .filter(s => s.product_id === productId)
+      .reduce((sum, s) => sum + (parseFloat(s.current_quantity) || 0), 0);
+  };
+
+  const getBatchStock = (productId: string, batchRef: string | undefined | null) => {
+    if (!productId) return 0;
+    if (!batchRef) {
+      return getAvailableStock(productId);
+    }
+    const item = salesStock.find(s => s.product_id === productId && s.batch_reference === batchRef);
+    return item ? parseFloat(item.current_quantity) : 0;
+  };
+
+  const getProductBatches = (productId: string) => {
+    if (!productId) return [];
+    return salesStock.filter(s => s.product_id === productId && (parseFloat(s.current_quantity) || 0) > 0);
   };
 
   const productOptions = React.useMemo(() => {
@@ -180,14 +196,27 @@ export default function NewOrderPage() {
 
   // Check if any quantity exceeds stock levels
   const isAnyItemExceeding = React.useMemo(() => {
-    return watchedItems.some(item => {
+    return watchedItems.some((item) => {
       if (!item.product_id) return false;
-      const avail = getAvailableStock(item.product_id);
+      const avail = getBatchStock(item.product_id, item.batch_reference);
       return (item.quantity || 0) > avail;
     });
   }, [watchedItems, salesStock]);
 
   const onSubmit = async (data: OrderFormValues) => {
+    // Validate batches for eligible products
+    for (let i = 0; i < data.items.length; i++) {
+      const item = data.items[i];
+      const prod = productsList.find(p => p.id === item.product_id);
+      if (prod) {
+        const supportsBatch = prod.category === 'eggs' || (prod.category === 'poultry' && prod.code !== 'POU-LVE');
+        if (supportsBatch && !item.batch_reference) {
+          alert(`Please select a batch reference for ${prod.name} (Row ${i + 1})`);
+          return;
+        }
+      }
+    }
+
     if (isAnyItemExceeding && !data.admin_override_reason) {
       alert("Order quantity exceeds available store stock. An Admin Override Reason is required.");
       return;
@@ -207,6 +236,7 @@ export default function NewOrderPage() {
         admin_override_reason: data.admin_override_reason || null,
         items: data.items.map(item => ({
           product_id: item.product_id,
+          batch_reference: item.batch_reference || null,
           quantity: item.quantity,
           unit_price: item.unit_price,
         })),
@@ -215,7 +245,7 @@ export default function NewOrderPage() {
       alert("Order created successfully!");
       router.push("/orders");
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to process stock transfer. Please check stock balances.");
+      alert(err.response?.data?.message || "Failed to create order. Please check stock balances.");
     } finally {
       setIsLoading(false);
     }
@@ -338,7 +368,7 @@ export default function NewOrderPage() {
                   type="button" 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => append({ product_id: "", quantity: 1, unit_price: 0 })}
+                  onClick={() => append({ product_id: "", batch_reference: "", quantity: 1, unit_price: 0 })}
                   className="gap-1.5 h-8 border-brand-sage text-brand-forest font-bold text-xs"
                 >
                   <Plus size={14} />
@@ -350,7 +380,8 @@ export default function NewOrderPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[40%] text-brand-forest font-bold text-xs">Product Select</TableHead>
+                      <TableHead className="w-[30%] text-brand-forest font-bold text-xs">Product Select</TableHead>
+                      <TableHead className="w-[25%] text-brand-forest font-bold text-xs">Batch Reference</TableHead>
                       <TableHead className="text-brand-forest font-bold text-xs">Quantity</TableHead>
                       <TableHead className="text-brand-forest font-bold text-xs">Unit Price (UGX)</TableHead>
                       <TableHead className="text-brand-forest font-bold text-xs">Total Dues</TableHead>
@@ -360,9 +391,11 @@ export default function NewOrderPage() {
                   <TableBody>
                     {fields.map((field, index) => {
                       const selectedProdId = watchedItems[index]?.product_id;
-                      const avail = selectedProdId ? getAvailableStock(selectedProdId) : 0;
+                      const selectedBatchRef = watchedItems[index]?.batch_reference;
+                      const avail = selectedProdId ? getBatchStock(selectedProdId, selectedBatchRef) : 0;
                       const quantityValue = watchedItems[index]?.quantity || 0;
                       const isExceeding = quantityValue > avail;
+                      const errorsItemsAtIndex = errors.items?.[index];
 
                       return (
                         <TableRow key={field.id} className="hover:bg-brand-sage/5">
@@ -373,9 +406,47 @@ export default function NewOrderPage() {
                               onChange={(e) => {
                                 register(`items.${index}.product_id`).onChange(e);
                                 handleProductChange(index, e.target.value);
+                                setValue(`items.${index}.batch_reference`, "");
                               }}
                               error={errors.items?.[index]?.product_id?.message}
                             />
+                          </TableCell>
+                          <TableCell>
+                            {selectedProdId ? (
+                              (() => {
+                                const prod = productsList.find(p => p.id === selectedProdId);
+                                const supportsBatch = prod && (prod.category === 'eggs' || (prod.category === 'poultry' && prod.code !== 'POU-LVE'));
+                                if (supportsBatch) {
+                                  const batches = getProductBatches(selectedProdId);
+                                  return (
+                                    <div className="space-y-1">
+                                      <select
+                                        className="w-full h-10 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-forest focus:border-transparent bg-white text-xs"
+                                        {...register(`items.${index}.batch_reference` as const)}
+                                      >
+                                        <option value="">-- Select Batch --</option>
+                                        {batches.map((b: any) => (
+                                          <option key={b.id} value={b.batch_reference}>
+                                            {b.batch_reference || 'Unbatched'} ({(parseFloat(b.current_quantity) || 0).toLocaleString()} avail)
+                                          </option>
+                                        ))}
+                                      </select>
+                                      {errorsItemsAtIndex && 'batch_reference' in errorsItemsAtIndex && (
+                                        <p className="text-[10px] text-red-500">Batch selection required</p>
+                                      )}
+                                    </div>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="text-xs text-gray-400 font-medium italic">
+                                      FIFO / Not Tracked
+                                    </span>
+                                  );
+                                }
+                              })()
+                            ) : (
+                              <span className="text-xs text-gray-300 italic">Select product first</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="space-y-1">
@@ -387,7 +458,10 @@ export default function NewOrderPage() {
                               />
                               {selectedProdId && (
                                 <div className={`text-[10px] font-bold ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
-                                  {isExceeding ? `Exceeds stock! (${avail} avail)` : `${avail} available`}
+                                  {isExceeding 
+                                    ? `Exceeds stock! (${avail} avail)` 
+                                    : `${avail} available${selectedBatchRef ? ' in batch' : ''}`
+                                  }
                                 </div>
                               )}
                             </div>

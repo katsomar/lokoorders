@@ -567,4 +567,279 @@ class DriverVehicleTest extends TestCase
         $order->refresh();
         $this->assertEquals('delivered', $order->status);
     }
+
+    public function test_can_manage_product_batches_across_stores_and_orders()
+    {
+        // 1. Setup production stores, sales store, products, and customer
+        $prodStoreA = \App\Models\ProductionStore::create([
+            'name' => 'Production Store A',
+            'code' => 'PSA',
+            'location' => 'Block A',
+        ]);
+        
+        $prodStoreB = \App\Models\ProductionStore::create([
+            'name' => 'Production Store B',
+            'code' => 'PSB',
+            'location' => 'Block B',
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Sales Store A',
+            'code' => 'SSA',
+            'location' => 'Kampala Main',
+        ]);
+
+        // Batch-tracked product (eggs)
+        $eggs = \App\Models\Product::create([
+            'name' => 'Golden Eggs',
+            'code' => 'EGG-GLD',
+            'category' => 'eggs',
+            'unit_of_measure' => 'trays',
+            'default_unit_price' => 12000,
+            'sales_unit_price' => 15000,
+        ]);
+
+        // Non-batch-tracked product (manure)
+        $manure = \App\Models\Product::create([
+            'name' => 'Organic Manure',
+            'code' => 'BY-MNR',
+            'category' => 'by_products',
+            'unit_of_measure' => 'kg',
+            'default_unit_price' => 5000,
+            'sales_unit_price' => 7000,
+        ]);
+
+        // Seed initial stocks in Production Store A
+        \App\Models\ProductionStoreStock::create([
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'current_quantity' => 100,
+            'valuation_price' => 12000,
+            'updated_by' => $this->user->id,
+        ]);
+
+        \App\Models\ProductionStoreStock::create([
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'current_quantity' => 50,
+            'valuation_price' => 12000,
+            'updated_by' => $this->user->id,
+        ]);
+
+        \App\Models\ProductionStoreStock::create([
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $manure->id,
+            'batch_reference' => null,
+            'current_quantity' => 10,
+            'valuation_price' => 5000,
+            'updated_by' => $this->user->id,
+        ]);
+
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Kampala Central',
+            'description' => 'City center',
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Corp',
+            'contact_person' => 'Jane Doe',
+            'phone_primary' => '0788111222',
+            'email' => 'jane@acme.com',
+            'address' => 'Kampala Rd',
+            'delivery_zone_id' => $zone->id,
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        // ---- PART 1: Inter-production store transfer with batch renaming ----
+        // Move 40 trays of eggs from BATCH-A1 in Prod Store A to BATCH-A1-NEW in Prod Store B
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/production-store-transfers', [
+                'from_production_store_id' => $prodStoreA->id,
+                'to_production_store_id' => $prodStoreB->id,
+                'product_id' => $eggs->id,
+                'quantity' => 40,
+                'from_batch_reference' => 'BATCH-A1',
+                'to_batch_reference' => 'BATCH-A1-NEW',
+                'transfer_date' => '2026-06-19',
+                'notes' => 'Transfer with rename',
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('production_store_stock', [
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'current_quantity' => 60,
+        ]);
+        $this->assertDatabaseHas('production_store_stock', [
+            'production_store_id' => $prodStoreB->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1-NEW',
+            'current_quantity' => 40,
+        ]);
+
+        // ---- PART 2: Production to Sales Store Transfer (Specific Batch) ----
+        // Move 30 trays of eggs from BATCH-A2 in Prod Store A to Sales Store
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/store-transfers', [
+                'production_store_id' => $prodStoreA->id,
+                'sales_store_id' => $salesStore->id,
+                'product_id' => $eggs->id,
+                'quantity' => 30,
+                'batch_reference' => 'BATCH-A2',
+                'transfer_date' => '2026-06-19',
+                'notes' => 'Move specific batch to sales',
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('production_store_stock', [
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'current_quantity' => 20,
+        ]);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'current_quantity' => 30,
+        ]);
+
+        // ---- PART 3: Production to Sales Store Transfer (FIFO fallback) ----
+        // Move 40 trays of eggs from Prod Store A to Sales Store without batch selection
+        // Remaining in Prod Store A: BATCH-A1 (60), BATCH-A2 (20)
+        // FIFO should grab 40 from BATCH-A1 (since it was created first/has oldest ID or created_at)
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/store-transfers', [
+                'production_store_id' => $prodStoreA->id,
+                'sales_store_id' => $salesStore->id,
+                'product_id' => $eggs->id,
+                'quantity' => 40,
+                'transfer_date' => '2026-06-19',
+                'notes' => 'FIFO transfer',
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('production_store_stock', [
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'current_quantity' => 20,
+        ]);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'current_quantity' => 40,
+        ]);
+
+        // ---- PART 4: Non-batch-tracked Product Transfer ----
+        // Transfer 5 bags of manure from Prod Store A to Sales Store
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/store-transfers', [
+                'production_store_id' => $prodStoreA->id,
+                'sales_store_id' => $salesStore->id,
+                'product_id' => $manure->id,
+                'quantity' => 5,
+                'transfer_date' => '2026-06-19',
+                'notes' => 'Manure transfer',
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('production_store_stock', [
+            'production_store_id' => $prodStoreA->id,
+            'product_id' => $manure->id,
+            'batch_reference' => null,
+            'current_quantity' => 5,
+        ]);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $manure->id,
+            'batch_reference' => null,
+            'current_quantity' => 5,
+        ]);
+
+        // ---- PART 5: Customer Order (Specific Batch) ----
+        // Order 10 trays of eggs from BATCH-A2 in Sales Store
+        // Available in Sales Store: BATCH-A2 (30), BATCH-A1 (40)
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'customer_id' => $customer->id,
+                'sales_store_id' => $salesStore->id,
+                'order_date' => '2026-06-19',
+                'required_delivery_date' => '2026-06-20',
+                'urgency' => 'normal',
+                'items' => [
+                    [
+                        'product_id' => $eggs->id,
+                        'quantity' => 10,
+                        'unit_price' => 15000,
+                        'batch_reference' => 'BATCH-A2',
+                    ]
+                ],
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'current_quantity' => 20,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'quantity' => 10,
+        ]);
+
+        // ---- PART 6: Customer Order (FIFO fallback) ----
+        // Order 50 trays of eggs from Sales Store without specifying batch_reference
+        // Sales store stocks: BATCH-A1 (40), BATCH-A2 (20)
+        // FIFO should grab 40 from BATCH-A1 (leaving 0) and 10 from BATCH-A2 (leaving 10)
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/orders', [
+                'customer_id' => $customer->id,
+                'sales_store_id' => $salesStore->id,
+                'order_date' => '2026-06-19',
+                'required_delivery_date' => '2026-06-20',
+                'urgency' => 'normal',
+                'items' => [
+                    [
+                        'product_id' => $eggs->id,
+                        'quantity' => 50,
+                        'unit_price' => 15000,
+                    ]
+                ],
+            ]);
+
+        $response->assertStatus(201);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'current_quantity' => 0,
+        ]);
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'current_quantity' => 10,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A1',
+            'quantity' => 40,
+        ]);
+        $this->assertDatabaseHas('order_items', [
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-A2',
+            'quantity' => 10,
+        ]);
+    }
 }

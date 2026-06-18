@@ -28,6 +28,7 @@ const transferSchema = z.object({
   sales_store_id: z.string().min(1, "Target sales store is required"),
   product_id: z.string().min(1, "Product is required"),
   quantity: z.number().min(0.01, "Quantity must be > 0"),
+  batch_reference: z.string().optional(),
   transfer_date: z.string(),
   notes: z.string().optional(),
 });
@@ -42,6 +43,7 @@ export default function StockTransferPage() {
   const [productionStores, setProductionStores] = useState<any[]>([]);
   const [salesStores, setSalesStores] = useState<any[]>([]);
   const [productsList, setProductsList] = useState<any[]>([]);
+  const [rawStockData, setRawStockData] = useState<any[]>([]);
   
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isLoadingStores, setIsLoadingStores] = useState(true);
@@ -56,6 +58,7 @@ export default function StockTransferPage() {
     resolver: zodResolver(transferSchema),
     defaultValues: {
       transfer_date: new Date().toISOString().split("T")[0],
+      batch_reference: "",
     },
   });
 
@@ -64,6 +67,26 @@ export default function StockTransferPage() {
   const selectedProductId = watch("product_id");
   const selectedProduct = productsList.find(p => p.value === selectedProductId);
   const watchQty = watch("quantity") || 0;
+
+  const supportsBatch = selectedProduct && (
+    selectedProduct.category === 'eggs' || 
+    (selectedProduct.category === 'poultry' && selectedProduct.code !== 'POU-LVE')
+  );
+
+  const availableBatches = React.useMemo(() => {
+    if (!selectedProductId || !rawStockData) return [];
+    return rawStockData.filter(
+      (item: any) => item.product_id === selectedProductId && (parseFloat(item.current_quantity) || 0) > 0
+    );
+  }, [selectedProductId, rawStockData]);
+
+  const watchBatchReference = watch("batch_reference");
+  const selectedBatchObj = watchBatchReference 
+    ? availableBatches.find((b: any) => b.batch_reference === watchBatchReference) 
+    : null;
+  const availableQty = selectedBatchObj 
+    ? (parseFloat(selectedBatchObj.current_quantity) || 0) 
+    : (selectedProduct?.available || 0);
 
   // Load stores on mount
   useEffect(() => {
@@ -110,9 +133,10 @@ export default function StockTransferPage() {
           params: { production_store_id: watchProductionStoreId }
         });
         const stockData = res.data.data || [];
+        setRawStockData(stockData);
         
         // Aggregate by product to handle different batches
-        const aggregated: { [key: string]: { name: string; available: number; unit: string; rate: number } } = {};
+        const aggregated: { [key: string]: { name: string; available: number; unit: string; rate: number; category: string; code: string } } = {};
         stockData.forEach((item: any) => {
           const prodId = item.product_id;
           const qty = parseFloat(item.current_quantity) || 0;
@@ -124,7 +148,9 @@ export default function StockTransferPage() {
               name: item.product.name,
               available: qty,
               unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
-              rate: price
+              rate: price,
+              category: item.product.category,
+              code: item.product.code
             };
           }
         });
@@ -134,7 +160,9 @@ export default function StockTransferPage() {
           label: `${aggregated[prodId].name}`,
           available: aggregated[prodId].available,
           unit: aggregated[prodId].unit,
-          rate: aggregated[prodId].rate
+          rate: aggregated[prodId].rate,
+          category: aggregated[prodId].category,
+          code: aggregated[prodId].code
         }));
         setProductsList(list);
         
@@ -187,6 +215,7 @@ export default function StockTransferPage() {
         product_id: data.product_id,
         quantity: data.quantity,
         transfer_date: data.transfer_date,
+        batch_reference: data.batch_reference || null,
         notes: data.notes || `Transfer to Sales Store`
       });
       setIsLoading(false);
@@ -299,6 +328,24 @@ export default function StockTransferPage() {
                     />
                   </div>
 
+                  {supportsBatch && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <Select
+                        label="Source Batch Reference"
+                        options={[
+                          { value: "", label: "FIFO (Oldest batches first)" },
+                          ...availableBatches.map((b: any) => ({
+                            value: b.batch_reference,
+                            label: `Batch ${b.batch_reference} (${(parseFloat(b.current_quantity) || 0).toLocaleString()} ${selectedProduct?.unit || ''} available)`
+                          }))
+                        ]}
+                        {...register("batch_reference")}
+                        error={errors.batch_reference?.message}
+                      />
+                      <div className="hidden md:block"></div>
+                    </div>
+                  )}
+
                   {isLoadingData ? (
                     <div className="p-4 bg-brand-sage/10 rounded-xl flex items-center justify-center gap-2 border border-dashed border-brand-sage">
                       <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-brand-forest"></div>
@@ -308,10 +355,12 @@ export default function StockTransferPage() {
                     <div className="p-4 bg-brand-sage/30 rounded-xl flex items-center justify-between border border-brand-sage">
                       <div className="flex items-center gap-3">
                         <Info size={18} className="text-brand-forest" />
-                        <span className="text-sm font-medium text-brand-forest">Current Production Stock in Selected Store:</span>
+                        <span className="text-sm font-medium text-brand-forest">
+                          {selectedBatchObj ? `Available in Batch ${watchBatchReference}:` : "Current Production Stock in Selected Store:"}
+                        </span>
                       </div>
                       <span className="text-lg font-bold text-brand-forest">
-                        {selectedProduct.available.toLocaleString()} {selectedProduct.unit}
+                        {availableQty.toLocaleString()} {selectedProduct.unit}
                       </span>
                     </div>
                   ) : watchProductionStoreId && productsList.length === 0 ? (
@@ -342,12 +391,12 @@ export default function StockTransferPage() {
                       type="submit" 
                       className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md cursor-pointer" 
                       isLoading={isLoading}
-                      disabled={selectedProduct && watchQty > selectedProduct.available}
+                      disabled={selectedProduct && watchQty > availableQty}
                     >
                       <ArrowRightLeft size={18} />
                       Execute Transfer
                     </Button>
-                    {selectedProduct && watchQty > selectedProduct.available && (
+                    {selectedProduct && watchQty > availableQty && (
                       <p className="text-center text-xs text-red-500 font-medium mt-3">
                         Error: Transfer quantity exceeds available production stock.
                       </p>

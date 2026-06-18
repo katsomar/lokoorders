@@ -43,6 +43,7 @@ class OrderController extends Controller
             'order_notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
+            'items.*.batch_reference' => 'nullable|string',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
             'admin_override_reason' => 'nullable|string',
@@ -51,15 +52,27 @@ class OrderController extends Controller
         return DB::transaction(function () use ($validated) {
             // 1. Validate stock for all items
             foreach ($validated['items'] as $item) {
-                $stock = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
-                    ->where('product_id', $item['product_id'])
-                    ->first();
-                
-                $available = $stock ? (float) $stock->current_quantity : 0.0;
+                $prod = \App\Models\Product::findOrFail($item['product_id']);
+                $supportsBatch = $this->productSupportsBatch($prod);
+                $batchRef = $supportsBatch ? ($item['batch_reference'] ?? null) : null;
+
+                if ($supportsBatch && $batchRef) {
+                    $stock = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
+                        ->where('product_id', $item['product_id'])
+                        ->where('batch_reference', $batchRef)
+                        ->first();
+                    $available = $stock ? (float) $stock->current_quantity : 0.0;
+                } else {
+                    $available = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
+                        ->where('product_id', $item['product_id'])
+                        ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
+                        ->sum('current_quantity');
+                }
                 
                 if ($available < (float) $item['quantity'] && empty($validated['admin_override_reason'])) {
-                    $productName = \App\Models\Product::find($item['product_id'])?->name ?? 'Product';
-                    return $this->error("Insufficient stock for {$productName} in the selected sales store. (Available: {$available})", 422);
+                    $productName = $prod->name;
+                    $batchStr = $batchRef ? " (Batch: {$batchRef})" : "";
+                    return $this->error("Insufficient stock for {$productName}{$batchStr} in the selected sales store. (Available: {$available})", 422);
                 }
             }
 
@@ -72,9 +85,9 @@ class OrderController extends Controller
                 'order_date' => $validated['order_date'],
                 'required_delivery_date' => $validated['required_delivery_date'],
                 'urgency' => $validated['urgency'],
-                'order_notes' => $validated['order_notes'],
+                'order_notes' => $validated['order_notes'] ?? null,
                 'total_amount' => 0, // Will update after items
-                'admin_override_reason' => $validated['admin_override_reason'],
+                'admin_override_reason' => $validated['admin_override_reason'] ?? null,
                 'created_by' => auth()->id(),
                 'status' => 'pending'
             ]);
@@ -84,40 +97,150 @@ class OrderController extends Controller
                 $lineTotal = $item['quantity'] * $item['unit_price'];
                 $totalAmount += $lineTotal;
 
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $item['product_id'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'line_total' => $lineTotal,
-                ]);
+                $prod = \App\Models\Product::findOrFail($item['product_id']);
+                $supportsBatch = $this->productSupportsBatch($prod);
+                $batchRef = $supportsBatch ? ($item['batch_reference'] ?? null) : null;
 
-                // Debit sales store stock
-                $stock = \App\Models\SalesStoreStock::firstOrCreate(
-                    [
+                if ($supportsBatch && $batchRef) {
+                    // Specific batch debit
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $item['product_id'],
+                        'batch_reference' => $batchRef,
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'line_total' => $lineTotal,
+                    ]);
+
+                    $stock = \App\Models\SalesStoreStock::firstOrCreate(
+                        [
+                            'sales_store_id' => $validated['sales_store_id'],
+                            'product_id' => $item['product_id'],
+                            'batch_reference' => $batchRef,
+                        ],
+                        ['current_quantity' => 0, 'updated_by' => auth()->id()]
+                    );
+                    $stock->decrement('current_quantity', $item['quantity']);
+                    $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                    \App\Models\SalesStoreMovement::create([
+                        'movement_date' => $validated['order_date'],
                         'sales_store_id' => $validated['sales_store_id'],
                         'product_id' => $item['product_id'],
-                    ],
-                    [
-                        'current_quantity' => 0,
-                        'updated_by' => auth()->id(),
-                    ]
-                );
+                        'batch_reference' => $batchRef,
+                        'movement_type' => 'dispatch_out',
+                        'quantity' => $item['quantity'],
+                        'reference_id' => $order->id,
+                        'created_by' => auth()->id(),
+                        'notes' => "Sold for Order: " . $order->order_number,
+                    ]);
+                } else {
+                    // FIFO Debit across sales stock batches
+                    $remainingToDebit = $item['quantity'];
+                    $stocks = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
+                        ->where('product_id', $item['product_id'])
+                        ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
+                        ->where('current_quantity', '>', 0)
+                        ->orderBy('created_at', 'asc')
+                        ->get();
 
-                $stock->decrement('current_quantity', $item['quantity']);
-                $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    // If no stocks found but override reason is set, we debit a default row
+                    if ($stocks->isEmpty()) {
+                        $stock = \App\Models\SalesStoreStock::firstOrCreate(
+                            [
+                                'sales_store_id' => $validated['sales_store_id'],
+                                'product_id' => $item['product_id'],
+                                'batch_reference' => null,
+                            ],
+                            ['current_quantity' => 0, 'updated_by' => auth()->id()]
+                        );
+                        $stock->decrement('current_quantity', $remainingToDebit);
+                        $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
 
-                // Log movement
-                \App\Models\SalesStoreMovement::create([
-                    'movement_date' => $validated['order_date'],
-                    'sales_store_id' => $validated['sales_store_id'],
-                    'product_id' => $item['product_id'],
-                    'movement_type' => 'dispatch_out',
-                    'quantity' => $item['quantity'],
-                    'reference_id' => $order->id,
-                    'created_by' => auth()->id(),
-                    'notes' => "Sold for Order: " . $order->order_number,
-                ]);
+                        OrderItem::create([
+                            'order_id' => $order->id,
+                            'product_id' => $item['product_id'],
+                            'batch_reference' => null,
+                            'quantity' => $remainingToDebit,
+                            'unit_price' => $item['unit_price'],
+                            'line_total' => $lineTotal,
+                        ]);
+
+                        \App\Models\SalesStoreMovement::create([
+                            'movement_date' => $validated['order_date'],
+                            'sales_store_id' => $validated['sales_store_id'],
+                            'product_id' => $item['product_id'],
+                            'batch_reference' => null,
+                            'movement_type' => 'dispatch_out',
+                            'quantity' => $remainingToDebit,
+                            'reference_id' => $order->id,
+                            'created_by' => auth()->id(),
+                            'notes' => "Sold for Order: " . $order->order_number . " (Stock Override)",
+                        ]);
+                    } else {
+                        foreach ($stocks as $stock) {
+                            if ($remainingToDebit <= 0) break;
+
+                            $debitAmount = min($stock->current_quantity, $remainingToDebit);
+                            $stock->decrement('current_quantity', $debitAmount);
+                            $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                            $segmentBatch = $stock->batch_reference;
+                            $segmentLineTotal = $debitAmount * $item['unit_price'];
+
+                            OrderItem::create([
+                                'order_id' => $order->id,
+                                'product_id' => $item['product_id'],
+                                'batch_reference' => $segmentBatch,
+                                'quantity' => $debitAmount,
+                                'unit_price' => $item['unit_price'],
+                                'line_total' => $segmentLineTotal,
+                            ]);
+
+                            \App\Models\SalesStoreMovement::create([
+                                'movement_date' => $validated['order_date'],
+                                'sales_store_id' => $validated['sales_store_id'],
+                                'product_id' => $item['product_id'],
+                                'batch_reference' => $segmentBatch,
+                                'movement_type' => 'dispatch_out',
+                                'quantity' => $debitAmount,
+                                'reference_id' => $order->id,
+                                'created_by' => auth()->id(),
+                                'notes' => "Sold for Order: " . $order->order_number . ($segmentBatch ? " (FIFO Batch: {$segmentBatch})" : ""),
+                            ]);
+
+                            $remainingToDebit -= $debitAmount;
+                        }
+
+                        // If still remaining (in case of override reason exceeding sum of available stocks)
+                        if ($remainingToDebit > 0) {
+                            $lastStock = $stocks->last();
+                            $lastStock->decrement('current_quantity', $remainingToDebit);
+                            $lastStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                            OrderItem::create([
+                                'order_id' => $order->id,
+                                'product_id' => $item['product_id'],
+                                'batch_reference' => $lastStock->batch_reference,
+                                'quantity' => $remainingToDebit,
+                                'unit_price' => $item['unit_price'],
+                                'line_total' => $remainingToDebit * $item['unit_price'],
+                            ]);
+
+                            \App\Models\SalesStoreMovement::create([
+                                'movement_date' => $validated['order_date'],
+                                'sales_store_id' => $validated['sales_store_id'],
+                                'product_id' => $item['product_id'],
+                                'batch_reference' => $lastStock->batch_reference,
+                                'movement_type' => 'dispatch_out',
+                                'quantity' => $remainingToDebit,
+                                'reference_id' => $order->id,
+                                'created_by' => auth()->id(),
+                                'notes' => "Sold for Order: " . $order->order_number . " (FIFO Override Spill)",
+                            ]);
+                        }
+                    }
+                }
             }
 
             $order->update(['total_amount' => $totalAmount]);
@@ -133,6 +256,7 @@ class OrderController extends Controller
                 'subtotal' => $totalAmount,
                 'tax_amount' => 0,
                 'total_amount' => $totalAmount,
+                'payment_method' => 'cash',
                 'status' => 'unpaid',
                 'created_by' => auth()->id(),
             ]);
@@ -186,5 +310,16 @@ class OrderController extends Controller
         ]);
 
         return $this->success($order, "Order status updated to {$request->status}");
+    }
+
+    private function productSupportsBatch($product)
+    {
+        if ($product->category === 'eggs') {
+            return true;
+        }
+        if ($product->category === 'poultry' && $product->code !== 'POU-LVE') {
+            return true;
+        }
+        return false;
     }
 }
