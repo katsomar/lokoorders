@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { 
@@ -106,6 +106,7 @@ export default function CustomerDetailPage() {
   const [consumptionData, setConsumptionData] = useState<any>(null);
   const [isConsumptionLoading, setIsConsumptionLoading] = useState(false);
   const [generalTrendFilter, setGeneralTrendFilter] = useState<string>("consolidated");
+  const [timeframeFilter, setTimeframeFilter] = useState<string>("15");
   
   // Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -468,6 +469,299 @@ export default function CustomerDetailPage() {
     return ledger.filter((tx: any) => tx.branchId === ledgerFilter);
   };
 
+
+
+  const activeBranch = customer && customer.isParent
+    ? customer.branches.find((b: any) => b.id === activeTab)
+    : null;
+
+  const currentDues = activeBranch ? activeBranch.balance : getConsolidatedBalance();
+  const currentLimit = activeBranch ? activeBranch.credit_limit : (customer ? customer.credit_limit : 0);
+  const currentTerms = activeBranch ? activeBranch.credit_terms : (customer ? customer.credit_terms : "");
+
+  const displayLedger = activeBranch
+    ? ledger.filter((tx: any) => tx.branchId === activeBranch.id)
+    : getFilteredLedger();
+
+  // 1. General Order Trend Data & Dynamic Metrics calculations
+  const convertToTrays = (nameOrCode: string, quantityInput: any): number => {
+    const quantity = parseFloat(quantityInput || 0);
+    const term = (nameOrCode || "").toLowerCase();
+    if (term.includes("15-pack") || term.includes("15 pack") || term.endsWith("-15p")) {
+      return quantity / 2;
+    } else if (term.includes("6-pack") || term.includes("6 pack") || term.includes("06-pack") || term.endsWith("-06p")) {
+      return quantity / 5;
+    } else if (term.includes("single") || term.endsWith("-sgl")) {
+      return quantity / 30;
+    }
+    return quantity;
+  };
+
+  const filteredOrderHistory = useMemo(() => {
+    const history = consumptionData?.order_history || [];
+    if (timeframeFilter === "all") return history;
+    
+    const limitDays = parseInt(timeframeFilter, 10);
+    const cutOffDate = new Date();
+    cutOffDate.setDate(cutOffDate.getDate() - limitDays);
+    
+    return history.filter((ord: any) => {
+      const ordDate = new Date(ord.order_date);
+      return ordDate >= cutOffDate;
+    });
+  }, [consumptionData, timeframeFilter]);
+
+  const chronologicalHistory = useMemo(() => {
+    return [...filteredOrderHistory].reverse();
+  }, [filteredOrderHistory]);
+
+  const datesList = useMemo(() => {
+    if (timeframeFilter === "all") {
+      return Array.from(
+        new Set(
+          (consumptionData?.order_history || []).map((ord: any) => ord.order_date.split('T')[0])
+        )
+      ).sort() as string[];
+    }
+    
+    const limitDays = parseInt(timeframeFilter, 10);
+    const dates: string[] = [];
+    const today = new Date();
+    for (let i = limitDays - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
+  }, [consumptionData, timeframeFilter]);
+
+  const branchesInHistory = useMemo(() => {
+    if (customer?.isParent && customer.branches) {
+      return customer.branches.map((b: any) => b.name);
+    }
+    return Array.from(
+      new Set(
+        (consumptionData?.order_history || [])
+          .map((ord: any) => ord.branch_name)
+          .filter((name: any) => !!name)
+      )
+    ) as string[];
+  }, [customer, consumptionData]);
+
+  // Dynamic Metrics Recalculations
+  const {
+    orderCount,
+    totalQtySum,
+    totalValueSum,
+    avgOrderSizeQty,
+    daysSinceLastOrder,
+    lastOrderDate,
+    avgFrequency,
+    predictedNextOrderDate
+  } = useMemo(() => {
+    const count = filteredOrderHistory.length;
+    let qtySum = 0;
+    let valSum = 0;
+    
+    filteredOrderHistory.forEach((ord: any) => {
+      qtySum += parseFloat(ord.total_qty || 0);
+      valSum += parseFloat(ord.total_value || 0);
+    });
+
+    const avgSize = count > 0 ? parseFloat((qtySum / count).toFixed(1)) : 0;
+
+    let daysSince = null;
+    let lastDate = null;
+    if (count > 0) {
+      lastDate = filteredOrderHistory[0].order_date;
+      const diffTime = Math.abs(new Date().getTime() - new Date(lastDate).getTime());
+      daysSince = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    const intervals: number[] = [];
+    let prevDate: Date | null = null;
+    const sortedHistory = [...filteredOrderHistory].reverse(); // oldest to newest
+    sortedHistory.forEach((ord: any) => {
+      const currDate = new Date(ord.order_date);
+      if (prevDate !== null) {
+        const diffTime = Math.abs(currDate.getTime() - prevDate.getTime());
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        intervals.push(diffDays);
+      }
+      prevDate = currDate;
+    });
+    const avgFreq = intervals.length > 0 ? parseFloat((intervals.reduce((a, b) => a + b, 0) / intervals.length).toFixed(1)) : 0;
+
+    let predictedNext = null;
+    if (lastDate && avgFreq > 0) {
+      const nextDate = new Date(lastDate);
+      nextDate.setDate(nextDate.getDate() + Math.round(avgFreq));
+      predictedNext = nextDate.toISOString().split('T')[0];
+    }
+
+    return {
+      orderCount: count,
+      totalQtySum: qtySum,
+      totalValueSum: valSum,
+      avgOrderSizeQty: avgSize,
+      daysSinceLastOrder: daysSince,
+      lastOrderDate: lastDate,
+      avgFrequency: avgFreq,
+      predictedNextOrderDate: predictedNext
+    };
+  }, [filteredOrderHistory]);
+
+  // Dynamic Product Demand Breakdown
+  const dynamicProductBreakdown = useMemo(() => {
+    const productTotals: { [productName: string]: { total_qty: number; unit: string } } = {};
+    let qtySum = 0;
+    
+    filteredOrderHistory.forEach((ord: any) => {
+      (ord.items || []).forEach((it: any) => {
+        const parsedQty = parseFloat(it.quantity || 0);
+        if (!productTotals[it.product_name]) {
+          productTotals[it.product_name] = { total_qty: 0, unit: it.unit };
+        }
+        productTotals[it.product_name].total_qty += parsedQty;
+        qtySum += parsedQty;
+      });
+    });
+
+    return Object.entries(productTotals).map(([name, detail]) => ({
+      product_name: name,
+      total_qty: detail.total_qty,
+      unit: detail.unit,
+      percentage: qtySum > 0 ? parseFloat(((detail.total_qty / qtySum) * 100).toFixed(1)) : 0
+    })).sort((a, b) => b.total_qty - a.total_qty);
+  }, [filteredOrderHistory]);
+
+  // Dynamic Monthly Trends
+  const dynamicMonthlyTrends = useMemo(() => {
+    const monthlyMap: { [month: string]: { month: string; order_count: number; total_qty: number; total_value: number } } = {};
+    
+    chronologicalHistory.forEach((ord: any) => {
+      const monthStr = format(new Date(ord.order_date), "MMMM yyyy");
+      if (!monthlyMap[monthStr]) {
+        monthlyMap[monthStr] = {
+          month: monthStr,
+          order_count: 0,
+          total_qty: 0,
+          total_value: 0
+        };
+      }
+      monthlyMap[monthStr].order_count++;
+      monthlyMap[monthStr].total_qty += parseFloat(ord.total_qty || 0);
+      monthlyMap[monthStr].total_value += parseFloat(ord.total_value || 0);
+    });
+    
+    return Object.values(monthlyMap);
+  }, [chronologicalHistory]);
+
+  const generalTrendData = useMemo(() => {
+    return datesList.map((dateStr: string) => {
+      const dateOrders = filteredOrderHistory.filter(
+        (ord: any) => ord.order_date.split('T')[0] === dateStr
+      );
+      
+      const formattedDate = format(new Date(dateStr), "dd/MM");
+      let consolidatedTrays = 0;
+      
+      const branchTrays: { [branchName: string]: number } = {};
+      branchesInHistory.forEach((bName: any) => {
+        branchTrays[bName] = 0;
+      });
+
+      const branchDetails: { 
+        [branchName: string]: { 
+          totalTrays: number; 
+          items: { product_name: string; quantity: number; unit: string }[] 
+        } 
+      } = {};
+
+      dateOrders.forEach((ord: any) => {
+        const bName = ord.branch_name || "Main Customer";
+        if (!branchDetails[bName]) {
+          branchDetails[bName] = { totalTrays: 0, items: [] };
+        }
+
+        (ord.items || []).forEach((it: any) => {
+          const parsedQty = parseFloat(it.quantity || 0);
+          const trays = convertToTrays(it.product_code || it.product_name, parsedQty);
+          consolidatedTrays += trays;
+          branchDetails[bName].totalTrays += trays;
+
+          const existingItem = branchDetails[bName].items.find(i => i.product_name === it.product_name);
+          if (existingItem) {
+            existingItem.quantity += parsedQty;
+          } else {
+            branchDetails[bName].items.push({
+              product_name: it.product_name,
+              quantity: parsedQty,
+              unit: it.unit
+            });
+          }
+        });
+      });
+
+      branchesInHistory.forEach((bName: any) => {
+        branchTrays[bName] = parseFloat((branchDetails[bName]?.totalTrays || 0).toFixed(2));
+      });
+
+      const branchesList = Object.entries(branchDetails).map(([bName, detail]) => ({
+        branchName: bName,
+        totalTrays: parseFloat(detail.totalTrays.toFixed(2)),
+        items: detail.items
+      }));
+
+      return {
+        date: dateStr,
+        name: formattedDate,
+        consolidated: parseFloat(consolidatedTrays.toFixed(2)),
+        ...branchTrays,
+        branchesList
+      };
+    });
+  }, [datesList, filteredOrderHistory, branchesInHistory]);
+
+  const productNames = useMemo(() => {
+    if (consumptionData?.product_breakdown) {
+      return consumptionData.product_breakdown.map((item: any) => item.product_name) as string[];
+    }
+    return Array.from(
+      new Set(
+        (consumptionData?.order_history || []).flatMap((ord: any) => 
+          (ord.items || []).map((it: any) => it.product_name)
+        )
+      )
+    ) as string[];
+  }, [consumptionData]);
+
+  const productTrendData = useMemo(() => {
+    return datesList.map((dateStr: string) => {
+      const dateOrders = filteredOrderHistory.filter(
+        (ord: any) => ord.order_date.split('T')[0] === dateStr
+      );
+      
+      const formattedDate = format(new Date(dateStr), "dd/MM");
+      const dataPoint: any = {
+        name: formattedDate,
+        date: dateStr
+      };
+      
+      productNames.forEach((prodName: any) => {
+        dataPoint[prodName] = 0;
+      });
+      
+      dateOrders.forEach((ord: any) => {
+        (ord.items || []).forEach((it: any) => {
+          dataPoint[it.product_name] += parseFloat(it.quantity || 0);
+        });
+      });
+      
+      return dataPoint;
+    });
+  }, [datesList, filteredOrderHistory, productNames]);
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -491,135 +785,6 @@ export default function CustomerDetailPage() {
       </DashboardLayout>
     );
   }
-
-  const activeBranch = customer && customer.isParent
-    ? customer.branches.find((b: any) => b.id === activeTab)
-    : null;
-
-  const currentDues = activeBranch ? activeBranch.balance : getConsolidatedBalance();
-  const currentLimit = activeBranch ? activeBranch.credit_limit : (customer ? customer.credit_limit : 0);
-  const currentTerms = activeBranch ? activeBranch.credit_terms : (customer ? customer.credit_terms : "");
-
-  const displayLedger = activeBranch
-    ? ledger.filter((tx: any) => tx.branchId === activeBranch.id)
-    : getFilteredLedger();
-
-  // 1. General Order Trend Data
-  const convertToTrays = (nameOrCode: string, quantityInput: any): number => {
-    const quantity = parseFloat(quantityInput || 0);
-    const term = (nameOrCode || "").toLowerCase();
-    if (term.includes("15-pack") || term.includes("15 pack") || term.endsWith("-15p")) {
-      return quantity / 2;
-    } else if (term.includes("6-pack") || term.includes("6 pack") || term.includes("06-pack") || term.endsWith("-06p")) {
-      return quantity / 5;
-    } else if (term.includes("single") || term.endsWith("-sgl")) {
-      return quantity / 30;
-    }
-    return quantity;
-  };
-
-  const datesList = Array.from(
-    new Set(
-      (consumptionData?.order_history || []).map((ord: any) => ord.order_date.split('T')[0])
-    )
-  ).sort() as string[];
-
-  const branchesInHistory = Array.from(
-    new Set(
-      (consumptionData?.order_history || [])
-        .map((ord: any) => ord.branch_name)
-        .filter((name: any) => !!name)
-    )
-  ) as string[];
-
-  const generalTrendData = datesList.map((dateStr: string) => {
-    const dateOrders = (consumptionData?.order_history || []).filter(
-      (ord: any) => ord.order_date.split('T')[0] === dateStr
-    );
-    
-    const formattedDate = format(new Date(dateStr), "dd/MM");
-    let consolidatedTrays = 0;
-    
-    const branchTrays: { [branchName: string]: number } = {};
-    branchesInHistory.forEach((bName: any) => {
-      branchTrays[bName] = 0;
-    });
-
-    const branchDetails: { 
-      [branchName: string]: { 
-        totalTrays: number; 
-        items: { product_name: string; quantity: number; unit: string }[] 
-      } 
-    } = {};
-
-    dateOrders.forEach((ord: any) => {
-      const bName = ord.branch_name || "Main Customer";
-      if (!branchDetails[bName]) {
-        branchDetails[bName] = { totalTrays: 0, items: [] };
-      }
-
-      (ord.items || []).forEach((it: any) => {
-        const parsedQty = parseFloat(it.quantity || 0);
-        const trays = convertToTrays(it.product_code || it.product_name, parsedQty);
-        consolidatedTrays += trays;
-        branchDetails[bName].totalTrays += trays;
-
-        const existingItem = branchDetails[bName].items.find(i => i.product_name === it.product_name);
-        if (existingItem) {
-          existingItem.quantity += parsedQty;
-        } else {
-          branchDetails[bName].items.push({
-            product_name: it.product_name,
-            quantity: parsedQty,
-            unit: it.unit
-          });
-        }
-      });
-    });
-
-    branchesInHistory.forEach((bName: any) => {
-      branchTrays[bName] = parseFloat((branchDetails[bName]?.totalTrays || 0).toFixed(2));
-    });
-
-    const branchesList = Object.entries(branchDetails).map(([bName, detail]) => ({
-      branchName: bName,
-      totalTrays: parseFloat(detail.totalTrays.toFixed(2)),
-      items: detail.items
-    }));
-
-    return {
-      date: dateStr,
-      name: formattedDate,
-      consolidated: parseFloat(consolidatedTrays.toFixed(2)),
-      ...branchTrays,
-      branchesList
-    };
-  });
-
-  const chronologicalHistory = [...(consumptionData?.order_history || [])].reverse();
-
-  // 2. Product-wise Trend Data
-  const productNames = Array.from(
-    new Set(
-      (consumptionData?.order_history || []).flatMap((ord: any) => 
-        (ord.items || []).map((it: any) => it.product_name)
-      )
-    )
-  );
-
-  const productTrendData = chronologicalHistory.map((ord: any) => {
-    const dataPoint: any = {
-      name: format(new Date(ord.order_date), "dd/MM"),
-      orderNumber: ord.order_number
-    };
-    productNames.forEach((prodName: any) => {
-      dataPoint[prodName] = 0;
-    });
-    (ord.items || []).forEach((it: any) => {
-      dataPoint[it.product_name] = it.quantity;
-    });
-    return dataPoint;
-  });
 
   return (
     <DashboardLayout>
@@ -1026,6 +1191,28 @@ export default function CustomerDetailPage() {
             {activeTab === "consumption" && (
               <div className="space-y-6">
                 
+                {/* Timeframe General Filter */}
+                <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-brand-sage/40 shadow-sm">
+                  <div>
+                    <h3 className="text-xs font-bold text-brand-forest font-heading">Consumption Timeframe</h3>
+                    <p className="text-[10px] text-gray-400">Filter consumption trends and predictive metrics by time range</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500">Filter Range:</span>
+                    <select
+                      value={timeframeFilter}
+                      onChange={(e) => setTimeframeFilter(e.target.value)}
+                      className="text-xs font-extrabold text-brand-forest border border-brand-sage rounded-xl px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-9 shadow-sm cursor-pointer"
+                    >
+                      <option value="all">All Time History</option>
+                      <option value="15">Last 15 Days</option>
+                      <option value="30">Last 30 Days</option>
+                      <option value="60">Last 60 Days</option>
+                      <option value="90">Last 90 Days</option>
+                    </select>
+                  </div>
+                </div>
+
                 {/* 1. Consumption Summary Sub-Cards Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   
@@ -1036,15 +1223,15 @@ export default function CustomerDetailPage() {
                       <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
                         {isConsumptionLoading ? (
                           <span className="text-xs font-normal text-gray-400">Loading...</span>
-                        ) : consumptionData?.metrics?.days_since_last_order !== null && consumptionData?.metrics?.days_since_last_order !== undefined ? (
-                          `${consumptionData.metrics.days_since_last_order} Days`
+                        ) : daysSinceLastOrder !== null && daysSinceLastOrder !== undefined ? (
+                          `${daysSinceLastOrder} Days`
                         ) : (
                           "—"
                         )}
                       </h4>
                       <p className="text-[9px] text-gray-400 mt-1 font-semibold">
-                        {consumptionData?.metrics?.last_order_date 
-                          ? `Last ordered: ${format(new Date(consumptionData.metrics.last_order_date), "dd MMM yyyy")}`
+                        {lastOrderDate 
+                          ? `Last ordered: ${format(new Date(lastOrderDate), "dd MMM yyyy")}`
                           : "No orders recorded"}
                       </p>
                     </CardContent>
@@ -1057,14 +1244,14 @@ export default function CustomerDetailPage() {
                       <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
                         {isConsumptionLoading ? (
                           <span className="text-xs font-normal text-gray-400">Loading...</span>
-                        ) : consumptionData?.metrics?.avg_frequency_days !== null && consumptionData?.metrics?.avg_frequency_days !== undefined ? (
-                          `${consumptionData.metrics.avg_frequency_days} Days`
+                        ) : avgFrequency !== null && avgFrequency !== undefined && avgFrequency > 0 ? (
+                          `${avgFrequency} Days`
                         ) : (
                           "—"
                         )}
                       </h4>
                       <p className="text-[9px] text-gray-400 mt-1 font-semibold">
-                        {consumptionData?.metrics?.avg_frequency_days 
+                        {avgFrequency && avgFrequency > 0
                           ? "Typical purchasing frequency"
                           : "Need at least 2 orders"}
                       </p>
@@ -1078,25 +1265,25 @@ export default function CustomerDetailPage() {
                       <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
                         {isConsumptionLoading ? (
                           <span className="text-xs font-normal text-gray-400">Loading...</span>
-                        ) : consumptionData?.metrics?.predicted_next_order_date ? (
-                          format(new Date(consumptionData.metrics.predicted_next_order_date), "dd/MM/yyyy")
+                        ) : predictedNextOrderDate ? (
+                          format(new Date(predictedNextOrderDate), "dd/MM/yyyy")
                         ) : (
                           "—"
                         )}
                       </h4>
                       <div className="mt-1 flex items-center">
-                        {consumptionData?.metrics?.predicted_next_order_date && (
+                        {predictedNextOrderDate && (
                           (() => {
-                            const daysDiff = consumptionData.metrics.days_since_last_order;
-                            const avgFreq = consumptionData.metrics.avg_frequency_days;
+                            const daysDiff = daysSinceLastOrder;
+                            const avgFreq = avgFrequency;
                             
-                            if (avgFreq && daysDiff > avgFreq) {
+                            if (avgFreq && daysDiff !== null && daysDiff > avgFreq) {
                               return (
                                 <Badge className="bg-red-50 text-red-700 border border-red-200 text-[8px] font-extrabold uppercase py-0.5 px-1.5 rounded">
                                   Overdue
                                 </Badge>
                               );
-                            } else if (avgFreq && Math.abs(daysDiff - avgFreq) <= 1) {
+                            } else if (avgFreq && daysDiff !== null && Math.abs(daysDiff - avgFreq) <= 1) {
                               return (
                                 <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-extrabold uppercase py-0.5 px-1.5 rounded">
                                   Due Soon
@@ -1122,15 +1309,15 @@ export default function CustomerDetailPage() {
                       <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
                         {isConsumptionLoading ? (
                           <span className="text-xs font-normal text-gray-400">Loading...</span>
-                        ) : consumptionData?.metrics?.avg_order_size_qty !== null && consumptionData?.metrics?.avg_order_size_qty !== undefined ? (
-                          `${consumptionData.metrics.avg_order_size_qty} units`
+                        ) : avgOrderSizeQty !== null && avgOrderSizeQty !== undefined ? (
+                          `${avgOrderSizeQty} units`
                         ) : (
                           "—"
                         )}
                       </h4>
                       <p className="text-[9px] text-gray-400 mt-1 font-semibold">
-                        {consumptionData?.metrics?.total_qty_ordered
-                          ? `Total volume: ${consumptionData.metrics.total_qty_ordered.toLocaleString()}`
+                        {totalQtySum
+                          ? `Total volume: ${totalQtySum.toLocaleString()}`
                           : "No volume taken"}
                       </p>
                     </CardContent>
@@ -1150,10 +1337,10 @@ export default function CustomerDetailPage() {
                     <CardContent className="p-5 space-y-4 flex-1">
                       {isConsumptionLoading ? (
                         <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading shares...</div>
-                      ) : !consumptionData?.product_breakdown || consumptionData.product_breakdown.length === 0 ? (
+                      ) : !dynamicProductBreakdown || dynamicProductBreakdown.length === 0 ? (
                         <div className="text-center py-10 text-xs text-gray-400 font-body">No product consumption data available.</div>
                       ) : (
-                        consumptionData.product_breakdown.map((item: any, idx: number) => (
+                        dynamicProductBreakdown.map((item: any, idx: number) => (
                           <div key={idx} className="space-y-1">
                             <div className="flex justify-between text-[11px] font-semibold text-gray-700">
                               <span>{item.product_name}</span>
@@ -1263,11 +1450,11 @@ export default function CustomerDetailPage() {
                     <CardContent className="p-5 flex-1 overflow-y-auto max-h-[250px]">
                       {isConsumptionLoading ? (
                         <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading monthly trends...</div>
-                      ) : !consumptionData?.monthly_trends || consumptionData.monthly_trends.length === 0 ? (
+                      ) : !dynamicMonthlyTrends || dynamicMonthlyTrends.length === 0 ? (
                         <div className="text-center py-10 text-xs text-gray-400 font-body">No monthly trends available.</div>
                       ) : (
                         <div className="space-y-4">
-                          {consumptionData.monthly_trends.map((trend: any, idx: number) => (
+                          {dynamicMonthlyTrends.map((trend: any, idx: number) => (
                             <div key={idx} className="flex justify-between items-start border-b border-gray-100 last:border-0 pb-3 last:pb-0">
                               <div>
                                 <p className="text-xs font-extrabold text-gray-900">{trend.month}</p>
@@ -1366,14 +1553,14 @@ export default function CustomerDetailPage() {
                                 </div>
                               </TableCell>
                             </TableRow>
-                          ) : !consumptionData?.order_history || consumptionData.order_history.length === 0 ? (
+                          ) : !filteredOrderHistory || filteredOrderHistory.length === 0 ? (
                             <TableRow>
                               <TableCell colSpan={customer.isParent ? 7 : 6} className="text-center py-12 text-gray-500 font-body text-xs">
                                 No historical orders found.
                               </TableCell>
                             </TableRow>
                           ) : (
-                            consumptionData.order_history.map((ord: any) => (
+                            filteredOrderHistory.map((ord: any) => (
                               <TableRow key={ord.order_id} className="hover:bg-brand-sage/5 transition-colors">
                                 <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(ord.order_date), "dd/MM/yyyy")}</TableCell>
                                 <TableCell className="text-xs font-mono font-bold text-brand-forest">{ord.order_number}</TableCell>
@@ -1398,7 +1585,7 @@ export default function CustomerDetailPage() {
                                 <TableCell className="text-center">
                                   {ord.days_since_previous !== null && ord.days_since_previous !== undefined ? (
                                     (() => {
-                                      const avgFreq = consumptionData.metrics.avg_frequency_days;
+                                      const avgFreq = avgFrequency;
                                       const interval = ord.days_since_previous;
                                       
                                       if (avgFreq && interval > avgFreq * 1.5) {
