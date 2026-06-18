@@ -15,7 +15,7 @@ class DriverController extends Controller
 
     public function index()
     {
-        $drivers = Driver::with(['vehicle', 'deliveries'])->get();
+        $drivers = Driver::with(['vehicle', 'deliveries', 'user'])->get();
 
         $data = $drivers->map(function ($driver) {
             $status = 'available';
@@ -51,6 +51,9 @@ class DriverController extends Controller
                 'id' => $driver->id,
                 'name' => $driver->full_name,
                 'phone' => $driver->phone,
+                'email' => $driver->user ? $driver->user->email : '',
+                'notes' => $driver->notes,
+                'vehicle_id' => $driver->vehicle_id,
                 'license' => $driver->license_number,
                 'vehicle_registration' => $driver->vehicle ? $driver->vehicle->registration_number : 'N/A',
                 'vehicle_make' => $driver->vehicle ? ($driver->vehicle->make . ' ' . $driver->vehicle->model) : 'N/A',
@@ -121,6 +124,88 @@ class DriverController extends Controller
             ]);
 
             return $this->success($driver, 'Driver registered successfully', 201);
+        });
+    }
+
+    public function update(Request $request, $id)
+    {
+        $driver = Driver::findOrFail($id);
+        $user = $driver->user;
+
+        $validated = $request->validate([
+            'full_name' => 'required|string',
+            'email' => 'nullable|email|unique:users,email,' . ($user ? $user->id : 'NULL'),
+            'phone' => 'required|string',
+            'vehicle_id' => 'nullable|exists:vehicles,id',
+            'license_number' => 'required|string',
+            'employment_status' => 'nullable|in:active,inactive',
+            'date_joined' => 'nullable|date',
+            'notes' => 'nullable|string',
+            'avatar' => 'nullable|image|max:2048',
+            'license_photo' => 'nullable|image|max:2048',
+        ]);
+
+        return DB::transaction(function () use ($driver, $user, $validated, $request) {
+            $avatarPath = $driver->avatar_path;
+            if ($request->hasFile('avatar')) {
+                if ($driver->avatar_path && !filter_var($driver->avatar_path, FILTER_VALIDATE_URL)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($driver->avatar_path);
+                }
+                $avatarPath = $request->file('avatar')->store('avatars', 'public');
+            }
+
+            $licensePath = $driver->license_path;
+            if ($request->hasFile('license_photo')) {
+                if ($driver->license_path && !filter_var($driver->license_path, FILTER_VALIDATE_URL)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($driver->license_path);
+                }
+                $licensePath = $request->file('license_photo')->store('licenses', 'public');
+            }
+
+            if ($user) {
+                $email = $validated['email'] ?? $user->email;
+                $user->update([
+                    'name' => $validated['full_name'],
+                    'email' => $email,
+                    'phone' => $validated['phone'],
+                ]);
+            }
+
+            $driver->update([
+                'full_name' => $validated['full_name'],
+                'phone' => $validated['phone'],
+                'vehicle_id' => $validated['vehicle_id'] ?? null,
+                'license_number' => $validated['license_number'],
+                'employment_status' => $validated['employment_status'] ?? 'active',
+                'date_joined' => $validated['date_joined'] ?? now()->toDateString(),
+                'notes' => $validated['notes'] ?? null,
+                'avatar_path' => $avatarPath,
+                'license_path' => $licensePath,
+            ]);
+
+            return $this->success($driver, 'Driver updated successfully');
+        });
+    }
+
+    public function destroy($id)
+    {
+        $driver = Driver::findOrFail($id);
+        $user = $driver->user;
+
+        return DB::transaction(function () use ($driver, $user) {
+            if ($driver->avatar_path && !filter_var($driver->avatar_path, FILTER_VALIDATE_URL)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($driver->avatar_path);
+            }
+            if ($driver->license_path && !filter_var($driver->license_path, FILTER_VALIDATE_URL)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($driver->license_path);
+            }
+
+            $driver->delete();
+            if ($user) {
+                $user->delete();
+            }
+
+            return $this->success(null, 'Driver deleted successfully');
         });
     }
 

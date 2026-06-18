@@ -83,6 +83,8 @@ Route::prefix('v1')->group(function () {
         // Drivers & Vehicles
         Route::get('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'index']);
         Route::post('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'store']);
+        Route::put('/drivers/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'update']);
+        Route::delete('/drivers/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'destroy']);
         Route::get('/drivers/{id}/shifts', [App\Http\Controllers\Api\V1\DriverController::class, 'shifts']);
         Route::get('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'index']);
         Route::post('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'store']);

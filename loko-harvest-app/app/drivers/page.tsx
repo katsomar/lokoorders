@@ -16,7 +16,9 @@ import {
   X,
   Mail,
   ShieldCheck,
-  Gauge
+  Gauge,
+  Edit2,
+  Trash2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -103,6 +105,20 @@ export default function DriversPage() {
   const [newVehicleStatus, setNewVehicleStatus] = useState("active");
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
   const [newVehiclePhotoFile, setNewVehiclePhotoFile] = useState<File | null>(null);
+
+  // Edit Driver Drawer State
+  const [selectedDriverForEdit, setSelectedDriverForEdit] = useState<any | null>(null);
+  const [editDriverName, setEditDriverName] = useState("");
+  const [editDriverEmail, setEditDriverEmail] = useState("");
+  const [editDriverPhone, setEditDriverPhone] = useState("");
+  const [editDriverLicense, setEditDriverLicense] = useState("");
+  const [editDriverVehicleId, setEditDriverVehicleId] = useState("");
+  const [editDriverStatus, setEditDriverStatus] = useState("active");
+  const [editDriverDateJoined, setEditDriverDateJoined] = useState("");
+  const [editDriverNotes, setEditDriverNotes] = useState("");
+  const [editDriverAvatarFile, setEditDriverAvatarFile] = useState<File | null>(null);
+  const [editDriverLicenseFile, setEditDriverLicenseFile] = useState<File | null>(null);
+  const [isSavingDriver, setIsSavingDriver] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -280,6 +296,86 @@ export default function DriversPage() {
       setIsSubmittingVehicle(false);
     }
   };
+  const handleStartEditDriver = (driver: any) => {
+    setSelectedDriverForEdit(driver);
+    setEditDriverName(driver.name || "");
+    setEditDriverEmail(driver.email || "");
+    setEditDriverPhone(driver.phone || "");
+    setEditDriverLicense(driver.license || "");
+    setEditDriverVehicleId(driver.vehicle_id || "");
+    setEditDriverStatus(driver.employment_status || "active");
+    setEditDriverDateJoined(driver.date_joined ? driver.date_joined.split(' ')[0] : new Date().toISOString().split('T')[0]);
+    setEditDriverNotes(driver.notes || "");
+    setEditDriverAvatarFile(null);
+    setEditDriverLicenseFile(null);
+  };
+
+  const handleEditDriverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriverForEdit) return;
+
+    if (!editDriverName || !editDriverPhone || !editDriverLicense) {
+      alert("Name, phone, and license number are required.");
+      return;
+    }
+
+    setIsSavingDriver(true);
+    try {
+      const formData = new FormData();
+      formData.append("_method", "PUT");
+      formData.append("full_name", editDriverName);
+      if (editDriverEmail) formData.append("email", editDriverEmail);
+      formData.append("phone", editDriverPhone);
+      formData.append("license_number", editDriverLicense);
+      formData.append("employment_status", editDriverStatus);
+      formData.append("date_joined", editDriverDateJoined);
+      formData.append("notes", editDriverNotes || "");
+      if (editDriverVehicleId) {
+        formData.append("vehicle_id", editDriverVehicleId);
+      } else {
+        formData.append("vehicle_id", "");
+      }
+      if (editDriverAvatarFile) {
+        formData.append("avatar", editDriverAvatarFile);
+      }
+      if (editDriverLicenseFile) {
+        formData.append("license_photo", editDriverLicenseFile);
+      }
+
+      await api.post(`/drivers/${selectedDriverForEdit.id}`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      alert("Driver updated successfully!");
+      setSelectedDriverForEdit(null);
+      await fetchData(); // Refresh data
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to update driver.");
+    } finally {
+      setIsSavingDriver(false);
+    }
+  };
+
+  const handleDeleteDriver = async (driverId: string, driverName: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete driver "${driverName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/drivers/${driverId}`);
+      alert("Driver deleted successfully!");
+      if (selectedDriverForEdit?.id === driverId) {
+        setSelectedDriverForEdit(null);
+      }
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to delete driver.");
+    }
+  };
 
   // Filtering based on active directory selection
   const filteredDrivers = drivers.filter(driver =>
@@ -414,13 +510,33 @@ export default function DriversPage() {
                       </div>
 
                       <div className="mt-4 flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-yellow-500">
-                          <Star size={13} className="fill-yellow-500 text-yellow-500" />
-                          <span className="text-xs font-black text-gray-700">{(driver.rating || 0).toFixed(2)}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1 text-yellow-500">
+                            <Star size={13} className="fill-yellow-500 text-yellow-500" />
+                            <span className="text-xs font-black text-gray-700">{(driver.rating || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
+                            <MapPin size={11} className="text-brand-mid" />
+                            {driver.current_location}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold">
-                          <MapPin size={11} className="text-brand-mid" />
-                          {driver.current_location}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditDriver(driver)}
+                            className="p-1.5 text-gray-400 hover:text-brand-forest hover:bg-brand-sage/20 rounded-lg transition-colors cursor-pointer"
+                            title="Edit / View Profile"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteDriver(driver.id, driver.name)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Driver"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -838,6 +954,237 @@ export default function DriversPage() {
                     {isSavingLogistics && <Loader2 className="animate-spin" size={13} />}
                     Save Logistics Updates
                   </Button>
+                </div>
+
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Slide-over Side Drawer Overlay for Edit Driver Profile */}
+        {selectedDriverForEdit && (
+          <div className="fixed inset-0 z-50 overflow-hidden">
+            {/* Backdrop layer */}
+            <div 
+              className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
+              onClick={() => setSelectedDriverForEdit(null)}
+            />
+
+            <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+              {/* Drawer form panel */}
+              <form 
+                onSubmit={handleEditDriverSubmit}
+                className="w-screen max-w-md bg-white shadow-2xl flex flex-col border-l border-brand-sage transform transition-transform duration-300"
+              >
+                
+                {/* Header */}
+                <div className="px-6 py-5 bg-brand-forest text-white flex justify-between items-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-lg bg-white/25 flex items-center justify-center">
+                      <User size={18} />
+                    </div>
+                    <div>
+                      <h2 className="font-heading font-black text-sm leading-tight">Edit Driver Profile</h2>
+                      <p className="text-[10px] text-brand-sage font-bold uppercase mt-0.5">
+                        {selectedDriverForEdit.name}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedDriverForEdit(null)}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver Full Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        placeholder="e.g. Sarah Namubiru" 
+                        required 
+                        value={editDriverName}
+                        onChange={(e) => setEditDriverName(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Contact Phone *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          placeholder="e.g. 0755333444" 
+                          required 
+                          value={editDriverPhone}
+                          onChange={(e) => setEditDriverPhone(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver License Number *</label>
+                      <div className="relative">
+                        <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          placeholder="e.g. UG-8821" 
+                          required 
+                          value={editDriverLicense}
+                          onChange={(e) => setEditDriverLicense(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          type="email"
+                          placeholder="driver@lokoharvest.com" 
+                          value={editDriverEmail}
+                          onChange={(e) => setEditDriverEmail(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Date Joined *</label>
+                      <Input 
+                        type="date"
+                        required 
+                        value={editDriverDateJoined}
+                        onChange={(e) => setEditDriverDateJoined(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Assign Vehicle</label>
+                      <select
+                        value={editDriverVehicleId}
+                        onChange={(e) => setEditDriverVehicleId(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="">No Vehicle Assigned</option>
+                        {vehicles.map(v => (
+                          <option key={v.id} value={v.id}>{v.registration_number} ({v.make})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Employment Status</label>
+                      <select
+                        value={editDriverStatus}
+                        onChange={(e) => setEditDriverStatus(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Notes</label>
+                    <textarea 
+                      placeholder="e.g. Experienced driver, morning shift preferrence"
+                      value={editDriverNotes}
+                      onChange={(e) => setEditDriverNotes(e.target.value)}
+                      className="w-full h-16 p-2 text-xs font-semibold rounded-xl border border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
+                    />
+                  </div>
+
+                  {/* Previews and Image Uploads */}
+                  <div className="space-y-4 pt-2 border-t border-brand-sage/35">
+                    {/* Avatar Upload block */}
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60">
+                        {editDriverAvatarFile ? (
+                          <img src={URL.createObjectURL(editDriverAvatarFile)} alt="Avatar Preview" className="h-full w-full object-cover" />
+                        ) : selectedDriverForEdit.avatar ? (
+                          <img src={selectedDriverForEdit.avatar} alt="Avatar Current" className="h-full w-full object-cover" />
+                        ) : (
+                          <User size={28} />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Replace Profile Image</label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setEditDriverAvatarFile(e.target.files?.[0] || null)}
+                          className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* License Upload block */}
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60">
+                        {editDriverLicenseFile ? (
+                          <img src={URL.createObjectURL(editDriverLicenseFile)} alt="License Preview" className="h-full w-full object-cover" />
+                        ) : selectedDriverForEdit.license_photo ? (
+                          <img src={selectedDriverForEdit.license_photo} alt="License Current" className="h-full w-full object-cover" />
+                        ) : (
+                          <ShieldCheck size={28} />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Replace Driver's License</label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setEditDriverLicenseFile(e.target.files?.[0] || null)}
+                          className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Footer */}
+                <div className="px-6 py-4.5 bg-gray-50 border-t border-brand-sage/30 flex justify-between items-center">
+                  <Button 
+                    type="button"
+                    onClick={() => handleDeleteDriver(selectedDriverForEdit.id, selectedDriverForEdit.name)}
+                    className="bg-white hover:bg-red-50 text-red-500 border border-red-200 hover:border-red-300 font-bold rounded-xl text-xs px-3.5 h-9.5 cursor-pointer"
+                  >
+                    Delete Driver
+                  </Button>
+                  <div className="flex gap-2.5">
+                    <Button 
+                      type="button"
+                      onClick={() => setSelectedDriverForEdit(null)}
+                      className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit"
+                      disabled={isSavingDriver}
+                      className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isSavingDriver && <Loader2 className="animate-spin" size={13} />}
+                      Save Changes
+                    </Button>
+                  </div>
                 </div>
 
               </form>

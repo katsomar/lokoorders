@@ -290,4 +290,110 @@ class DriverVehicleTest extends TestCase
         $this->assertNull($driver1->vehicle_id);
         $this->assertEquals($this->vehicle->id, $driver2->vehicle_id);
     }
+
+    public function test_can_update_driver()
+    {
+        Storage::fake('public');
+
+        $driverUser = User::create([
+            'name' => 'Musa Driver',
+            'email' => 'driver@lokoharvest.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700 000 002',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-1048',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+            'avatar_path' => 'avatars/old.jpg',
+            'license_path' => 'licenses/old.jpg',
+        ]);
+
+        Storage::disk('public')->put('avatars/old.jpg', 'fake content');
+        Storage::disk('public')->put('licenses/old.jpg', 'fake content');
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/drivers/{$driver->id}", [
+                'full_name' => 'Musa Driver Updated',
+                'email' => 'driver_new@lokoharvest.com',
+                'phone' => '0700 000 999',
+                'vehicle_id' => $this->vehicle->id,
+                'license_number' => 'UG-9999',
+                'employment_status' => 'inactive',
+                'date_joined' => '2025-01-15',
+                'avatar' => UploadedFile::fake()->create('avatar_new.jpg', 100, 'image/jpeg'),
+                'license_photo' => UploadedFile::fake()->create('license_new.jpg', 100, 'image/jpeg'),
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $driverUser->id,
+            'name' => 'Musa Driver Updated',
+            'email' => 'driver_new@lokoharvest.com',
+            'phone' => '0700 000 999',
+        ]);
+
+        $this->assertDatabaseHas('drivers', [
+            'id' => $driver->id,
+            'full_name' => 'Musa Driver Updated',
+            'license_number' => 'UG-9999',
+            'employment_status' => 'inactive',
+        ]);
+
+        $driver->refresh();
+        Storage::disk('public')->assertMissing('avatars/old.jpg');
+        Storage::disk('public')->assertMissing('licenses/old.jpg');
+        Storage::disk('public')->assertExists($driver->avatar_path);
+        Storage::disk('public')->assertExists($driver->license_path);
+    }
+
+    public function test_can_delete_driver()
+    {
+        Storage::fake('public');
+
+        $driverUser = User::create([
+            'name' => 'Musa Driver',
+            'email' => 'driver@lokoharvest.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700 000 002',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-1048',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+            'avatar_path' => 'avatars/old.jpg',
+            'license_path' => 'licenses/old.jpg',
+        ]);
+
+        Storage::disk('public')->put('avatars/old.jpg', 'fake content');
+        Storage::disk('public')->put('licenses/old.jpg', 'fake content');
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson("/api/v1/drivers/{$driver->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('drivers', ['id' => $driver->id]);
+        $this->assertDatabaseMissing('users', ['id' => $driverUser->id]);
+
+        Storage::disk('public')->assertMissing('avatars/old.jpg');
+        Storage::disk('public')->assertMissing('licenses/old.jpg');
+    }
 }
