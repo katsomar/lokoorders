@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
@@ -9,7 +8,6 @@ import {
   TrendingUp, 
   Layers, 
   DollarSign, 
-  Search, 
   Loader2, 
   Download, 
   Warehouse, 
@@ -20,7 +18,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Table, 
   TableBody, 
@@ -29,14 +27,18 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import api from "@/lib/api";
 
 export default function SalesStoreActivityPage() {
   const router = useRouter();
-  const [transfers, setTransfers] = useState<any[]>([]);
-  const [allTransfersForAnalytics, setAllTransfersForAnalytics] = useState<any[]>([]);
+  
+  // Tabs State
+  const [activityTab, setActivityTab] = useState<"transfers" | "sales">("transfers");
+
+  // Core Data States
+  const [items, setItems] = useState<any[]>([]);
+  const [allItemsForAnalytics, setAllItemsForAnalytics] = useState<any[]>([]);
   const [salesStores, setSalesStores] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   
@@ -56,7 +58,7 @@ export default function SalesStoreActivityPage() {
   const [totalItems, setTotalItems] = useState(0);
   const [perPage, setPerPage] = useState(15);
 
-  // Load baseline filters on mount
+  // Load baseline filter data on mount
   useEffect(() => {
     const loadFiltersData = async () => {
       try {
@@ -73,31 +75,37 @@ export default function SalesStoreActivityPage() {
     loadFiltersData();
   }, []);
 
-  // Fetch paginated transfers
-  const fetchTransfers = async () => {
+  // Fetch paginated activity
+  const fetchActivity = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get("/sales-store-transfers", {
-        params: {
-          from_sales_store_id: fromStore || undefined,
-          to_sales_store_id: toStore || undefined,
-          product_id: selectedProduct || undefined,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          page: currentPage,
-          per_page: 15
-        }
-      });
+      const endpoint = activityTab === "transfers" ? "/sales-store-transfers" : "/sales-store-sales";
+      const params: any = {
+        product_id: selectedProduct || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        page: currentPage,
+        per_page: 15
+      };
+
+      if (activityTab === "transfers") {
+        params.from_sales_store_id = fromStore || undefined;
+        params.to_sales_store_id = toStore || undefined;
+      } else {
+        params.sales_store_id = fromStore || undefined;
+      }
+
+      const res = await api.get(endpoint, { params });
       const responseData = res.data.data;
       if (responseData) {
-        setTransfers(responseData.data || []);
+        setItems(responseData.data || []);
         setCurrentPage(responseData.current_page || 1);
         setTotalPages(responseData.last_page || 1);
         setTotalItems(responseData.total || 0);
         setPerPage(responseData.per_page || 15);
       }
     } catch (err) {
-      console.error("Failed to fetch transfers:", err);
+      console.error("Failed to fetch activity logs:", err);
     } finally {
       setIsLoading(false);
     }
@@ -107,17 +115,23 @@ export default function SalesStoreActivityPage() {
   const fetchAllForAnalytics = async () => {
     setIsAnalyticsLoading(true);
     try {
-      const res = await api.get("/sales-store-transfers", {
-        params: {
-          from_sales_store_id: fromStore || undefined,
-          to_sales_store_id: toStore || undefined,
-          product_id: selectedProduct || undefined,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          per_page: 1000 // Large page size to pull entire context
-        }
-      });
-      setAllTransfersForAnalytics(res.data.data?.data || []);
+      const endpoint = activityTab === "transfers" ? "/sales-store-transfers" : "/sales-store-sales";
+      const params: any = {
+        product_id: selectedProduct || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        per_page: 1000 // Large page size to pull entire context
+      };
+
+      if (activityTab === "transfers") {
+        params.from_sales_store_id = fromStore || undefined;
+        params.to_sales_store_id = toStore || undefined;
+      } else {
+        params.sales_store_id = fromStore || undefined;
+      }
+
+      const res = await api.get(endpoint, { params });
+      setAllItemsForAnalytics(res.data.data?.data || []);
     } catch (err) {
       console.error("Failed to fetch analytics data:", err);
     } finally {
@@ -126,9 +140,9 @@ export default function SalesStoreActivityPage() {
   };
 
   useEffect(() => {
-    fetchTransfers();
+    fetchActivity();
     fetchAllForAnalytics();
-  }, [startDate, endDate, fromStore, toStore, selectedProduct, currentPage]);
+  }, [activityTab, startDate, endDate, fromStore, toStore, selectedProduct, currentPage]);
 
   // Reset page when filters change
   const handleFilterChange = () => {
@@ -139,14 +153,21 @@ export default function SalesStoreActivityPage() {
   const analytics = useMemo(() => {
     let totalValuation = 0;
     let totalQuantity = 0;
-    const count = allTransfersForAnalytics.length;
+    const count = allItemsForAnalytics.length;
 
     // Category value distributions
     const productValues: { [name: string]: number } = {};
 
-    allTransfersForAnalytics.forEach(t => {
+    allItemsForAnalytics.forEach(t => {
       const qty = parseFloat(t.quantity) || 0;
-      const price = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+      
+      let price = 0;
+      if (activityTab === "transfers") {
+        price = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+      } else {
+        price = parseFloat(t.unit_price || t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+      }
+      
       const value = qty * price;
       
       totalValuation += value;
@@ -165,7 +186,7 @@ export default function SalesStoreActivityPage() {
       averageValuation,
       productValues
     };
-  }, [allTransfersForAnalytics]);
+  }, [allItemsForAnalytics, activityTab]);
 
   const getLogoColor = (productName: string = "") => {
     const lower = productName.toLowerCase();
@@ -176,23 +197,43 @@ export default function SalesStoreActivityPage() {
   };
 
   const exportCSV = () => {
-    if (allTransfersForAnalytics.length === 0) {
+    if (allItemsForAnalytics.length === 0) {
       alert("No data available to export.");
       return;
     }
-    const headers = ["Date", "Product", "Product Code", "From Store", "To Store", "Quantity", "Sales Unit Price (UGX)", "Total Valuation (UGX)", "Authorized By", "Notes"];
-    const rows = allTransfersForAnalytics.map(t => [
-      t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd"),
-      t.product?.name || "N/A",
-      t.product?.code || "N/A",
-      t.from_store?.name || "N/A",
-      t.to_store?.name || "N/A",
-      t.quantity,
-      (t.product?.sales_unit_price || t.product?.default_unit_price || 0),
-      (parseFloat(t.quantity) * parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0)),
-      t.user?.name || "System",
-      t.notes || ""
-    ]);
+    
+    let headers: string[] = [];
+    let rows: any[][] = [];
+
+    if (activityTab === "transfers") {
+      headers = ["Date", "Product", "Product Code", "From Store", "To Store", "Quantity", "Sales Unit Price (UGX)", "Total Valuation (UGX)", "Authorized By", "Notes"];
+      rows = allItemsForAnalytics.map(t => [
+        t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd"),
+        t.product?.name || "N/A",
+        t.product?.code || "N/A",
+        t.from_store?.name || "N/A",
+        t.to_store?.name || "N/A",
+        t.quantity,
+        (t.product?.sales_unit_price || t.product?.default_unit_price || 0),
+        (parseFloat(t.quantity) * parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0)),
+        t.user?.name || "System",
+        t.notes || ""
+      ]);
+    } else {
+      headers = ["Date", "Order Reference", "Customer", "Product", "Product Code", "Sales Store", "Quantity", "Sold Unit Price (UGX)", "Total Revenue (UGX)", "Operator"];
+      rows = allItemsForAnalytics.map(t => [
+        t.order?.order_date || format(new Date(t.created_at), "yyyy-MM-dd"),
+        t.order?.order_number || "N/A",
+        t.order?.customer?.name || "N/A",
+        t.product?.name || "N/A",
+        t.product?.code || "N/A",
+        t.order?.sales_store?.name || "N/A",
+        t.quantity,
+        t.unit_price,
+        (parseFloat(t.quantity) * parseFloat(t.unit_price || 0)),
+        t.order?.user?.name || "System"
+      ]);
+    }
 
     const csvContent = "data:text/csv;charset=utf-8," 
       + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
@@ -200,7 +241,7 @@ export default function SalesStoreActivityPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `sales_transfers_audit_${format(new Date(), "yyyy-MM-dd")}.csv`);
+    link.setAttribute("download", `${activityTab === "transfers" ? "sales_transfers" : "sales_revenue"}_audit_${format(new Date(), "yyyy-MM-dd")}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -220,8 +261,8 @@ export default function SalesStoreActivityPage() {
               <ChevronLeft size={18} />
             </button>
             <div>
-              <h1 className="text-2xl font-black text-brand-forest font-heading">Sales Store Transfer Activity</h1>
-              <p className="text-gray-500 font-body text-xs mt-0.5">Comprehensive audit and financial tracking of stock transfers between sales stores</p>
+              <h1 className="text-2xl font-black text-brand-forest font-heading">Sales Store Activity Log</h1>
+              <p className="text-gray-500 font-body text-xs mt-0.5">Audit tracking of stock transfers and direct product sales from sales outlets</p>
             </div>
           </div>
 
@@ -235,6 +276,31 @@ export default function SalesStoreActivityPage() {
           </Button>
         </div>
 
+        {/* Activity Tab Selection */}
+        <div className="flex border-b border-brand-sage/40 gap-6 text-sm font-bold pt-2">
+          <button 
+            onClick={() => { setActivityTab("transfers"); handleFilterChange(); }}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activityTab === "transfers" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+          >
+            <span className="flex items-center gap-1.5">
+              <ArrowRightLeft size={16} />
+              Inter-Store Transfers
+            </span>
+            {activityTab === "transfers" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-brand-forest rounded-full" />}
+          </button>
+          
+          <button 
+            onClick={() => { setActivityTab("sales"); handleFilterChange(); }}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activityTab === "sales" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+          >
+            <span className="flex items-center gap-1.5">
+              <TrendingUp size={16} />
+              Product Sales Activity
+            </span>
+            {activityTab === "sales" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-brand-forest rounded-full" />}
+          </button>
+        </div>
+
         {/* Analytics Summary Panel */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           
@@ -242,7 +308,9 @@ export default function SalesStoreActivityPage() {
           <Card className="border-none shadow-xl bg-brand-forest text-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
-                <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider">Total Sales Valuation Transferred</p>
+                <p className="text-white/60 text-[10px] font-bold uppercase tracking-wider">
+                  {activityTab === "transfers" ? "Total Sales Value Transferred" : "Total Revenue from Sales"}
+                </p>
                 <DollarSign size={16} className="text-brand-yellow" />
               </div>
               <h3 className="text-2xl font-black font-heading mt-2">
@@ -254,7 +322,7 @@ export default function SalesStoreActivityPage() {
               </h3>
               <p className="text-[10px] text-brand-yellow font-semibold mt-4 flex items-center gap-1">
                 <Activity size={12} className="animate-pulse" />
-                Valued at sales retail prices
+                {activityTab === "transfers" ? "Valued at sales retail prices" : "Calculated from completed orders"}
               </p>
             </CardContent>
           </Card>
@@ -263,7 +331,9 @@ export default function SalesStoreActivityPage() {
           <Card className="border border-brand-sage/40 shadow-sm bg-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
-                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Total Packaged Units Moved</p>
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                  {activityTab === "transfers" ? "Total Packaged Units Moved" : "Total Packaged Units Sold"}
+                </p>
                 <Warehouse size={16} className="text-brand-forest" />
               </div>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-2">
@@ -274,7 +344,7 @@ export default function SalesStoreActivityPage() {
                 )}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4">
-                Total item count transferred
+                {activityTab === "transfers" ? "Total item count transferred" : "Total item count sold"}
               </p>
             </CardContent>
           </Card>
@@ -283,7 +353,9 @@ export default function SalesStoreActivityPage() {
           <Card className="border border-brand-sage/40 shadow-sm bg-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
-                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Avg Sales Value / Transfer</p>
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                  {activityTab === "transfers" ? "Avg Sales Value / Transfer" : "Avg Revenue / Sale Item"}
+                </p>
                 <TrendingUp size={16} className="text-green-500" />
               </div>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-2">
@@ -294,7 +366,7 @@ export default function SalesStoreActivityPage() {
                 )}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4">
-                Calculated across {analytics.count} dispatches
+                Calculated across {analytics.count} items
               </p>
             </CardContent>
           </Card>
@@ -303,18 +375,20 @@ export default function SalesStoreActivityPage() {
           <Card className="border border-brand-sage/40 shadow-sm bg-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
-                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">Total Dispatch Count</p>
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                  {activityTab === "transfers" ? "Total Dispatch Count" : "Total Sales Count"}
+                </p>
                 <Layers size={16} className="text-brand-forest" />
               </div>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-2">
                 {isAnalyticsLoading ? (
                   <Loader2 className="animate-spin text-brand-forest h-6 w-6" />
                 ) : (
-                  `${analytics.count} Transfers`
+                  `${analytics.count} Records`
                 )}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4">
-                Logged movements to outlets
+                {activityTab === "transfers" ? "Logged movements to outlets" : "Logged direct client purchases"}
               </p>
             </CardContent>
           </Card>
@@ -327,7 +401,7 @@ export default function SalesStoreActivityPage() {
           {/* Filters Panel */}
           <Card className="lg:col-span-2 border border-brand-sage/40 shadow-sm rounded-xl bg-white">
             <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-5 py-3">
-              <CardTitle className="text-sm font-bold text-brand-forest">Filter Sales Transfer Logs</CardTitle>
+              <CardTitle className="text-sm font-bold text-brand-forest">Filter Activity Logs</CardTitle>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -353,7 +427,9 @@ export default function SalesStoreActivityPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-[10px] font-extrabold uppercase text-gray-400 block mb-1">Source Store (From)</label>
+                  <label className="text-[10px] font-extrabold uppercase text-gray-400 block mb-1">
+                    {activityTab === "transfers" ? "Source Store (From)" : "Sales Store"}
+                  </label>
                   <Select 
                     value={fromStore}
                     onChange={(e) => { setFromStore(e.target.value); handleFilterChange(); }}
@@ -363,18 +439,20 @@ export default function SalesStoreActivityPage() {
                     ]}
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-extrabold uppercase text-gray-400 block mb-1">Destination Store (To)</label>
-                  <Select 
-                    value={toStore}
-                    onChange={(e) => { setToStore(e.target.value); handleFilterChange(); }}
-                    options={[
-                      { label: "All Stores", value: "" },
-                      ...salesStores.map(s => ({ label: `${s.name}`, value: s.id }))
-                    ]}
-                  />
-                </div>
-                <div>
+                {activityTab === "transfers" && (
+                  <div>
+                    <label className="text-[10px] font-extrabold uppercase text-gray-400 block mb-1">Destination Store (To)</label>
+                    <Select 
+                      value={toStore}
+                      onChange={(e) => { setToStore(e.target.value); handleFilterChange(); }}
+                      options={[
+                        { label: "All Stores", value: "" },
+                        ...salesStores.map(s => ({ label: `${s.name}`, value: s.id }))
+                      ]}
+                    />
+                  </div>
+                )}
+                <div className={activityTab === "transfers" ? "" : "sm:col-span-2"}>
                   <label className="text-[10px] font-extrabold uppercase text-gray-400 block mb-1">Filter by Product</label>
                   <Select 
                     value={selectedProduct}
@@ -433,8 +511,10 @@ export default function SalesStoreActivityPage() {
         <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
           <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-brand-forest">Audit Ledger - Sales Transfers</CardTitle>
-              <CardDescription className="text-xs">Detailed records matching selected criteria</CardDescription>
+              <CardTitle className="text-base font-bold text-brand-forest">
+                {activityTab === "transfers" ? "Audit Ledger - Sales Transfers" : "Sales Ledger - Product Sales"}
+              </CardTitle>
+              <p className="text-xs text-gray-500">Detailed records matching selected criteria</p>
             </div>
             {totalItems > 0 && (
               <span className="text-[10px] text-gray-400 font-extrabold uppercase bg-gray-100 px-2.5 py-1 rounded-md border border-gray-200">
@@ -447,86 +527,151 @@ export default function SalesStoreActivityPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader className="bg-gray-50/70 border-b border-brand-sage/30">
-                  <TableRow>
-                    <TableHead className="pl-6 text-xs font-bold text-brand-forest">Date</TableHead>
-                    <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
-                    <TableHead className="text-xs font-bold text-brand-forest">From Store</TableHead>
-                    <TableHead className="text-xs font-bold text-brand-forest">To Store</TableHead>
-                    <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Transferred</TableHead>
-                    <TableHead className="text-right text-xs font-bold text-brand-forest">Sales Unit Price</TableHead>
-                    <TableHead className="text-right text-xs font-bold text-brand-forest">Total Valuation</TableHead>
-                    <TableHead className="text-xs font-bold text-brand-forest pl-6">Operator</TableHead>
-                    <TableHead className="text-xs font-bold text-brand-forest pr-6">Notes</TableHead>
-                  </TableRow>
+                  {activityTab === "transfers" ? (
+                    <TableRow>
+                      <TableHead className="pl-6 text-xs font-bold text-brand-forest">Date</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">From Store</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">To Store</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Transferred</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Sales Unit Price</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Total Valuation</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest pl-6">Operator</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest pr-6">Notes</TableHead>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
+                      <TableHead className="pl-6 text-xs font-bold text-brand-forest">Date</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Order Ref</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Customer</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Product Details</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Sales Store</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Qty Sold</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Sold Unit Price</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Total Revenue</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest pl-6 pr-6">Operator</TableHead>
+                    </TableRow>
+                  )}
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-16">
+                      <TableCell colSpan={activityTab === "transfers" ? 9 : 9} className="text-center py-16">
                         <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
                           <Loader2 className="animate-spin text-brand-forest" size={24} />
                           Loading transaction records...
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : transfers.length === 0 ? (
+                  ) : items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-16 text-gray-500 text-xs font-medium">
-                        No transfer activities found matching the filters.
+                      <TableCell colSpan={activityTab === "transfers" ? 9 : 9} className="text-center py-16 text-gray-500 text-xs font-medium">
+                        No activity records found matching the filters.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    transfers.map((t) => {
-                      const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                    items.map((t) => {
                       const prodName = t.product?.name || "Unknown Product";
                       const prodCode = t.product?.code || "N/A";
-                      const fromStore = t.from_store?.name || "Main Sales Store";
-                      const toStore = t.to_store?.name || "Main Sales Store";
                       const qty = parseFloat(t.quantity) || 0;
                       const uom = t.product?.unit_of_measure === 'trays' ? 'Trays' : t.product?.unit_of_measure === 'kg' ? 'Kg' : 'Units';
-                      const unitPrice = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
-                      const totalVal = qty * unitPrice;
-                      const opName = t.user?.name || "System";
+                      
+                      if (activityTab === "transfers") {
+                        const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                        const fromStore = t.from_store?.name || "Main Sales Store";
+                        const toStore = t.to_store?.name || "Main Sales Store";
+                        const unitPrice = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+                        const totalVal = qty * unitPrice;
+                        const opName = t.user?.name || "System";
 
-                      return (
-                        <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                          <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
-                            {format(new Date(dateStr), "dd/MM/yyyy")}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2.5">
-                              <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
-                                {prodCode.replace("EGG-", "")}
+                        return (
+                          <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
+                            <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
+                              {format(new Date(dateStr), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2.5">
+                                <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
+                                  {prodCode.replace("EGG-", "")}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-brand-forest text-xs">{prodName}</p>
+                                  <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-bold text-brand-forest text-xs">{prodName}</p>
-                                <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                              {fromStore}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                              {toStore}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
+                              {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
+                              UGX {unitPrice.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
+                              UGX {totalVal.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6">
+                              {opName}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-500 font-medium max-w-[200px] truncate pr-6" title={t.notes}>
+                              {t.notes || "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      } else {
+                        const dateStr = t.order?.order_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                        const orderNum = t.order?.order_number || "N/A";
+                        const customerName = t.order?.customer?.name || "N/A";
+                        const salesStoreName = t.order?.sales_store?.name || "Main Sales Store";
+                        const unitPrice = parseFloat(t.unit_price || t.product?.sales_unit_price || t.product?.default_unit_price || 0);
+                        const totalVal = qty * unitPrice;
+                        const opName = t.order?.user?.name || "System";
+
+                        return (
+                          <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
+                            <TableCell className="pl-6 text-xs text-gray-550 font-bold whitespace-nowrap">
+                              {format(new Date(dateStr), "dd/MM/yyyy")}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap font-mono">
+                              {orderNum}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                              {customerName}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2.5">
+                                <div className={`h-8 w-8 rounded-xl font-heading font-black text-[10px] flex items-center justify-center shadow-sm shrink-0 select-none ${getLogoColor(prodName)}`}>
+                                  {prodCode.replace("EGG-", "")}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-brand-forest text-xs">{prodName}</p>
+                                  <p className="text-[10px] text-gray-400 font-bold font-mono">{prodCode}</p>
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                            {fromStore}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
-                            {toStore}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
-                            {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
-                            UGX {unitPrice.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
-                            UGX {totalVal.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6">
-                            {opName}
-                          </TableCell>
-                          <TableCell className="text-xs text-gray-500 font-medium max-w-[200px] truncate pr-6" title={t.notes}>
-                            {t.notes || "—"}
-                          </TableCell>
-                        </TableRow>
-                      );
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-650 font-bold whitespace-nowrap">
+                              {salesStoreName}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-xs text-brand-forest whitespace-nowrap">
+                              {qty.toLocaleString()} <span className="text-[10px] text-gray-400 font-normal">{uom}</span>
+                            </TableCell>
+                            <TableCell className="text-right text-xs text-gray-500 font-bold whitespace-nowrap">
+                              UGX {unitPrice.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right font-black text-brand-forest font-heading text-xs whitespace-nowrap">
+                              UGX {totalVal.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-xs text-gray-550 font-bold whitespace-nowrap pl-6 pr-6">
+                              {opName}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
                     })
                   )}
                 </TableBody>
@@ -538,7 +683,7 @@ export default function SalesStoreActivityPage() {
               <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">
                 {totalItems > 0 
                   ? `Showing ${(currentPage - 1) * perPage + 1} to ${Math.min(currentPage * perPage, totalItems)} of ${totalItems} entries`
-                  : "No transfers to display"
+                  : "No activity to display"
                 }
               </p>
               <div className="flex items-center gap-2">

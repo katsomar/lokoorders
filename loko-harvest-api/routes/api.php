@@ -60,6 +60,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('sales-stores', App\Http\Controllers\Api\V1\SalesStoreController::class);
         Route::get('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'index']);
         Route::post('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'store']);
+        Route::get('/sales-store-sales', [App\Http\Controllers\Api\V1\SalesStoreSalesController::class, 'index']);
 
         Route::get('/sales-stock', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'index']);
         Route::get('/sales-movements', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'movements']);
