@@ -531,18 +531,12 @@ export default function CustomersPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {customer.isParent ? (
-                            <span className="font-black text-brand-forest text-base font-heading">
-                              {customer.name}
-                            </span>
-                          ) : (
-                            <Link 
-                              href={`/customers/${customer.id}`} 
-                              className="font-black text-brand-forest text-base hover:underline font-heading"
-                            >
-                              {customer.name}
-                            </Link>
-                          )}
+                          <Link 
+                            href={`/customers/${customer.id}`} 
+                            className="font-black text-brand-forest text-base hover:underline font-heading"
+                          >
+                            {customer.name}
+                          </Link>
                           {customer.isParent ? (
                             <Badge className="bg-brand-forest text-white border-none text-[9px] py-0.5 px-2 font-extrabold uppercase tracking-wider rounded-lg">
                               Corporate HQ ({customer.branches.length} Branches)
@@ -586,17 +580,15 @@ export default function CustomersPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {!customer.isParent && (
-                          <Link href={`/customers/${customer.id}`}>
-                            <Button 
-                              variant="outline" 
-                              className="h-8.5 px-3.5 text-xs font-extrabold gap-1 rounded-xl cursor-pointer"
-                            >
-                              View Ledger
-                              <ChevronRight size={14} />
-                            </Button>
-                          </Link>
-                        )}
+                        <Link href={`/customers/${customer.id}`}>
+                          <Button 
+                            variant="outline" 
+                            className="h-8.5 px-3.5 text-xs font-extrabold gap-1 rounded-xl cursor-pointer"
+                          >
+                            {customer.isParent ? "View HQ Ledger" : "View Ledger"}
+                            <ChevronRight size={14} />
+                          </Button>
+                        </Link>
 
                         {hasBranches && (
                           <Button
