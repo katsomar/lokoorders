@@ -396,4 +396,56 @@ class DriverVehicleTest extends TestCase
         Storage::disk('public')->assertMissing('avatars/old.jpg');
         Storage::disk('public')->assertMissing('licenses/old.jpg');
     }
+
+    public function test_can_delete_vehicle()
+    {
+        Storage::fake('public');
+
+        $vehicle = Vehicle::create([
+            'registration_number' => 'UBL 999X',
+            'make' => 'Toyota',
+            'model' => 'Hilux',
+            'max_crates_capacity' => 150,
+            'fuel_level' => 100,
+            'status' => 'active',
+            'image_path' => 'vehicles/old.jpg',
+        ]);
+
+        $driverUser = User::create([
+            'name' => 'John Driver',
+            'email' => 'john@lokoharvest.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700000003',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $vehicle->id,
+            'license_number' => 'UG-9999',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        Storage::disk('public')->put('vehicles/old.jpg', 'fake content');
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson("/api/v1/vehicles/{$vehicle->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseMissing('vehicles', ['id' => $vehicle->id]);
+        
+        // Driver should remain in DB but vehicle_id should be null
+        $this->assertDatabaseHas('drivers', [
+            'id' => $driver->id,
+            'vehicle_id' => null,
+        ]);
+
+        Storage::disk('public')->assertMissing('vehicles/old.jpg');
+    }
 }

@@ -64,30 +64,70 @@ class VehicleController extends Controller
         $vehicle = Vehicle::findOrFail($id);
 
         $validated = $request->validate([
-            'status' => 'required|in:active,maintenance,inactive',
-            'fuel_level' => 'required|integer|between:0,100',
-            'driver_ids' => 'present|array',
+            'registration_number' => 'nullable|string|unique:vehicles,registration_number,' . $vehicle->id,
+            'make' => 'nullable|string',
+            'model' => 'nullable|string',
+            'max_crates_capacity' => 'nullable|integer|min:1',
+            'status' => 'nullable|in:active,maintenance,inactive',
+            'fuel_level' => 'nullable|integer|between:0,100',
+            'vehicle_photo' => 'nullable|image|max:2048',
+            'driver_ids' => 'nullable|array',
             'driver_ids.*' => 'exists:drivers,id',
         ]);
 
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle, $validated) {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle, $validated, $request) {
+            $imagePath = $vehicle->image_path;
+            if ($request->hasFile('vehicle_photo')) {
+                if ($vehicle->image_path && !filter_var($vehicle->image_path, FILTER_VALIDATE_URL)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($vehicle->image_path);
+                }
+                $imagePath = $request->file('vehicle_photo')->store('vehicles', 'public');
+            }
+
             $vehicle->update([
-                'status' => $validated['status'],
-                'fuel_level' => $validated['fuel_level'],
+                'registration_number' => $validated['registration_number'] ?? $vehicle->registration_number,
+                'make' => $validated['make'] ?? $vehicle->make,
+                'model' => $validated['model'] ?? $vehicle->model,
+                'max_crates_capacity' => $validated['max_crates_capacity'] ?? $vehicle->max_crates_capacity,
+                'status' => $validated['status'] ?? $vehicle->status,
+                'fuel_level' => $validated['fuel_level'] ?? $vehicle->fuel_level,
+                'image_path' => $imagePath,
             ]);
 
-            // Disassociate drivers who were previously assigned to this vehicle but not in new list
-            \App\Models\Driver::where('vehicle_id', $vehicle->id)
-                ->whereNotIn('id', $validated['driver_ids'])
-                ->update(['vehicle_id' => null]);
+            $driverIds = $validated['driver_ids'] ?? null;
 
-            // Associate the selected drivers
-            if (!empty($validated['driver_ids'])) {
-                \App\Models\Driver::whereIn('id', $validated['driver_ids'])
-                    ->update(['vehicle_id' => $vehicle->id]);
+            if ($driverIds !== null) {
+                // Disassociate drivers who were previously assigned to this vehicle but not in new list
+                \App\Models\Driver::where('vehicle_id', $vehicle->id)
+                    ->whereNotIn('id', $driverIds)
+                    ->update(['vehicle_id' => null]);
+
+                // Associate the selected drivers
+                if (!empty($driverIds)) {
+                    \App\Models\Driver::whereIn('id', $driverIds)
+                        ->update(['vehicle_id' => $vehicle->id]);
+                }
             }
 
             return $this->success($vehicle, 'Vehicle logistics updated successfully');
+        });
+    }
+
+    public function destroy($id)
+    {
+        $vehicle = Vehicle::findOrFail($id);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($vehicle) {
+            if ($vehicle->image_path && !filter_var($vehicle->image_path, FILTER_VALIDATE_URL)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($vehicle->image_path);
+            }
+
+            // Disassociate drivers
+            \App\Models\Driver::where('vehicle_id', $vehicle->id)->update(['vehicle_id' => null]);
+
+            $vehicle->delete();
+
+            return $this->success(null, 'Vehicle deleted successfully');
         });
     }
 }

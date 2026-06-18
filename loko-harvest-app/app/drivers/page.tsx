@@ -80,6 +80,12 @@ export default function DriversPage() {
   const [logisticsFuelLevel, setLogisticsFuelLevel] = useState<number>(100);
   const [logisticsDriverIds, setLogisticsDriverIds] = useState<string[]>([]);
   const [isSavingLogistics, setIsSavingLogistics] = useState(false);
+  const [logisticsRegistration, setLogisticsRegistration] = useState("");
+  const [logisticsMake, setLogisticsMake] = useState("");
+  const [logisticsModel, setLogisticsModel] = useState("");
+  const [logisticsCapacity, setLogisticsCapacity] = useState("300");
+  const [logisticsPhotoFile, setLogisticsPhotoFile] = useState<File | null>(null);
+  const [logisticsPhotoPreview, setLogisticsPhotoPreview] = useState<string | null>(null);
 
   // Register Driver Modal State
   const [showRegisterDriverModal, setShowRegisterDriverModal] = useState(false);
@@ -192,6 +198,11 @@ export default function DriversPage() {
     }
     setLogisticsStatus(selectedVehicleForLogistics.status || "active");
     setLogisticsFuelLevel(selectedVehicleForLogistics.fuel_level ?? 100);
+    setLogisticsRegistration(selectedVehicleForLogistics.registration_number || "");
+    setLogisticsMake(selectedVehicleForLogistics.make || "");
+    setLogisticsModel(selectedVehicleForLogistics.model || "");
+    setLogisticsCapacity((selectedVehicleForLogistics.max_crates_capacity ?? 300).toString());
+    setLogisticsPhotoFile(null);
     
     // Find the IDs of the drivers who have this vehicle registration number
     const assignedIds = drivers
@@ -200,17 +211,53 @@ export default function DriversPage() {
     setLogisticsDriverIds(assignedIds);
   }, [selectedVehicleForLogistics, drivers]);
 
+  useEffect(() => {
+    if (logisticsPhotoFile) {
+      const objectUrl = URL.createObjectURL(logisticsPhotoFile);
+      setLogisticsPhotoPreview(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    } else {
+      setLogisticsPhotoPreview(null);
+    }
+  }, [logisticsPhotoFile]);
+
   // Handle saving logistics updates
   const handleSaveLogistics = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedVehicleForLogistics) return;
 
+    if (!logisticsRegistration || !logisticsMake || !logisticsModel || !logisticsCapacity) {
+      alert("Registration plate, make, model, and capacity are required.");
+      return;
+    }
+
     setIsSavingLogistics(true);
     try {
-      await api.put(`/vehicles/${selectedVehicleForLogistics.id}/logistics`, {
-        status: logisticsStatus,
-        fuel_level: logisticsFuelLevel,
-        driver_ids: logisticsDriverIds
+      const formData = new FormData();
+      formData.append("_method", "PUT");
+      formData.append("registration_number", logisticsRegistration);
+      formData.append("make", logisticsMake);
+      formData.append("model", logisticsModel);
+      formData.append("max_crates_capacity", logisticsCapacity);
+      formData.append("status", logisticsStatus);
+      formData.append("fuel_level", logisticsFuelLevel.toString());
+      if (logisticsPhotoFile) {
+        formData.append("vehicle_photo", logisticsPhotoFile);
+      }
+      
+      if (logisticsDriverIds.length > 0) {
+        logisticsDriverIds.forEach(id => {
+          formData.append("driver_ids[]", id);
+        });
+      } else {
+        // Clear all drivers
+        formData.append("driver_ids", "");
+      }
+
+      await api.post(`/vehicles/${selectedVehicleForLogistics.id}/logistics`, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       alert("Vehicle logistics saved successfully!");
@@ -221,6 +268,24 @@ export default function DriversPage() {
       alert(err.response?.data?.message || "Failed to update vehicle logistics.");
     } finally {
       setIsSavingLogistics(false);
+    }
+  };
+
+  const handleDeleteVehicle = async (vehicleId: string, registrationNumber: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete vehicle "${registrationNumber}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/vehicles/${vehicleId}`);
+      alert("Vehicle deleted successfully!");
+      if (selectedVehicleForLogistics?.id === vehicleId) {
+        setSelectedVehicleForLogistics(null);
+      }
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to delete vehicle.");
     }
   };
 
@@ -864,20 +929,74 @@ export default function DriversPage() {
                 </div>
 
                 {/* Body Content */}
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-5">
                   
-                  {/* Status Dropdown */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Operational Status</label>
-                    <select
-                      value={logisticsStatus}
-                      onChange={(e) => setLogisticsStatus(e.target.value)}
-                      className="w-full text-xs font-semibold text-gray-700 border border-brand-sage bg-white p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-forest shadow-xs"
-                    >
-                      <option value="active">Active</option>
-                      <option value="maintenance">Maintenance</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
+                  {/* Registration plate */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Registration Number (Plate) *</label>
+                    <div className="relative">
+                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        placeholder="e.g. UBL 482Y" 
+                        required 
+                        value={logisticsRegistration}
+                        onChange={(e) => setLogisticsRegistration(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Make and Model */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Make *</label>
+                      <Input 
+                        placeholder="e.g. Isuzu" 
+                        required 
+                        value={logisticsMake}
+                        onChange={(e) => setLogisticsMake(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Model *</label>
+                      <Input 
+                        placeholder="e.g. Cargo Crate Truck" 
+                        required 
+                        value={logisticsModel}
+                        onChange={(e) => setLogisticsModel(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Capacity and Status */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Max Crate Capacity (Trays) *</label>
+                      <Input 
+                        type="number"
+                        placeholder="e.g. 300" 
+                        required 
+                        value={logisticsCapacity}
+                        onChange={(e) => setLogisticsCapacity(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Operational Status</label>
+                      <select
+                        value={logisticsStatus}
+                        onChange={(e) => setLogisticsStatus(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="active">Active</option>
+                        <option value="maintenance">Maintenance</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
                   </div>
 
                   {/* Fuel level slider */}
@@ -893,6 +1012,42 @@ export default function DriversPage() {
                         className="w-full accent-brand-forest h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
                       />
                       <span className="font-mono font-bold text-xs text-gray-700 w-12 text-right">{logisticsFuelLevel}%</span>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Photo upload / preview */}
+                  <div className="space-y-4 pt-2 border-t border-brand-sage/35">
+                    <div className="flex items-center gap-4">
+                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60 relative group">
+                        {logisticsPhotoPreview ? (
+                          <img 
+                            src={logisticsPhotoPreview} 
+                            alt="Vehicle Preview" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(logisticsPhotoPreview)}
+                          />
+                        ) : selectedVehicleForLogistics.image ? (
+                          <img 
+                            src={selectedVehicleForLogistics.image} 
+                            alt="Vehicle Current" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(selectedVehicleForLogistics.image)}
+                          />
+                        ) : (
+                          <Truck size={28} className="text-brand-sage/60" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Replace Vehicle Photo</label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setLogisticsPhotoFile(e.target.files?.[0] || null)}
+                          className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -961,22 +1116,31 @@ export default function DriversPage() {
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-4.5 bg-gray-50 border-t border-brand-sage/30 flex justify-end gap-2.5">
+                <div className="px-6 py-4.5 bg-gray-50 border-t border-brand-sage/30 flex justify-between items-center">
                   <Button 
                     type="button"
-                    onClick={() => setSelectedVehicleForLogistics(null)}
-                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer"
+                    onClick={() => handleDeleteVehicle(selectedVehicleForLogistics.id, selectedVehicleForLogistics.registration_number)}
+                    className="bg-white hover:bg-red-50 text-red-500 border border-red-200 hover:border-red-300 font-bold rounded-xl text-xs px-3.5 h-9.5 cursor-pointer"
                   >
-                    Cancel
+                    Delete Vehicle
                   </Button>
-                  <Button 
-                    type="submit"
-                    disabled={isSavingLogistics}
-                    className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer flex items-center gap-1.5"
-                  >
-                    {isSavingLogistics && <Loader2 className="animate-spin" size={13} />}
-                    Save Logistics Updates
-                  </Button>
+                  <div className="flex gap-2.5">
+                    <Button 
+                      type="button"
+                      onClick={() => setSelectedVehicleForLogistics(null)}
+                      className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit"
+                      disabled={isSavingLogistics}
+                      className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-9.5 cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isSavingLogistics && <Loader2 className="animate-spin" size={13} />}
+                      Save Logistics Updates
+                    </Button>
+                  </div>
                 </div>
 
               </form>

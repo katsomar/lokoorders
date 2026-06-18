@@ -89,6 +89,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'index']);
         Route::post('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'store']);
         Route::put('/vehicles/{id}/logistics', [App\Http\Controllers\Api\V1\VehicleController::class, 'updateLogistics']);
+        Route::delete('/vehicles/{id}', [App\Http\Controllers\Api\V1\VehicleController::class, 'destroy']);
 
         // Other module routes will go here
     });
