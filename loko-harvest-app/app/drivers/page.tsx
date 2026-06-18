@@ -13,7 +13,10 @@ import {
   UserCheck,
   AlertTriangle,
   Loader2,
-  X
+  X,
+  Mail,
+  ShieldCheck,
+  Gauge
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -40,6 +43,28 @@ export default function DriversPage() {
   const [logisticsFuelLevel, setLogisticsFuelLevel] = useState<number>(100);
   const [logisticsDriverIds, setLogisticsDriverIds] = useState<string[]>([]);
   const [isSavingLogistics, setIsSavingLogistics] = useState(false);
+
+  // Register Driver Modal State
+  const [showRegisterDriverModal, setShowRegisterDriverModal] = useState(false);
+  const [newDriverName, setNewDriverName] = useState("");
+  const [newDriverEmail, setNewDriverEmail] = useState("");
+  const [newDriverPhone, setNewDriverPhone] = useState("");
+  const [newDriverLicense, setNewDriverLicense] = useState("");
+  const [newDriverVehicleId, setNewDriverVehicleId] = useState("");
+  const [newDriverStatus, setNewDriverStatus] = useState("active");
+  const [newDriverDateJoined, setNewDriverDateJoined] = useState(new Date().toISOString().split('T')[0]);
+  const [newDriverNotes, setNewDriverNotes] = useState("");
+  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
+
+  // Register Vehicle Modal State
+  const [showRegisterVehicleModal, setShowRegisterVehicleModal] = useState(false);
+  const [newVehicleRegistration, setNewVehicleRegistration] = useState("");
+  const [newVehicleMake, setNewVehicleMake] = useState("");
+  const [newVehicleModel, setNewVehicleModel] = useState("");
+  const [newVehicleCapacity, setNewVehicleCapacity] = useState("300");
+  const [newVehicleFuel, setNewVehicleFuel] = useState("100");
+  const [newVehicleStatus, setNewVehicleStatus] = useState("active");
+  const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -122,6 +147,80 @@ export default function DriversPage() {
     }
   };
 
+  // Submit Register Driver
+  const handleRegisterDriverSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDriverName || !newDriverPhone || !newDriverLicense) return;
+
+    setIsSubmittingDriver(true);
+    try {
+      await api.post("/drivers", {
+        full_name: newDriverName,
+        email: newDriverEmail || null,
+        phone: newDriverPhone,
+        vehicle_id: newDriverVehicleId || null,
+        license_number: newDriverLicense,
+        employment_status: newDriverStatus,
+        date_joined: newDriverDateJoined,
+        notes: newDriverNotes || null
+      });
+
+      alert("Driver registered successfully!");
+      // Reset State
+      setNewDriverName("");
+      setNewDriverEmail("");
+      setNewDriverPhone("");
+      setNewDriverLicense("");
+      setNewDriverVehicleId("");
+      setNewDriverStatus("active");
+      setNewDriverDateJoined(new Date().toISOString().split('T')[0]);
+      setNewDriverNotes("");
+      setShowRegisterDriverModal(false);
+      
+      await fetchData(); // Refresh data
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to register driver.");
+    } finally {
+      setIsSubmittingDriver(false);
+    }
+  };
+
+  // Submit Register Vehicle
+  const handleRegisterVehicleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVehicleRegistration || !newVehicleMake || !newVehicleModel) return;
+
+    setIsSubmittingVehicle(true);
+    try {
+      await api.post("/vehicles", {
+        registration_number: newVehicleRegistration,
+        make: newVehicleMake,
+        model: newVehicleModel,
+        max_crates_capacity: parseInt(newVehicleCapacity) || 300,
+        fuel_level: parseInt(newVehicleFuel) || 100,
+        status: newVehicleStatus
+      });
+
+      alert("Vehicle registered successfully!");
+      // Reset State
+      setNewVehicleRegistration("");
+      setNewVehicleMake("");
+      setNewVehicleModel("");
+      setNewVehicleCapacity("300");
+      setNewVehicleFuel("100");
+      setNewVehicleStatus("active");
+      setShowRegisterVehicleModal(false);
+
+      await fetchData(); // Refresh data
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to register vehicle.");
+    } finally {
+      setIsSubmittingVehicle(false);
+    }
+  };
+
   // Filtering based on active directory selection
   const filteredDrivers = drivers.filter(driver =>
     (driver.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -146,11 +245,17 @@ export default function DriversPage() {
             <p className="text-gray-500 font-body text-sm">Coordinate operational delivery personnel, registered vehicle assets, and shared shift mappings</p>
           </div>
           <div className="flex gap-2">
-            <Button className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-11">
+            <Button 
+              onClick={() => setShowRegisterVehicleModal(true)}
+              className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+            >
               <Plus size={16} />
               Register Vehicle
             </Button>
-            <Button className="gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-4 h-11">
+            <Button 
+              onClick={() => setShowRegisterDriverModal(true)}
+              className="gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+            >
               <Plus size={16} />
               Register New Driver
             </Button>
@@ -611,7 +716,7 @@ export default function DriversPage() {
                               <button 
                                 type="button"
                                 onClick={() => setLogisticsDriverIds(prev => prev.filter(id => id !== dId))}
-                                className="text-red-500 hover:text-red-750 font-black text-[9px] uppercase cursor-pointer"
+                                className="text-red-500 hover:text-red-755 font-black text-[9px] uppercase cursor-pointer"
                               >
                                 Remove
                               </button>
@@ -671,6 +776,294 @@ export default function DriversPage() {
                 </div>
 
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* REGISTER VEHICLE MODAL OVERLAY */}
+        {showRegisterVehicleModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Register Vehicle Asset</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Add a new delivery vehicle to the logistics fleet</p>
+                </div>
+                <Button 
+                  onClick={() => setShowRegisterVehicleModal(false)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer animate-none"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleRegisterVehicleSubmit} className="p-6 space-y-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Registration Number (License Plate) *</label>
+                    <div className="relative">
+                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        placeholder="e.g. UBL 482Y" 
+                        required 
+                        value={newVehicleRegistration}
+                        onChange={(e) => setNewVehicleRegistration(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Make *</label>
+                      <Input 
+                        placeholder="e.g. Isuzu" 
+                        required 
+                        value={newVehicleMake}
+                        onChange={(e) => setNewVehicleMake(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Model *</label>
+                      <Input 
+                        placeholder="e.g. Cargo Crate Truck" 
+                        required 
+                        value={newVehicleModel}
+                        onChange={(e) => setNewVehicleModel(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Max Crate Capacity (Trays) *</label>
+                      <Input 
+                        type="number"
+                        placeholder="e.g. 300" 
+                        required 
+                        value={newVehicleCapacity}
+                        onChange={(e) => setNewVehicleCapacity(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Initial Fuel Level (%)</label>
+                      <div className="relative">
+                        <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                        <Input 
+                          type="number"
+                          min="0"
+                          max="100"
+                          placeholder="e.g. 100" 
+                          value={newVehicleFuel}
+                          onChange={(e) => setNewVehicleFuel(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Initial Fleet Status</label>
+                    <select
+                      value={newVehicleStatus}
+                      onChange={(e) => setNewVehicleStatus(e.target.value)}
+                      className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="active">Active</option>
+                      <option value="maintenance">Maintenance</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                  <Button 
+                    type="button" 
+                    onClick={() => setShowRegisterVehicleModal(false)} 
+                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmittingVehicle}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSubmittingVehicle && <Loader2 className="animate-spin" size={13} />}
+                    Register Vehicle
+                  </Button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* REGISTER NEW DRIVER MODAL OVERLAY */}
+        {showRegisterDriverModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Register Driver Profile</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Setup a new driver user and license mappings</p>
+                </div>
+                <Button 
+                  onClick={() => setShowRegisterDriverModal(false)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer animate-none"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleRegisterDriverSubmit} className="p-6 space-y-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver Full Name *</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        placeholder="e.g. Sarah Namubiru" 
+                        required 
+                        value={newDriverName}
+                        onChange={(e) => setNewDriverName(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Contact Phone *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          placeholder="e.g. 0755333444" 
+                          required 
+                          value={newDriverPhone}
+                          onChange={(e) => setNewDriverPhone(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver License Number *</label>
+                      <div className="relative">
+                        <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          placeholder="e.g. UG-8821" 
+                          required 
+                          value={newDriverLicense}
+                          onChange={(e) => setNewDriverLicense(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Email Address</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          type="email"
+                          placeholder="driver@lokoharvest.com" 
+                          value={newDriverEmail}
+                          onChange={(e) => setNewDriverEmail(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Date Joined *</label>
+                      <Input 
+                        type="date"
+                        required 
+                        value={newDriverDateJoined}
+                        onChange={(e) => setNewDriverDateJoined(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Assign Vehicle</label>
+                      <select
+                        value={newDriverVehicleId}
+                        onChange={(e) => setNewDriverVehicleId(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="">No Vehicle Assigned</option>
+                        {vehicles.map(v => (
+                          <option key={v.id} value={v.id}>{v.registration_number} ({v.make})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Employment Status</label>
+                      <select
+                        value={newDriverStatus}
+                        onChange={(e) => setNewDriverStatus(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Notes</label>
+                    <textarea 
+                      placeholder="e.g. Experienced driver, morning shift preferrence"
+                      value={newDriverNotes}
+                      onChange={(e) => setNewDriverNotes(e.target.value)}
+                      className="w-full h-16 p-2 text-xs font-semibold rounded-xl border border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
+                    />
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                  <Button 
+                    type="button" 
+                    onClick={() => setShowRegisterDriverModal(false)} 
+                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmittingDriver}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSubmittingDriver && <Loader2 className="animate-spin" size={13} />}
+                    Register Driver
+                  </Button>
+                </div>
+              </form>
+
             </div>
           </div>
         )}
