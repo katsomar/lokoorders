@@ -6,6 +6,8 @@ use App\Models\Driver;
 use App\Models\Vehicle;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DriverVehicleTest extends TestCase
@@ -78,6 +80,8 @@ class DriverVehicleTest extends TestCase
 
     public function test_can_store_new_driver()
     {
+        Storage::fake('public');
+
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/drivers', [
                 'full_name' => 'Sarah Namubiru',
@@ -87,6 +91,8 @@ class DriverVehicleTest extends TestCase
                 'license_number' => 'UG-8821',
                 'employment_status' => 'active',
                 'date_joined' => '2025-03-20',
+                'avatar' => UploadedFile::fake()->create('avatar.jpg', 100, 'image/jpeg'),
+                'license_photo' => UploadedFile::fake()->create('license.jpg', 100, 'image/jpeg'),
             ]);
 
         $response->assertStatus(201)
@@ -103,6 +109,10 @@ class DriverVehicleTest extends TestCase
             'license_number' => 'UG-8821',
             'vehicle_id' => $this->vehicle->id,
         ]);
+
+        $driver = Driver::where('license_number', 'UG-8821')->first();
+        Storage::disk('public')->assertExists($driver->avatar_path);
+        Storage::disk('public')->assertExists($driver->license_path);
     }
 
     public function test_can_fetch_vehicles_list()
@@ -145,6 +155,8 @@ class DriverVehicleTest extends TestCase
 
     public function test_can_store_new_vehicle()
     {
+        Storage::fake('public');
+
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/vehicles', [
                 'registration_number' => 'UAE 445Z',
@@ -153,6 +165,7 @@ class DriverVehicleTest extends TestCase
                 'max_crates_capacity' => 800,
                 'fuel_level' => 60,
                 'status' => 'active',
+                'vehicle_photo' => UploadedFile::fake()->create('truck.jpg', 100, 'image/jpeg'),
             ]);
 
         $response->assertStatus(201)
@@ -164,6 +177,9 @@ class DriverVehicleTest extends TestCase
             'model' => 'Fuso Transporter',
             'max_crates_capacity' => 800,
         ]);
+
+        $vehicle = Vehicle::where('registration_number', 'UAE 445Z')->first();
+        Storage::disk('public')->assertExists($vehicle->image_path);
     }
 
     public function test_can_fetch_driver_shifts()

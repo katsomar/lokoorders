@@ -39,6 +39,8 @@ class UserSeeder extends Seeder
                     'vehicle_reg' => 'UBL 482Y',
                     'employment_status' => 'active',
                     'date_joined' => '2025-01-15',
+                    'avatar_path' => 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=300',
+                    'license_path' => 'https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?auto=format&fit=crop&q=80&w=500',
                 ]
             ],
             [
@@ -53,6 +55,8 @@ class UserSeeder extends Seeder
                     'vehicle_reg' => 'UBL 482Y',
                     'employment_status' => 'active',
                     'date_joined' => '2025-03-20',
+                    'avatar_path' => 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=300',
+                    'license_path' => 'https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?auto=format&fit=crop&q=80&w=500',
                 ]
             ],
             [
@@ -67,6 +71,8 @@ class UserSeeder extends Seeder
                     'vehicle_reg' => 'UAB 123X',
                     'employment_status' => 'active',
                     'date_joined' => '2025-02-10',
+                    'avatar_path' => 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300',
+                    'license_path' => 'https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?auto=format&fit=crop&q=80&w=500',
                 ]
             ],
             [
@@ -81,6 +87,8 @@ class UserSeeder extends Seeder
                     'vehicle_reg' => 'UBC 778A',
                     'employment_status' => 'inactive',
                     'date_joined' => '2025-05-01',
+                    'avatar_path' => 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=300',
+                    'license_path' => 'https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?auto=format&fit=crop&q=80&w=500',
                 ]
             ],
         ];
@@ -101,6 +109,8 @@ class UserSeeder extends Seeder
                     'license_number' => $driverDetails['license_number'],
                     'employment_status' => $driverDetails['employment_status'],
                     'date_joined' => $driverDetails['date_joined'],
+                    'avatar_path' => $driverDetails['avatar_path'],
+                    'license_path' => $driverDetails['license_path'],
                 ]);
             }
         }

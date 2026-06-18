@@ -25,6 +25,7 @@ class VehicleController extends Controller
                 'fuel_level' => $vehicle->fuel_level,
                 'status' => $vehicle->status,
                 'assigned_drivers' => $vehicle->drivers->pluck('full_name')->toArray(),
+                'image' => $vehicle->image_path ? (filter_var($vehicle->image_path, FILTER_VALIDATE_URL) ? $vehicle->image_path : url('storage/' . $vehicle->image_path)) : null,
             ];
         });
 
@@ -40,7 +41,10 @@ class VehicleController extends Controller
             'max_crates_capacity' => 'required|integer|min:1',
             'fuel_level' => 'nullable|integer|between:0,100',
             'status' => 'nullable|in:active,maintenance,inactive',
+            'vehicle_photo' => 'required|image|max:2048',
         ]);
+
+        $vehiclePhotoPath = $request->file('vehicle_photo')->store('vehicles', 'public');
 
         $vehicle = Vehicle::create([
             'registration_number' => $validated['registration_number'],
@@ -49,6 +53,7 @@ class VehicleController extends Controller
             'max_crates_capacity' => $validated['max_crates_capacity'],
             'fuel_level' => $validated['fuel_level'] ?? 100,
             'status' => $validated['status'] ?? 'active',
+            'image_path' => $vehiclePhotoPath,
         ]);
 
         return $this->success($vehicle, 'Vehicle registered successfully', 201);

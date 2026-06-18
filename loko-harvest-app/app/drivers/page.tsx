@@ -55,6 +55,8 @@ export default function DriversPage() {
   const [newDriverDateJoined, setNewDriverDateJoined] = useState(new Date().toISOString().split('T')[0]);
   const [newDriverNotes, setNewDriverNotes] = useState("");
   const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
+  const [newDriverAvatarFile, setNewDriverAvatarFile] = useState<File | null>(null);
+  const [newDriverLicenseFile, setNewDriverLicenseFile] = useState<File | null>(null);
 
   // Register Vehicle Modal State
   const [showRegisterVehicleModal, setShowRegisterVehicleModal] = useState(false);
@@ -65,6 +67,7 @@ export default function DriversPage() {
   const [newVehicleFuel, setNewVehicleFuel] = useState("100");
   const [newVehicleStatus, setNewVehicleStatus] = useState("active");
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
+  const [newVehiclePhotoFile, setNewVehiclePhotoFile] = useState<File | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -150,19 +153,29 @@ export default function DriversPage() {
   // Submit Register Driver
   const handleRegisterDriverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDriverName || !newDriverPhone || !newDriverLicense) return;
+    if (!newDriverName || !newDriverPhone || !newDriverLicense || !newDriverAvatarFile || !newDriverLicenseFile) {
+      alert("All fields, including driver avatar and license photo, are required.");
+      return;
+    }
 
     setIsSubmittingDriver(true);
     try {
-      await api.post("/drivers", {
-        full_name: newDriverName,
-        email: newDriverEmail || null,
-        phone: newDriverPhone,
-        vehicle_id: newDriverVehicleId || null,
-        license_number: newDriverLicense,
-        employment_status: newDriverStatus,
-        date_joined: newDriverDateJoined,
-        notes: newDriverNotes || null
+      const formData = new FormData();
+      formData.append("full_name", newDriverName);
+      if (newDriverEmail) formData.append("email", newDriverEmail);
+      formData.append("phone", newDriverPhone);
+      if (newDriverVehicleId) formData.append("vehicle_id", newDriverVehicleId);
+      formData.append("license_number", newDriverLicense);
+      formData.append("employment_status", newDriverStatus);
+      formData.append("date_joined", newDriverDateJoined);
+      if (newDriverNotes) formData.append("notes", newDriverNotes);
+      formData.append("avatar", newDriverAvatarFile);
+      formData.append("license_photo", newDriverLicenseFile);
+
+      await api.post("/drivers", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       alert("Driver registered successfully!");
@@ -175,6 +188,8 @@ export default function DriversPage() {
       setNewDriverStatus("active");
       setNewDriverDateJoined(new Date().toISOString().split('T')[0]);
       setNewDriverNotes("");
+      setNewDriverAvatarFile(null);
+      setNewDriverLicenseFile(null);
       setShowRegisterDriverModal(false);
       
       await fetchData(); // Refresh data
@@ -189,17 +204,26 @@ export default function DriversPage() {
   // Submit Register Vehicle
   const handleRegisterVehicleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newVehicleRegistration || !newVehicleMake || !newVehicleModel) return;
+    if (!newVehicleRegistration || !newVehicleMake || !newVehicleModel || !newVehiclePhotoFile) {
+      alert("All fields, including the vehicle photo, are required.");
+      return;
+    }
 
     setIsSubmittingVehicle(true);
     try {
-      await api.post("/vehicles", {
-        registration_number: newVehicleRegistration,
-        make: newVehicleMake,
-        model: newVehicleModel,
-        max_crates_capacity: parseInt(newVehicleCapacity) || 300,
-        fuel_level: parseInt(newVehicleFuel) || 100,
-        status: newVehicleStatus
+      const formData = new FormData();
+      formData.append("registration_number", newVehicleRegistration);
+      formData.append("make", newVehicleMake);
+      formData.append("model", newVehicleModel);
+      formData.append("max_crates_capacity", (parseInt(newVehicleCapacity) || 300).toString());
+      formData.append("fuel_level", (parseInt(newVehicleFuel) || 100).toString());
+      formData.append("status", newVehicleStatus);
+      formData.append("vehicle_photo", newVehiclePhotoFile);
+
+      await api.post("/vehicles", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       alert("Vehicle registered successfully!");
@@ -210,6 +234,7 @@ export default function DriversPage() {
       setNewVehicleCapacity("300");
       setNewVehicleFuel("100");
       setNewVehicleStatus("active");
+      setNewVehiclePhotoFile(null);
       setShowRegisterVehicleModal(false);
 
       await fetchData(); // Refresh data
@@ -322,8 +347,12 @@ export default function DriversPage() {
                   <CardContent className="p-0">
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-5">
-                        <div className="h-12 w-12 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner">
-                          <User size={24} />
+                        <div className="h-12 w-12 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden">
+                          {driver.avatar ? (
+                            <img src={driver.avatar} alt={driver.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <User size={24} />
+                          )}
                         </div>
                         <Badge variant={driver.status as any} className="capitalize font-bold text-[9px] px-2.5 py-0.5 border-none">
                           {driver.status}
@@ -391,6 +420,15 @@ export default function DriversPage() {
                 <Card key={vehicle.id} className="border-none shadow-sm hover:shadow-md transition-shadow group overflow-hidden bg-white rounded-2xl">
                   <CardContent className="p-0">
                     
+                    {/* Vehicle image header or fallback */}
+                    <div className="h-40 w-full bg-brand-sage/20 relative overflow-hidden flex items-center justify-center text-brand-forest border-b border-brand-sage/30">
+                      {vehicle.image ? (
+                        <img src={vehicle.image} alt={`${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" />
+                      ) : (
+                        <Truck size={48} className="text-brand-sage/60" />
+                      )}
+                    </div>
+
                     {/* Premium top vehicle bar */}
                     <div className="bg-brand-forest/5 p-5 border-b border-brand-sage/30 flex justify-between items-center">
                       <div>
@@ -884,6 +922,17 @@ export default function DriversPage() {
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Vehicle Photo *</label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      required
+                      onChange={(e) => setNewVehiclePhotoFile(e.target.files?.[0] || null)}
+                      className="h-9.5 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                    />
+                  </div>
                 </div>
 
                 {/* Buttons */}
@@ -1041,6 +1090,29 @@ export default function DriversPage() {
                       onChange={(e) => setNewDriverNotes(e.target.value)}
                       className="w-full h-16 p-2 text-xs font-semibold rounded-xl border border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver Avatar *</label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        required
+                        onChange={(e) => setNewDriverAvatarFile(e.target.files?.[0] || null)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Driver's License *</label>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        required
+                        onChange={(e) => setNewDriverLicenseFile(e.target.files?.[0] || null)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
 

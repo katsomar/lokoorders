@@ -60,6 +60,8 @@ class DriverController extends Controller
                 'current_location' => $location,
                 'employment_status' => $driver->employment_status,
                 'date_joined' => $driver->date_joined,
+                'avatar' => $driver->avatar_path ? (filter_var($driver->avatar_path, FILTER_VALIDATE_URL) ? $driver->avatar_path : url('storage/' . $driver->avatar_path)) : null,
+                'license_photo' => $driver->license_path ? (filter_var($driver->license_path, FILTER_VALIDATE_URL) ? $driver->license_path : url('storage/' . $driver->license_path)) : null,
             ];
         });
 
@@ -77,9 +79,14 @@ class DriverController extends Controller
             'employment_status' => 'nullable|in:active,inactive',
             'date_joined' => 'nullable|date',
             'notes' => 'nullable|string',
+            'avatar' => 'required|image|max:2048',
+            'license_photo' => 'required|image|max:2048',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        $avatarPath = $request->file('avatar')->store('avatars', 'public');
+        $licensePath = $request->file('license_photo')->store('licenses', 'public');
+
+        return DB::transaction(function () use ($validated, $avatarPath, $licensePath) {
             $email = $validated['email'] ?? (str_replace(' ', '', strtolower($validated['full_name'])) . '@lokoharvest.com');
             
             // Ensure email uniqueness
@@ -109,6 +116,8 @@ class DriverController extends Controller
                 'employment_status' => $validated['employment_status'] ?? 'active',
                 'date_joined' => $validated['date_joined'] ?? now()->toDateString(),
                 'notes' => $validated['notes'] ?? null,
+                'avatar_path' => $avatarPath,
+                'license_path' => $licensePath,
             ]);
 
             return $this->success($driver, 'Driver registered successfully', 201);
