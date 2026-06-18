@@ -24,6 +24,41 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+// Sub-component to handle driver avatar with error boundary/fallback
+function DriverAvatar({ src, alt }: { src: string | null; alt: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError || !src) {
+    return <User size={24} />;
+  }
+
+  return (
+    <img 
+      src={src} 
+      alt={alt} 
+      onError={() => setHasError(true)} 
+      className="h-full w-full object-cover" 
+    />
+  );
+}
+
+// Sub-component to handle vehicle banner image with error boundary/fallback
+function VehicleImage({ src, alt }: { src: string | null; alt: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError || !src) {
+    return <Truck size={48} className="text-brand-sage/60" />;
+  }
+
+  return (
+    <img 
+      src={src} 
+      alt={alt} 
+      onError={() => setHasError(true)} 
+      className="h-full w-full object-cover" 
+    />
+  );
+}
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -348,11 +383,7 @@ export default function DriversPage() {
                     <div className="p-6">
                       <div className="flex justify-between items-start mb-5">
                         <div className="h-12 w-12 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden">
-                          {driver.avatar ? (
-                            <img src={driver.avatar} alt={driver.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <User size={24} />
-                          )}
+                          <DriverAvatar src={driver.avatar} alt={driver.name} />
                         </div>
                         <Badge variant={driver.status as any} className="capitalize font-bold text-[9px] px-2.5 py-0.5 border-none">
                           {driver.status}
@@ -422,11 +453,7 @@ export default function DriversPage() {
                     
                     {/* Vehicle image header or fallback */}
                     <div className="h-40 w-full bg-brand-sage/20 relative overflow-hidden flex items-center justify-center text-brand-forest border-b border-brand-sage/30">
-                      {vehicle.image ? (
-                        <img src={vehicle.image} alt={`${vehicle.make} ${vehicle.model}`} className="h-full w-full object-cover" />
-                      ) : (
-                        <Truck size={48} className="text-brand-sage/60" />
-                      )}
+                      <VehicleImage src={vehicle.image} alt={`${vehicle.make} ${vehicle.model}`} />
                     </div>
 
                     {/* Premium top vehicle bar */}
