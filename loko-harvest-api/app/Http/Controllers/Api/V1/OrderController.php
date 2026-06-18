@@ -171,7 +171,7 @@ class OrderController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|in:pending,processing,ready_for_dispatch,dispatched,delivered',
+            'status' => 'required|in:pending,processing,ready_for_dispatch,dispatched',
             'notes' => 'nullable|string',
         ]);
 

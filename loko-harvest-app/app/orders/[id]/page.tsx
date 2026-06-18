@@ -110,7 +110,6 @@ export default function OrderDetailPage() {
       case "pending": return "processing";
       case "processing": return "ready_for_dispatch";
       case "ready_for_dispatch": return "dispatched";
-      case "dispatched": return "delivered";
       default: return null;
     }
   };
@@ -120,7 +119,6 @@ export default function OrderDetailPage() {
       case "pending": return "Move to Processing";
       case "processing": return "Mark Ready for Dispatch";
       case "ready_for_dispatch": return "Mark as Dispatched";
-      case "dispatched": return "Mark as Delivered";
       default: return "";
     }
   };
