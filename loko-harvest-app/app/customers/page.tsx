@@ -39,6 +39,8 @@ interface Branch {
   type: string;
   balance: number;
   credit_limit: number;
+  total_invoiced: number;
+  total_paid: number;
 }
 
 interface Customer {
@@ -52,6 +54,8 @@ interface Customer {
   isParent: boolean;
   branches: Branch[];
   balance?: number; // for standalone
+  total_invoiced?: number; // for standalone
+  total_paid?: number; // for standalone
   logoColor?: string;
   logoLetter?: string;
 }
@@ -119,9 +123,12 @@ export default function CustomersPage() {
       type: c.customer_type || "supermarket",
       balance: parseFloat(c.account?.current_balance || 0),
       credit_limit: parseFloat(c.credit_limit || 0),
+      total_invoiced: parseFloat(c.account?.total_invoiced || 0),
+      total_paid: parseFloat(c.account?.total_paid || 0),
     });
 
     if (shopriteBranches.length > 0) {
+      const branches = shopriteBranches.map(formatBranch);
       list.push({
         id: "parent-shoprite",
         name: "Shoprite Supermarkets",
@@ -129,15 +136,18 @@ export default function CustomersPage() {
         phone: "0772 123 456",
         zone: "Multiple Zones",
         type: "supermarket",
-        credit_limit: shopriteBranches.reduce((acc, c) => acc + parseFloat(c.credit_limit || 0), 0),
+        credit_limit: branches.reduce((acc, br) => acc + br.credit_limit, 0),
         isParent: true,
         logoColor: "bg-red-600 text-white",
         logoLetter: "S",
-        branches: shopriteBranches.map(formatBranch),
+        branches: branches,
+        total_invoiced: branches.reduce((acc, br) => acc + br.total_invoiced, 0),
+        total_paid: branches.reduce((acc, br) => acc + br.total_paid, 0),
       });
     }
 
     if (megaBranches.length > 0) {
+      const branches = megaBranches.map(formatBranch);
       list.push({
         id: "parent-mega",
         name: "Mega Standard Supermarkets",
@@ -145,11 +155,13 @@ export default function CustomersPage() {
         phone: "0702 444 555",
         zone: "Multiple Zones",
         type: "supermarket",
-        credit_limit: megaBranches.reduce((acc, c) => acc + parseFloat(c.credit_limit || 0), 0),
+        credit_limit: branches.reduce((acc, br) => acc + br.credit_limit, 0),
         isParent: true,
         logoColor: "bg-brand-forest text-brand-yellow border border-brand-yellow/30",
         logoLetter: "M",
-        branches: megaBranches.map(formatBranch),
+        branches: branches,
+        total_invoiced: branches.reduce((acc, br) => acc + br.total_invoiced, 0),
+        total_paid: branches.reduce((acc, br) => acc + br.total_paid, 0),
       });
     }
 
@@ -181,6 +193,8 @@ export default function CustomersPage() {
         logoLetter: letter,
         branches: [],
         balance: parseFloat(c.account?.current_balance || 0),
+        total_invoiced: parseFloat(c.account?.total_invoiced || 0),
+        total_paid: parseFloat(c.account?.total_paid || 0),
       });
     });
 
@@ -245,6 +259,20 @@ export default function CustomersPage() {
     return cust.balance || 0;
   };
 
+  const getConsolidatedInvoiced = (cust: Customer) => {
+    if (cust.isParent) {
+      return cust.branches.reduce((acc, br) => acc + br.total_invoiced, 0);
+    }
+    return cust.total_invoiced || 0;
+  };
+
+  const getConsolidatedPaid = (cust: Customer) => {
+    if (cust.isParent) {
+      return cust.branches.reduce((acc, br) => acc + br.total_paid, 0);
+    }
+    return cust.total_paid || 0;
+  };
+
   // Filter logic
   const filteredCustomers = customers.filter(customer => {
     const matchesSearch = 
@@ -263,10 +291,10 @@ export default function CustomersPage() {
   });
 
   // Dynamic financial overview calculations
-  const totalCreditLimit = customers.reduce((acc, c) => acc + c.credit_limit, 0);
   const totalUnpaid = customers.reduce((acc, c) => acc + getConsolidatedBalance(c), 0);
-  const totalPaid = Math.max(0, totalCreditLimit - totalUnpaid);
-  const paymentPercentage = totalCreditLimit > 0 ? Math.round((totalPaid / totalCreditLimit) * 100) : 0;
+  const totalInvoiced = customers.reduce((acc, c) => acc + getConsolidatedInvoiced(c), 0);
+  const totalPaid = customers.reduce((acc, c) => acc + getConsolidatedPaid(c), 0);
+  const paymentPercentage = totalInvoiced > 0 ? Math.round((totalPaid / totalInvoiced) * 100) : 0;
 
   return (
     <DashboardLayout>
@@ -276,7 +304,9 @@ export default function CustomersPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold text-brand-forest font-heading">Customer Directory & Branches</h1>
-            <p className="text-gray-500 font-body text-xs mt-0.5">Manage unified corporate customer structures, branches, balances and credit limits</p>
+            <p className="text-gray-500 font-body text-xs mt-0.5">
+              Manage unified corporate customer structures, branches, balances and credit limits • {isLoading ? "—" : `${dbCustomers.length} Active Accounts`}
+            </p>
           </div>
           <Button 
             onClick={() => setShowAddModal(true)}
@@ -326,28 +356,28 @@ export default function CustomersPage() {
                 {isLoading ? "Loading..." : `${paymentPercentage}% Cleared`}
               </p>
               <p className="text-[10px] text-gray-500 font-semibold leading-tight">
-                {isLoading ? "—" : `UGX ${totalPaid.toLocaleString()} / UGX ${totalCreditLimit.toLocaleString()}`}
+                {isLoading ? "—" : `UGX ${totalPaid.toLocaleString()} / UGX ${totalInvoiced.toLocaleString()}`}
               </p>
             </div>
           </div>
 
-          {/* Card 2: Total Unpaid Balance */}
+          {/* Card 2: Total Demanded */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
-            <div className="h-12 w-12 bg-red-50 border border-red-100 rounded-xl flex items-center justify-center text-red-500 flex-shrink-0">
+            <div className="h-12 w-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 flex-shrink-0">
               <DollarSign size={22} className="stroke-[2.5]" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Receivables</h3>
-              <p className="text-lg font-black text-red-600 font-heading">
-                {isLoading ? "UGX —" : `UGX ${totalUnpaid.toLocaleString()}`}
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Demanded</h3>
+              <p className="text-lg font-black text-blue-600 font-heading">
+                {isLoading ? "UGX —" : `UGX ${totalInvoiced.toLocaleString()}`}
               </p>
-              <div className="flex items-center gap-1 text-[9px] text-red-500 font-bold uppercase">
-                <span>⚠️ Outstanding Balance</span>
+              <div className="flex items-center gap-1 text-[9px] text-blue-500 font-bold uppercase">
+                <span>⚡ Total Invoiced Amount</span>
               </div>
             </div>
           </div>
 
-          {/* Card 3: Total Paid Collection */}
+          {/* Card 3: Total Collected / Paid */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
             <div className="h-12 w-12 bg-green-50 border border-green-100 rounded-xl flex items-center justify-center text-green-600 flex-shrink-0">
               <DollarSign size={22} className="stroke-[2.5]" />
@@ -363,17 +393,18 @@ export default function CustomersPage() {
             </div>
           </div>
 
-          {/* Card 4: Total Customer Accounts */}
+          {/* Card 4: Total Receivables / Outstanding */}
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-brand-sage flex items-center gap-4 hover:shadow-md transition-shadow duration-200">
-            <div className="h-12 w-12 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-blue-500 flex-shrink-0">
-              <Building2 size={22} className="stroke-[2.5]" />
+            <div className="h-12 w-12 bg-red-50 border border-red-100 rounded-xl flex items-center justify-center text-red-500 flex-shrink-0">
+              <DollarSign size={22} className="stroke-[2.5]" />
             </div>
             <div className="space-y-1">
-              <h3 className="text-lg font-black text-brand-forest font-heading">
-                {isLoading ? "— Accounts" : `${dbCustomers.length} Accounts`}
-              </h3>
-              <div className="flex items-center gap-1 text-[9px] text-gray-500 font-bold uppercase">
-                <span>⚡ Active Directory List</span>
+              <h3 className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Receivables</h3>
+              <p className="text-lg font-black text-red-600 font-heading">
+                {isLoading ? "UGX —" : `UGX ${totalUnpaid.toLocaleString()}`}
+              </p>
+              <div className="flex items-center gap-1 text-[9px] text-red-500 font-bold uppercase">
+                <span>⚠️ Outstanding Balance</span>
               </div>
             </div>
           </div>
