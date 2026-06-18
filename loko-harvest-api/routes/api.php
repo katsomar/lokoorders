@@ -80,6 +80,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/reports/aging', [App\Http\Controllers\Api\V1\ReportController::class, 'agingReport']);
         Route::get('/reports/driver-performance', [App\Http\Controllers\Api\V1\ReportController::class, 'driverPerformance']);
         
+        // Drivers & Vehicles
+        Route::get('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'index']);
+        Route::post('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'store']);
+        Route::get('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'index']);
+        Route::post('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'store']);
+
         // Other module routes will go here
     });
 });
