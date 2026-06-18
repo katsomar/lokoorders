@@ -438,6 +438,12 @@ export default function ProductionStorePage() {
               <ArrowRightLeft size={15} />
               Transfer to Sales
             </Button>
+            <Link href="/production-store/activity">
+              <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+                <History size={15} />
+                Transfer Activity
+              </Button>
+            </Link>
             <Link href="/production-store/intake">
               <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
                 <ArrowDownToLine size={15} />

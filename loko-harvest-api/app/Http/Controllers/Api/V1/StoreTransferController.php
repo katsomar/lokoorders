@@ -17,7 +17,11 @@ class StoreTransferController extends Controller
 
     public function index(Request $request)
     {
-        $transfers = StoreTransfer::with(['product', 'user'])
+        $transfers = StoreTransfer::with(['product', 'user', 'productionStore', 'salesStore'])
+            ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id))
+            ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
+            ->when($request->start_date, fn($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
+            ->when($request->end_date, fn($q) => $q->whereDate('transfer_date', '<=', $request->end_date))
             ->latest()
             ->paginate($request->per_page ?? 15);
 
