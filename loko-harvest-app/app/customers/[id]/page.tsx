@@ -34,6 +34,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import api from "@/lib/api";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend
+} from "recharts";
 
 export default function CustomerDetailPage() {
   const params = useParams();
@@ -446,6 +456,38 @@ export default function CustomerDetailPage() {
     ? ledger.filter((tx: any) => tx.branchId === activeBranch.id)
     : getFilteredLedger();
 
+  // 1. General Order Trend Data
+  const chronologicalHistory = [...(consumptionData?.order_history || [])].reverse();
+  const generalTrendData = chronologicalHistory.map((ord: any) => ({
+    name: format(new Date(ord.order_date), "dd/MM"),
+    orderNumber: ord.order_number,
+    value: ord.total_value,
+    qty: ord.total_qty
+  }));
+
+  // 2. Product-wise Trend Data
+  const productNames = Array.from(
+    new Set(
+      (consumptionData?.order_history || []).flatMap((ord: any) => 
+        (ord.items || []).map((it: any) => it.product_name)
+      )
+    )
+  );
+
+  const productTrendData = chronologicalHistory.map((ord: any) => {
+    const dataPoint: any = {
+      name: format(new Date(ord.order_date), "dd/MM"),
+      orderNumber: ord.order_number
+    };
+    productNames.forEach((prodName: any) => {
+      dataPoint[prodName] = 0;
+    });
+    (ord.items || []).forEach((it: any) => {
+      dataPoint[it.product_name] = it.quantity;
+    });
+    return dataPoint;
+  });
+
   return (
     <DashboardLayout>
       <div className="space-y-6 pb-12 max-w-6xl mx-auto">
@@ -663,7 +705,7 @@ export default function CustomerDetailPage() {
         {/* Content Section based on selected tab */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          <div className="lg:col-span-2 space-y-6">
+          <div className={`${activeTab === "consumption" ? "lg:col-span-3" : "lg:col-span-2"} space-y-6`}>
             
             {/* LEDGER TAB */}
             {(activeTab === "ledger" || activeBranch) && (
@@ -963,16 +1005,16 @@ export default function CustomerDetailPage() {
 
                 </div>
 
-                {/* 2. Visual Analytics Section (Product Share + Trends) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 2. Visual Analytics Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   
                   {/* Product Consumption Share */}
-                  <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-5 py-3">
+                  <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white flex flex-col justify-between">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-5 py-3.5">
                       <CardTitle className="text-xs font-bold text-brand-forest font-heading">Product Demand Breakdown</CardTitle>
                       <CardDescription className="text-[10px]">Percentage share of total volume taken by category</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-5 space-y-4">
+                    <CardContent className="p-5 space-y-4 flex-1">
                       {isConsumptionLoading ? (
                         <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading shares...</div>
                       ) : !consumptionData?.product_breakdown || consumptionData.product_breakdown.length === 0 ? (
@@ -996,28 +1038,78 @@ export default function CustomerDetailPage() {
                     </CardContent>
                   </Card>
 
-                  {/* Monthly Consumption Trends */}
-                  <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-5 py-3">
+                  {/* General Order Value Trend */}
+                  <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm rounded-xl overflow-hidden flex flex-col justify-between">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-3.5 px-6">
+                      <CardTitle className="text-xs font-bold text-brand-forest font-heading">General Order Value Trend</CardTitle>
+                      <CardDescription className="text-[10px]">Chronological trend of total order value (UGX) over time</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-6 flex-1">
+                      {isConsumptionLoading ? (
+                        <div className="text-center py-20 text-xs text-gray-400 font-bold">Loading trend...</div>
+                      ) : !generalTrendData || generalTrendData.length === 0 ? (
+                        <div className="text-center py-20 text-xs text-gray-400 font-body">No trend history available.</div>
+                      ) : (
+                        <div className="h-[220px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={generalTrendData}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
+                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                              <YAxis 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fontSize: 10, fill: '#6B7280' }} 
+                                tickFormatter={(val) => val >= 1000000 ? `UGX ${(val/1000000).toFixed(1)}M` : `UGX ${val/1000}k`}
+                              />
+                              <Tooltip 
+                                contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '11px' }}
+                              />
+                              <Line 
+                                type="monotone" 
+                                dataKey="value" 
+                                stroke="#1A5C2A" 
+                                strokeWidth={3} 
+                                dot={{ r: 4, fill: "#1A5C2A", strokeWidth: 2 }}
+                                activeDot={{ r: 6 }}
+                                name="Order Value" 
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Product-wise & Monthly Order Trends Section */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  
+                  {/* Monthly Order Volume Trends Card */}
+                  <Card className="border border-brand-sage/40 bg-white shadow-sm rounded-xl overflow-hidden flex flex-col justify-between">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-3.5 px-5">
                       <CardTitle className="text-xs font-bold text-brand-forest font-heading">Monthly Order Volume Trends</CardTitle>
                       <CardDescription className="text-[10px]">Chronological trend of quantities and orders taken</CardDescription>
                     </CardHeader>
-                    <CardContent className="p-5 space-y-4">
+                    <CardContent className="p-5 flex-1 overflow-y-auto max-h-[250px]">
                       {isConsumptionLoading ? (
-                        <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading trends...</div>
+                        <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading monthly trends...</div>
                       ) : !consumptionData?.monthly_trends || consumptionData.monthly_trends.length === 0 ? (
-                        <div className="text-center py-10 text-xs text-gray-400 font-body">No trend history available.</div>
+                        <div className="text-center py-10 text-xs text-gray-400 font-body">No monthly trends available.</div>
                       ) : (
-                        <div className="space-y-3">
-                          {consumptionData.monthly_trends.map((item: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                        <div className="space-y-4">
+                          {consumptionData.monthly_trends.map((trend: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-start border-b border-gray-100 last:border-0 pb-3 last:pb-0">
                               <div>
-                                <p className="text-xs font-bold text-gray-800">{item.month}</p>
-                                <p className="text-[9px] text-gray-400 font-semibold">{item.order_count} Orders placed</p>
+                                <p className="text-xs font-extrabold text-gray-900">{trend.month}</p>
+                                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">{trend.order_count} {trend.order_count === 1 ? 'Order' : 'Orders'} placed</p>
                               </div>
                               <div className="text-right">
-                                <p className="text-xs font-black text-brand-forest font-mono">{item.total_qty.toLocaleString()} units</p>
-                                <p className="text-[9px] text-gray-550 font-semibold font-mono">UGX {item.total_value.toLocaleString()}</p>
+                                <p className="text-xs font-black text-brand-forest">
+                                  {trend.total_qty.toLocaleString()} <span className="font-normal text-gray-500">units</span>
+                                </p>
+                                <p className="text-[10px] font-bold text-gray-650 font-mono mt-0.5">
+                                  UGX {trend.total_value.toLocaleString()}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -1026,6 +1118,50 @@ export default function CustomerDetailPage() {
                     </CardContent>
                   </Card>
 
+                  {/* Product-wise Demand Trends Card */}
+                  <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm rounded-xl overflow-hidden flex flex-col justify-between">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-3.5 px-6">
+                      <CardTitle className="text-xs font-bold text-brand-forest font-heading">Product-wise Demand Trends</CardTitle>
+                      <CardDescription className="text-[10px]">Chronological trend of quantities ordered for each product type</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-6 flex-1">
+                      {isConsumptionLoading ? (
+                        <div className="text-center py-20 text-xs text-gray-400 font-bold">Loading trends...</div>
+                      ) : !productTrendData || productTrendData.length === 0 ? (
+                        <div className="text-center py-20 text-xs text-gray-400 font-body">No trend history available.</div>
+                      ) : (
+                        <div className="h-[250px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={productTrendData}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
+                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                              <Tooltip 
+                                contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '11px' }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} />
+                              {productNames.map((name: any, idx: number) => {
+                                const colors = ["#1A5C2A", "#F5A800", "#2563EB", "#8B5CF6", "#E11D48", "#10B981"];
+                                const color = colors[idx % colors.length];
+                                return (
+                                  <Line 
+                                    key={name}
+                                    type="monotone" 
+                                    dataKey={name} 
+                                    stroke={color} 
+                                    strokeWidth={2.5}
+                                    dot={{ r: 3.5 }}
+                                    activeDot={{ r: 5.5 }}
+                                    name={name} 
+                                  />
+                                );
+                              })}
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* 3. Consumption Frequency Table */}
@@ -1134,7 +1270,8 @@ export default function CustomerDetailPage() {
           </div>
 
           {/* Contact info sidebar */}
-          <div className="space-y-6">
+          {activeTab !== "consumption" && (
+            <div className="space-y-6">
             
             {/* Corporate Logo Card Upload */}
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
@@ -1245,6 +1382,7 @@ export default function CustomerDetailPage() {
             </Card>
 
           </div>
+          )}
 
         </div>
 
