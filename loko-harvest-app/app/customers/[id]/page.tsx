@@ -44,8 +44,10 @@ export default function CustomerDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLedgerLoading, setIsLedgerLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<"ledger" | "branches">("ledger");
+  const [activeTab, setActiveTab] = useState<"ledger" | "branches" | "consumption">("ledger");
   const [ledgerFilter, setLedgerFilter] = useState<string>("all");
+  const [consumptionData, setConsumptionData] = useState<any>(null);
+  const [isConsumptionLoading, setIsConsumptionLoading] = useState(false);
   
   // Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -89,6 +91,7 @@ export default function CustomerDetailPage() {
   const loadCustomerDetails = async () => {
     setIsLoading(true);
     setIsLedgerLoading(true);
+    setConsumptionData(null);
     try {
       const customerId = params.id as string;
       
@@ -339,6 +342,25 @@ export default function CustomerDetailPage() {
     loadCustomerDetails();
   }, [params.id]);
 
+  const loadConsumptionAnalysis = async () => {
+    setIsConsumptionLoading(true);
+    try {
+      const customerId = params.id as string;
+      const res = await api.get(`/customers/${customerId}/consumption-analysis`);
+      setConsumptionData(res.data.data);
+    } catch (err) {
+      console.error("Failed to load customer consumption analysis:", err);
+    } finally {
+      setIsConsumptionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "consumption" && customer && !consumptionData) {
+      loadConsumptionAnalysis();
+    }
+  }, [activeTab, customer]);
+
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentAmount) return;
@@ -586,19 +608,20 @@ export default function CustomerDetailPage() {
           </Card>
         </div>
 
-        {/* Tab Toggle (Only for Parent Accounts) */}
-        {customer.isParent && (
-          <div className="flex gap-2 border-b border-brand-sage/40 pb-px overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => setActiveTab("ledger")}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
-                activeTab === "ledger" 
-                  ? "border-brand-forest text-brand-forest" 
-                  : "border-transparent text-gray-500 hover:text-brand-forest"
-              }`}
-            >
-              Consolidated Account Ledger
-            </button>
+        {/* Tab Toggle */}
+        <div className="flex gap-2 border-b border-brand-sage/40 pb-px overflow-x-auto scrollbar-none">
+          <button
+            onClick={() => setActiveTab("ledger")}
+            className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
+              activeTab === "ledger" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-500 hover:text-brand-forest"
+            }`}
+          >
+            {customer.isParent ? "Consolidated Account Ledger" : "Account Transaction Ledger"}
+          </button>
+          
+          {customer.isParent && (
             <button
               onClick={() => setActiveTab("branches")}
               className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
@@ -609,21 +632,33 @@ export default function CustomerDetailPage() {
             >
               Branch Breakdown ({customer.branches.length})
             </button>
-            {customer.branches.map((b: any) => (
-              <button
-                key={b.id}
-                onClick={() => setActiveTab(b.id)}
-                className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
-                  activeTab === b.id 
-                    ? "border-brand-forest text-brand-forest" 
-                    : "border-transparent text-gray-500 hover:text-brand-forest"
-                }`}
-              >
-                {b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", "")}
-              </button>
-            ))}
-          </div>
-        )}
+          )}
+
+          <button
+            onClick={() => setActiveTab("consumption")}
+            className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
+              activeTab === "consumption" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-500 hover:text-brand-forest"
+            }`}
+          >
+            Consumption Analysis
+          </button>
+
+          {customer.isParent && customer.branches.map((b: any) => (
+            <button
+              key={b.id}
+              onClick={() => setActiveTab(b.id)}
+              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
+                activeTab === b.id 
+                  ? "border-brand-forest text-brand-forest" 
+                  : "border-transparent text-gray-500 hover:text-brand-forest"
+              }`}
+            >
+              {b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", "")}
+            </button>
+          ))}
+        </div>
 
         {/* Content Section based on selected tab */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -810,6 +845,290 @@ export default function CustomerDetailPage() {
                   </Table>
                 </CardContent>
               </Card>
+            )}
+
+            {/* CONSUMPTION TAB */}
+            {activeTab === "consumption" && (
+              <div className="space-y-6">
+                
+                {/* 1. Consumption Summary Sub-Cards Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  
+                  {/* Days Since Last Order */}
+                  <Card className="border border-brand-sage/30 shadow-xs bg-white">
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Days Since Last Order</p>
+                      <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
+                        {isConsumptionLoading ? (
+                          <span className="text-xs font-normal text-gray-400">Loading...</span>
+                        ) : consumptionData?.metrics?.days_since_last_order !== null && consumptionData?.metrics?.days_since_last_order !== undefined ? (
+                          `${consumptionData.metrics.days_since_last_order} Days`
+                        ) : (
+                          "—"
+                        )}
+                      </h4>
+                      <p className="text-[9px] text-gray-400 mt-1 font-semibold">
+                        {consumptionData?.metrics?.last_order_date 
+                          ? `Last ordered: ${format(new Date(consumptionData.metrics.last_order_date), "dd MMM yyyy")}`
+                          : "No orders recorded"}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Avg Order Frequency */}
+                  <Card className="border border-brand-sage/30 shadow-xs bg-white">
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Avg Order Interval</p>
+                      <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
+                        {isConsumptionLoading ? (
+                          <span className="text-xs font-normal text-gray-400">Loading...</span>
+                        ) : consumptionData?.metrics?.avg_frequency_days !== null && consumptionData?.metrics?.avg_frequency_days !== undefined ? (
+                          `${consumptionData.metrics.avg_frequency_days} Days`
+                        ) : (
+                          "—"
+                        )}
+                      </h4>
+                      <p className="text-[9px] text-gray-400 mt-1 font-semibold">
+                        {consumptionData?.metrics?.avg_frequency_days 
+                          ? "Typical purchasing frequency"
+                          : "Need at least 2 orders"}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Next Predicted Order */}
+                  <Card className="border border-brand-sage/30 shadow-xs bg-white">
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Next Predicted Order</p>
+                      <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
+                        {isConsumptionLoading ? (
+                          <span className="text-xs font-normal text-gray-400">Loading...</span>
+                        ) : consumptionData?.metrics?.predicted_next_order_date ? (
+                          format(new Date(consumptionData.metrics.predicted_next_order_date), "dd/MM/yyyy")
+                        ) : (
+                          "—"
+                        )}
+                      </h4>
+                      <div className="mt-1 flex items-center">
+                        {consumptionData?.metrics?.predicted_next_order_date && (
+                          (() => {
+                            const daysDiff = consumptionData.metrics.days_since_last_order;
+                            const avgFreq = consumptionData.metrics.avg_frequency_days;
+                            
+                            if (avgFreq && daysDiff > avgFreq) {
+                              return (
+                                <Badge className="bg-red-50 text-red-700 border border-red-200 text-[8px] font-extrabold uppercase py-0.5 px-1.5 rounded">
+                                  Overdue
+                                </Badge>
+                              );
+                            } else if (avgFreq && Math.abs(daysDiff - avgFreq) <= 1) {
+                              return (
+                                <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[8px] font-extrabold uppercase py-0.5 px-1.5 rounded">
+                                  Due Soon
+                                </Badge>
+                              );
+                            } else {
+                              return (
+                                <Badge className="bg-green-50 text-green-700 border border-green-200 text-[8px] font-extrabold uppercase py-0.5 px-1.5 rounded">
+                                  On Track
+                                </Badge>
+                              );
+                            }
+                          })()
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Average Order Size */}
+                  <Card className="border border-brand-sage/30 shadow-xs bg-white">
+                    <CardContent className="pt-4 pb-3 px-4">
+                      <p className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Avg Order Volume</p>
+                      <h4 className="text-xl font-black font-heading text-brand-forest mt-1">
+                        {isConsumptionLoading ? (
+                          <span className="text-xs font-normal text-gray-400">Loading...</span>
+                        ) : consumptionData?.metrics?.avg_order_size_qty !== null && consumptionData?.metrics?.avg_order_size_qty !== undefined ? (
+                          `${consumptionData.metrics.avg_order_size_qty} units`
+                        ) : (
+                          "—"
+                        )}
+                      </h4>
+                      <p className="text-[9px] text-gray-400 mt-1 font-semibold">
+                        {consumptionData?.metrics?.total_qty_ordered
+                          ? `Total volume: ${consumptionData.metrics.total_qty_ordered.toLocaleString()}`
+                          : "No volume taken"}
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                </div>
+
+                {/* 2. Visual Analytics Section (Product Share + Trends) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Product Consumption Share */}
+                  <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-5 py-3">
+                      <CardTitle className="text-xs font-bold text-brand-forest font-heading">Product Demand Breakdown</CardTitle>
+                      <CardDescription className="text-[10px]">Percentage share of total volume taken by category</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-4">
+                      {isConsumptionLoading ? (
+                        <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading shares...</div>
+                      ) : !consumptionData?.product_breakdown || consumptionData.product_breakdown.length === 0 ? (
+                        <div className="text-center py-10 text-xs text-gray-400 font-body">No product consumption data available.</div>
+                      ) : (
+                        consumptionData.product_breakdown.map((item: any, idx: number) => (
+                          <div key={idx} className="space-y-1">
+                            <div className="flex justify-between text-[11px] font-semibold text-gray-700">
+                              <span>{item.product_name}</span>
+                              <span className="font-mono text-brand-forest">{item.total_qty.toLocaleString()} {item.unit} ({item.percentage}%)</span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-brand-forest h-full rounded-full"
+                                style={{ width: `${item.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Monthly Consumption Trends */}
+                  <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+                    <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-5 py-3">
+                      <CardTitle className="text-xs font-bold text-brand-forest font-heading">Monthly Order Volume Trends</CardTitle>
+                      <CardDescription className="text-[10px]">Chronological trend of quantities and orders taken</CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-5 space-y-4">
+                      {isConsumptionLoading ? (
+                        <div className="text-center py-10 text-xs text-gray-400 font-bold">Loading trends...</div>
+                      ) : !consumptionData?.monthly_trends || consumptionData.monthly_trends.length === 0 ? (
+                        <div className="text-center py-10 text-xs text-gray-400 font-body">No trend history available.</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {consumptionData.monthly_trends.map((item: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                              <div>
+                                <p className="text-xs font-bold text-gray-800">{item.month}</p>
+                                <p className="text-[9px] text-gray-400 font-semibold">{item.order_count} Orders placed</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xs font-black text-brand-forest font-mono">{item.total_qty.toLocaleString()} units</p>
+                                <p className="text-[9px] text-gray-550 font-semibold font-mono">UGX {item.total_value.toLocaleString()}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                </div>
+
+                {/* 3. Consumption Frequency Table */}
+                <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+                  <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-6 py-4">
+                    <CardTitle className="text-base font-bold text-brand-forest font-heading">
+                      Consumption Interval History
+                    </CardTitle>
+                    <CardDescription className="text-xs">Chronological log of client order frequency intervals and volumes</CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
+                          <TableRow>
+                            <TableHead className="text-xs font-bold text-brand-forest pl-6">Order Date</TableHead>
+                            <TableHead className="text-xs font-bold text-brand-forest">Order #</TableHead>
+                            {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
+                            <TableHead className="text-xs font-bold text-brand-forest">Products Taken</TableHead>
+                            <TableHead className="text-center text-xs font-bold text-brand-forest">Interval (Days)</TableHead>
+                            <TableHead className="text-right text-xs font-bold text-brand-forest">Total Qty</TableHead>
+                            <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Order Value</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {isConsumptionLoading ? (
+                            <TableRow>
+                              <TableCell colSpan={customer.isParent ? 7 : 6} className="text-center py-12">
+                                <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 font-bold">
+                                  <Loader2 className="animate-spin text-brand-forest" size={16} />
+                                  Calculating frequency history...
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ) : !consumptionData?.order_history || consumptionData.order_history.length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={customer.isParent ? 7 : 6} className="text-center py-12 text-gray-500 font-body text-xs">
+                                No historical orders found.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            consumptionData.order_history.map((ord: any) => (
+                              <TableRow key={ord.order_id} className="hover:bg-brand-sage/5 transition-colors">
+                                <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(ord.order_date), "dd/MM/yyyy")}</TableCell>
+                                <TableCell className="text-xs font-mono font-bold text-brand-forest">{ord.order_number}</TableCell>
+                                {customer.isParent && (
+                                  <TableCell className="text-xs font-semibold text-gray-650">{ord.branch_name || "—"}</TableCell>
+                                )}
+                                <TableCell className="text-xs text-gray-650 font-medium py-3 max-w-xs">
+                                  {ord.items && ord.items.length > 0 ? (
+                                    <div className="space-y-1.5 pl-2 border-l border-brand-sage/40">
+                                      {ord.items.map((item: any, idx: number) => (
+                                        <div key={idx} className="leading-relaxed whitespace-nowrap text-[10px]">
+                                          <span className="font-bold text-brand-forest">{item.product_name}</span>
+                                          <span className="text-gray-400 mx-1.5">•</span>
+                                          <span className="font-semibold text-gray-700">{item.quantity} {item.unit}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    "No products detail"
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {ord.days_since_previous !== null && ord.days_since_previous !== undefined ? (
+                                    (() => {
+                                      const avgFreq = consumptionData.metrics.avg_frequency_days;
+                                      const interval = ord.days_since_previous;
+                                      
+                                      if (avgFreq && interval > avgFreq * 1.5) {
+                                        return (
+                                          <Badge className="bg-red-50 text-red-700 border border-red-200 text-[10px] font-bold py-0.5 px-2 rounded-lg">
+                                            {interval} Days (Delayed)
+                                          </Badge>
+                                        );
+                                      } else {
+                                        return (
+                                          <Badge className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold py-0.5 px-2 rounded-lg">
+                                            {interval} Days
+                                          </Badge>
+                                        );
+                                      }
+                                    })()
+                                  ) : (
+                                    <span className="text-[10px] text-gray-400 italic">First Order</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-xs font-bold font-mono text-gray-800">
+                                  {ord.total_qty.toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading font-mono">
+                                  UGX {ord.total_value.toLocaleString()}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+              </div>
             )}
 
           </div>

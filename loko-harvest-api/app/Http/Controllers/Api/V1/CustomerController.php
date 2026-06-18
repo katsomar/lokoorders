@@ -64,4 +64,172 @@ class CustomerController extends Controller
     {
         return $this->success(\App\Models\DeliveryZone::all());
     }
+
+    public function consumptionAnalysis($id)
+    {
+        $customerIds = [$id];
+        $isParent = false;
+        $customerName = "";
+
+        if ($id === 'parent-shoprite') {
+            $customerIds = Customer::where('name', 'like', '%shoprite%')->pluck('id')->toArray();
+            $isParent = true;
+            $customerName = "Shoprite Supermarkets (HQ)";
+        } elseif ($id === 'parent-mega') {
+            $customerIds = Customer::where('name', 'like', '%mega%')->pluck('id')->toArray();
+            $isParent = true;
+            $customerName = "Mega Standard Supermarkets (HQ)";
+        } else {
+            $customer = Customer::findOrFail($id);
+            $customerName = $customer->name;
+            $branches = Customer::where('parent_id', $id)->pluck('id')->toArray();
+            if (count($branches) > 0) {
+                $customerIds = array_merge([$id], $branches);
+                $isParent = true;
+            }
+        }
+
+        $orders = \App\Models\Order::whereIn('customer_id', $customerIds)
+            ->with(['items.product', 'customer'])
+            ->oldest('order_date')
+            ->get();
+
+        $orderCount = $orders->count();
+        $totalQty = 0;
+        $totalValue = 0;
+        
+        foreach ($orders as $order) {
+            $totalValue += $order->total_amount;
+            foreach ($order->items as $item) {
+                $totalQty += $item->quantity;
+            }
+        }
+
+        $avgOrderSizeQty = $orderCount > 0 ? $totalQty / $orderCount : 0;
+
+        // 1. Calculate Intervals
+        $intervals = [];
+        $prevDate = null;
+        foreach ($orders as $order) {
+            $currentDate = \Carbon\Carbon::parse($order->order_date);
+            if ($prevDate !== null) {
+                $diff = abs($currentDate->diffInDays($prevDate));
+                $intervals[] = $diff;
+            }
+            $prevDate = $currentDate;
+        }
+
+        $avgFrequency = count($intervals) > 0 ? array_sum($intervals) / count($intervals) : 0;
+
+        // 2. Days Since Last Order & Predicted Next Date
+        $daysSinceLastOrder = null;
+        $lastOrderDate = null;
+        $predictedNextOrderDate = null;
+        
+        if ($orderCount > 0) {
+            $lastOrder = $orders->last();
+            $lastOrderDate = $lastOrder->order_date;
+            $daysSinceLastOrder = \Carbon\Carbon::parse($lastOrderDate)->diffInDays(now()->startOfDay(), false);
+            if ($daysSinceLastOrder < 0) {
+                $daysSinceLastOrder = 0;
+            }
+            
+            if ($avgFrequency > 0) {
+                $predictedNextOrderDate = \Carbon\Carbon::parse($lastOrderDate)->addDays(round($avgFrequency))->toDateString();
+            }
+        }
+
+        // 3. Product Breakdown
+        $productData = [];
+        foreach ($orders as $order) {
+            foreach ($order->items as $item) {
+                $pid = $item->product_id;
+                if (!isset($productData[$pid])) {
+                    $productData[$pid] = [
+                        'product_name' => $item->product?->name ?? 'Product',
+                        'total_qty' => 0,
+                        'total_value' => 0,
+                        'unit' => $item->product?->unit_of_measure ?? 'units'
+                    ];
+                }
+                $productData[$pid]['total_qty'] += $item->quantity;
+                $productData[$pid]['total_value'] += $item->line_total;
+            }
+        }
+
+        $productBreakdown = [];
+        foreach ($productData as $pid => $data) {
+            $data['percentage'] = $totalQty > 0 ? round(($data['total_qty'] / $totalQty) * 100, 1) : 0;
+            $productBreakdown[] = $data;
+        }
+        usort($productBreakdown, fn($a, $b) => $b['total_qty'] <=> $a['total_qty']);
+
+        // 4. Order History
+        $orderHistory = [];
+        $prevDate = null;
+        foreach ($orders as $order) {
+            $currentDate = \Carbon\Carbon::parse($order->order_date);
+            $daysSincePrevious = null;
+            if ($prevDate !== null) {
+                $daysSincePrevious = abs($currentDate->diffInDays($prevDate));
+            }
+
+            $itemsMapped = $order->items->map(fn($item) => [
+                'product_name' => $item->product?->name ?? 'Product',
+                'quantity' => $item->quantity,
+                'unit' => $item->product?->unit_of_measure ?? 'units',
+                'unit_price' => (float) $item->unit_price,
+                'line_total' => (float) $item->line_total
+            ])->toArray();
+
+            $orderHistory[] = [
+                'order_id' => $order->id,
+                'order_number' => $order->order_number,
+                'order_date' => $order->order_date,
+                'days_since_previous' => $daysSincePrevious,
+                'total_qty' => $order->items->sum('quantity'),
+                'total_value' => (float) $order->total_amount,
+                'branch_name' => $isParent ? ($order->customer?->name ?? 'Main') : null,
+                'items' => $itemsMapped
+            ];
+
+            $prevDate = $currentDate;
+        }
+        $orderHistory = array_reverse($orderHistory);
+
+        // 5. Monthly Trends
+        $monthlyData = [];
+        foreach ($orders as $order) {
+            $month = \Carbon\Carbon::parse($order->order_date)->format('F Y');
+            if (!isset($monthlyData[$month])) {
+                $monthlyData[$month] = [
+                    'month' => $month,
+                    'order_count' => 0,
+                    'total_qty' => 0,
+                    'total_value' => 0
+                ];
+            }
+            $monthlyData[$month]['order_count']++;
+            $monthlyData[$month]['total_qty'] += $order->items->sum('quantity');
+            $monthlyData[$month]['total_value'] += $order->total_amount;
+        }
+        $monthlyTrends = array_values($monthlyData);
+
+        return $this->success([
+            'customer_name' => $customerName,
+            'metrics' => [
+                'avg_frequency_days' => count($intervals) > 0 ? round($avgFrequency, 1) : null,
+                'days_since_last_order' => $daysSinceLastOrder,
+                'total_qty_ordered' => $totalQty,
+                'total_value_ordered' => $totalValue,
+                'avg_order_size_qty' => $orderCount > 0 ? round($avgOrderSizeQty, 1) : 0,
+                'last_order_date' => $lastOrderDate,
+                'predicted_next_order_date' => $predictedNextOrderDate,
+                'order_count' => $orderCount
+            ],
+            'product_breakdown' => $productBreakdown,
+            'order_history' => $orderHistory,
+            'monthly_trends' => $monthlyTrends
+        ]);
+    }
 }
