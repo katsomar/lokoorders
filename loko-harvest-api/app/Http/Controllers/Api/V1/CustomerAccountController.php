@@ -21,7 +21,7 @@ class CustomerAccountController extends Controller
 
     public function ledger($customerId, Request $request)
     {
-        $transactions = AccountTransaction::with('user')->where('customer_id', $customerId)
+        $transactions = AccountTransaction::with(['user', 'invoice.order.items.product'])->where('customer_id', $customerId)
             ->latest('transaction_date')
             ->latest('id')
             ->paginate($request->per_page ?? 20);

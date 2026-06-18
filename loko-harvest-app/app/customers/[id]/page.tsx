@@ -149,6 +149,14 @@ export default function CustomerDetailPage() {
         
         branchesLedgers.forEach(bl => {
           bl.data.forEach((tx: any) => {
+            const items = tx.invoice?.order?.items || [];
+            const mappedItems = items.map((item: any) => ({
+              productName: item.product?.name || "Product",
+              quantity: item.quantity,
+              unit: item.product?.unit_of_measure || "units",
+              unitPrice: parseFloat(item.unit_price || 0)
+            }));
+
             consolidatedLedger.push({
               id: tx.id,
               date: tx.transaction_date,
@@ -164,7 +172,8 @@ export default function CustomerDetailPage() {
               paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
               deliveredBy: "-",
               receivedBy: tx.user?.name || "System",
-              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg"
+              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+              items: mappedItems
             });
           });
         });
@@ -231,6 +240,14 @@ export default function CustomerDetailPage() {
           
           branchesLedgers.forEach(bl => {
             bl.data.forEach((tx: any) => {
+              const items = tx.invoice?.order?.items || [];
+              const mappedItems = items.map((item: any) => ({
+                productName: item.product?.name || "Product",
+                quantity: item.quantity,
+                unit: item.product?.unit_of_measure || "units",
+                unitPrice: parseFloat(item.unit_price || 0)
+              }));
+
               consolidatedLedger.push({
                 id: tx.id,
                 date: tx.transaction_date,
@@ -246,7 +263,8 @@ export default function CustomerDetailPage() {
                 paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
                 deliveredBy: "-",
                 receivedBy: tx.user?.name || "System",
-                proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg"
+                proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+                items: mappedItems
               });
             });
           });
@@ -260,21 +278,32 @@ export default function CustomerDetailPage() {
           const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 50 } });
           const txs = ledgerRes.data.data?.data || [];
           
-          const mappedTxs = txs.map((tx: any) => ({
-            id: tx.id,
-            date: tx.transaction_date,
-            type: tx.type === "invoice_raised" ? "invoice" : "payment",
-            ref: tx.reference_number,
-            description: tx.description,
-            debit: parseFloat(tx.debit_amount || 0),
-            credit: parseFloat(tx.credit_amount || 0),
-            balance: parseFloat(tx.running_balance || 0),
-            efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
-            paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-            deliveredBy: "-",
-            receivedBy: tx.user?.name || "System",
-            proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg"
-          }));
+          const mappedTxs = txs.map((tx: any) => {
+            const items = tx.invoice?.order?.items || [];
+            const mappedItems = items.map((item: any) => ({
+              productName: item.product?.name || "Product",
+              quantity: item.quantity,
+              unit: item.product?.unit_of_measure || "units",
+              unitPrice: parseFloat(item.unit_price || 0)
+            }));
+
+            return {
+              id: tx.id,
+              date: tx.transaction_date,
+              type: tx.type === "invoice_raised" ? "invoice" : "payment",
+              ref: tx.reference_number,
+              description: tx.description,
+              debit: parseFloat(tx.debit_amount || 0),
+              credit: parseFloat(tx.credit_amount || 0),
+              balance: parseFloat(tx.running_balance || 0),
+              efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
+              paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
+              deliveredBy: "-",
+              receivedBy: tx.user?.name || "System",
+              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+              items: mappedItems
+            };
+          });
 
           setLedger(mappedTxs);
 
@@ -680,7 +709,22 @@ export default function CustomerDetailPage() {
                                   </Badge>
                                 </TableCell>
                               )}
-                              <TableCell className="text-xs text-gray-650 font-medium whitespace-nowrap">{tx.description}</TableCell>
+                              <TableCell className="text-xs text-gray-650 font-medium py-3 max-w-xs">
+                                <div className="font-bold text-gray-900 mb-1">{tx.description}</div>
+                                {tx.items && tx.items.length > 0 && (
+                                  <div className="mt-1.5 space-y-1 text-[10px] text-gray-500 font-normal pl-2 border-l border-brand-sage/40">
+                                    {tx.items.map((item: any, idx: number) => (
+                                      <div key={idx} className="leading-relaxed whitespace-nowrap">
+                                        <span className="font-bold text-brand-forest">{item.productName}</span>
+                                        <span className="text-gray-400 mx-1.5">•</span>
+                                        <span className="font-semibold text-gray-700">{item.quantity} {item.unit}</span>
+                                        <span className="text-gray-400 mx-1.5">@</span>
+                                        <span className="font-mono text-gray-600">UGX {item.unitPrice.toLocaleString()}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </TableCell>
                               <TableCell className="text-xs">
                                 {tx.type === "invoice" ? (
                                   <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
@@ -1063,6 +1107,20 @@ export default function CustomerDetailPage() {
                       UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}
                     </span>
                   </div>
+
+                  {/* Mapped products breakdown (items taken) */}
+                  {selectedProofTx.items && selectedProofTx.items.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-dotted border-gray-200 text-[9px] text-gray-600 space-y-1">
+                      <div className="font-bold text-[8px] text-gray-400 uppercase tracking-wide">Items Mapped / Taken:</div>
+                      {selectedProofTx.items.map((item: any, idx: number) => (
+                        <div key={idx} className="flex justify-between font-mono pl-1">
+                          <span>• {item.productName} (x{item.quantity} {item.unit}) @ UGX {item.unitPrice.toLocaleString()}</span>
+                          <span className="font-bold text-gray-700">UGX {(item.quantity * item.unitPrice).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex justify-between font-extrabold text-brand-forest border-t border-dashed border-gray-200 pt-1.5 text-xs">
                     <span>TOTAL VALUE</span>
                     <span>UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}</span>
