@@ -51,6 +51,7 @@ interface SalesStockItem {
   capacity: number; // Storage capacity for progress tracking
   sales_store_id: string;
   sales_store_name: string;
+  batch_reference?: string | null;
 }
 
 export default function SalesStorePage() {
@@ -89,6 +90,7 @@ export default function SalesStorePage() {
   const [convFromProductId, setConvFromProductId] = useState("");
   const [convToProductId, setConvToProductId] = useState("");
   const [convQty, setConvQty] = useState("");
+  const [convBatchRef, setConvBatchRef] = useState("");
   const [convNotes, setConvNotes] = useState("");
   const [isSubmittingConv, setIsSubmittingConv] = useState(false);
 
@@ -141,7 +143,8 @@ export default function SalesStorePage() {
           category: cat as any,
           capacity: cap,
           sales_store_id: item.sales_store_id,
-          sales_store_name: item.sales_store?.name || 'N/A'
+          sales_store_name: item.sales_store?.name || 'N/A',
+          batch_reference: item.batch_reference || null
         };
       });
       setStockItems(mappedStock);
@@ -296,9 +299,28 @@ export default function SalesStorePage() {
   // Conversion Helpers
   const getBulkProductsInStore = () => {
     if (!convStoreId) return [];
-    return stockItems.filter(item => 
+    const items = stockItems.filter(item => 
       item.sales_store_id === convStoreId && 
       (item.code === "EGG-CRM" || item.code === "EGG-WHT" || item.code === "EGG-BRN")
+    );
+    // Group by product_id and sum quantity
+    const grouped: { [key: string]: SalesStockItem } = {};
+    for (const item of items) {
+      if (!grouped[item.product_id]) {
+        grouped[item.product_id] = { ...item };
+      } else {
+        grouped[item.product_id].quantity += item.quantity;
+      }
+    }
+    return Object.values(grouped);
+  };
+
+  const getAvailableBatchesForConversion = () => {
+    if (!convStoreId || !convFromProductId) return [];
+    return stockItems.filter(item => 
+      item.sales_store_id === convStoreId && 
+      item.product_id === convFromProductId && 
+      item.quantity > 0
     );
   };
 
@@ -311,7 +333,23 @@ export default function SalesStorePage() {
   };
 
   const getSelectedSourceStockItem = () => {
-    return stockItems.find(item => item.sales_store_id === convStoreId && item.product_id === convFromProductId);
+    if (convBatchRef) {
+      return stockItems.find(item => 
+        item.sales_store_id === convStoreId && 
+        item.product_id === convFromProductId && 
+        item.batch_reference === convBatchRef
+      );
+    }
+    const matchingItems = stockItems.filter(item => 
+      item.sales_store_id === convStoreId && 
+      item.product_id === convFromProductId
+    );
+    if (matchingItems.length === 0) return undefined;
+    const totalQty = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
+    return {
+      ...matchingItems[0],
+      quantity: totalQty
+    };
   };
 
   const selectedTargetProduct = products.find(p => p.id === convToProductId);
@@ -336,11 +374,13 @@ export default function SalesStorePage() {
         from_product_id: convFromProductId,
         to_product_id: convToProductId,
         from_quantity: qty,
+        batch_reference: convBatchRef || null,
         notes: convNotes || `Conversion by operator: ${user?.name || 'Administrator'}`
       });
 
       alert("Conversion completed successfully!");
       setConvQty("");
+      setConvBatchRef("");
       setConvNotes("");
       fetchData();
     } catch (err: any) {
@@ -599,6 +639,7 @@ export default function SalesStorePage() {
                       <TableHead className="text-xs font-bold text-brand-forest pl-6">Sales Store</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Packaged Product</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Stock Code</TableHead>
+                      <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Current Stock</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Sales Price</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Total Dues Value</TableHead>
@@ -607,7 +648,7 @@ export default function SalesStorePage() {
                   <TableBody>
                     {getFilteredStock().length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-10 text-gray-405 font-medium">
+                        <TableCell colSpan={7} className="text-center py-10 text-gray-450 font-medium">
                           No stock records found matching filters.
                         </TableCell>
                       </TableRow>
@@ -630,6 +671,11 @@ export default function SalesStorePage() {
                             )}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-gray-400 font-bold">{item.code}</TableCell>
+                          <TableCell className="font-mono text-xs text-gray-700 font-bold">
+                            <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
+                              {item.batch_reference || "—"}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-right font-bold text-brand-forest">
                             <div>
                               {item.quantity.toLocaleString()}{" "}
@@ -734,6 +780,7 @@ export default function SalesStorePage() {
                           onChange={(e) => {
                             setConvFromProductId(e.target.value);
                             setConvToProductId("");
+                            setConvBatchRef("");
                           }}
                           className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
                           disabled={!convStoreId}
@@ -747,6 +794,25 @@ export default function SalesStorePage() {
                           ))}
                         </select>
                       </div>
+
+                      {/* Source Batch Dropdown (Only shown if product is selected and has batches) */}
+                      {convFromProductId && getAvailableBatchesForConversion().length > 0 && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-brand-forest block">Source Batch</label>
+                          <select
+                            value={convBatchRef}
+                            onChange={(e) => setConvBatchRef(e.target.value)}
+                            className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                          >
+                            <option value="">FIFO (Auto-split across batches)</option>
+                            {getAvailableBatchesForConversion().map(b => (
+                              <option key={b.id} value={b.batch_reference || ""}>
+                                Batch: {b.batch_reference || "N/A"} ({b.quantity} Trays available)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       {/* To Product (Packaged) */}
                       <div className="space-y-1">

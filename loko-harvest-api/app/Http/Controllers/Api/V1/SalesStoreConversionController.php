@@ -31,6 +31,7 @@ class SalesStoreConversionController extends Controller
             'from_product_id' => 'required|exists:products,id',
             'to_product_id' => 'required|exists:products,id|different:from_product_id',
             'from_quantity' => 'required|numeric|min:0.01',
+            'batch_reference' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
 
@@ -61,73 +62,181 @@ class SalesStoreConversionController extends Controller
 
             $toQty = $fromQty * $ratio;
 
-            // 3. Verify source stock is available
-            $sourceStock = SalesStoreStock::where('sales_store_id', $storeId)
-                ->where('product_id', $fromId)
-                ->first();
+            $supportsBatch = $this->productSupportsBatch($fromProduct);
+            $batchRef = $supportsBatch ? ($validated['batch_reference'] ?? null) : null;
 
-            if (!$sourceStock || $sourceStock->current_quantity < $fromQty) {
-                return $this->error('Insufficient bulk trays in the selected sales store.', 422, [
-                    'available' => $sourceStock ? $sourceStock->current_quantity : 0
+            if ($supportsBatch && $batchRef) {
+                // 3. Verify source stock is available for specific batch
+                $sourceStock = SalesStoreStock::where('sales_store_id', $storeId)
+                    ->where('product_id', $fromId)
+                    ->where('batch_reference', $batchRef)
+                    ->first();
+
+                if (!$sourceStock || $sourceStock->current_quantity < $fromQty) {
+                    return $this->error('Insufficient bulk trays for the selected batch in the sales store.', 422, [
+                        'available' => $sourceStock ? $sourceStock->current_quantity : 0
+                    ]);
+                }
+
+                // 4. Debit source stock
+                $sourceStock->decrement('current_quantity', $fromQty);
+                $sourceStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                // 5. Credit destination stock
+                $destStock = SalesStoreStock::firstOrCreate(
+                    [
+                        'sales_store_id' => $storeId,
+                        'product_id' => $toId,
+                        'batch_reference' => $batchRef,
+                    ],
+                    [
+                        'current_quantity' => 0,
+                        'updated_by' => auth()->id(),
+                    ]
+                );
+                $destStock->increment('current_quantity', $toQty);
+                $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                // 6. Record conversion log
+                $conversion = SalesStoreConversion::create([
+                    'conversion_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'from_product_id' => $fromId,
+                    'to_product_id' => $toId,
+                    'from_quantity' => $fromQty,
+                    'to_quantity' => $toQty,
+                    'batch_reference' => $batchRef,
+                    'converted_by' => auth()->id(),
+                    'notes' => $validated['notes'] ?? null,
                 ]);
-            }
 
-            // 4. Debit source stock
-            $sourceStock->decrement('current_quantity', $fromQty);
-            $sourceStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                // 7. Log movements
+                // Debit movement (source bulk product)
+                SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'product_id' => $fromId,
+                    'batch_reference' => $batchRef,
+                    'movement_type' => 'dispatch_out',
+                    'quantity' => $fromQty,
+                    'reference_id' => $conversion->id,
+                    'created_by' => auth()->id(),
+                    'notes' => "Converted " . $fromQty . " bulk trays into packaged units (Batch: {$batchRef})",
+                ]);
 
-            // 5. Credit destination stock
-            $destStock = SalesStoreStock::firstOrCreate(
-                [
+                // Credit movement (destination packaged product)
+                SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
                     'sales_store_id' => $storeId,
                     'product_id' => $toId,
-                ],
-                [
-                    'current_quantity' => 0,
-                    'updated_by' => auth()->id(),
-                ]
-            );
-            $destStock->increment('current_quantity', $toQty);
-            $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    'batch_reference' => $batchRef,
+                    'movement_type' => 'transfer_in',
+                    'quantity' => $toQty,
+                    'reference_id' => $conversion->id,
+                    'created_by' => auth()->id(),
+                    'notes' => "Obtained from bulk conversion (Batch: {$batchRef})",
+                ]);
 
-            // 6. Record conversion log
-            $conversion = SalesStoreConversion::create([
-                'conversion_date' => now()->toDateString(),
-                'sales_store_id' => $storeId,
-                'from_product_id' => $fromId,
-                'to_product_id' => $toId,
-                'from_quantity' => $fromQty,
-                'to_quantity' => $toQty,
-                'converted_by' => auth()->id(),
-                'notes' => $validated['notes'] ?? null,
-            ]);
+                return $this->success($conversion->load(['fromProduct', 'toProduct']), 'Conversion completed successfully', 201);
+            } else {
+                // FIFO Debit across sales stock batches for conversion
+                $remainingToDebit = $fromQty;
+                
+                // Retrieve all non-empty stocks of the source product
+                $stocks = SalesStoreStock::where('sales_store_id', $storeId)
+                    ->where('product_id', $fromId)
+                    ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
+                    ->where('current_quantity', '>', 0)
+                    ->orderBy('created_at', 'asc')
+                    ->get();
 
-            // 7. Log movements
-            // Debit movement (source bulk product)
-            SalesStoreMovement::create([
-                'movement_date' => now()->toDateString(),
-                'sales_store_id' => $storeId,
-                'product_id' => $fromId,
-                'movement_type' => 'dispatch_out',
-                'quantity' => $fromQty,
-                'reference_id' => $conversion->id,
-                'created_by' => auth()->id(),
-                'notes' => "Converted " . $fromQty . " bulk trays into packaged units",
-            ]);
+                // Check total available stock across all batches
+                $totalAvailable = $stocks->sum('current_quantity');
+                if ($totalAvailable < $fromQty) {
+                    return $this->error('Insufficient bulk trays in the selected sales store.', 422, [
+                        'available' => $totalAvailable
+                    ]);
+                }
 
-            // Credit movement (destination packaged product)
-            SalesStoreMovement::create([
-                'movement_date' => now()->toDateString(),
-                'sales_store_id' => $storeId,
-                'product_id' => $toId,
-                'movement_type' => 'transfer_in',
-                'quantity' => $toQty,
-                'reference_id' => $conversion->id,
-                'created_by' => auth()->id(),
-                'notes' => "Obtained from bulk conversion",
-            ]);
+                // Record main conversion log
+                $conversion = SalesStoreConversion::create([
+                    'conversion_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'from_product_id' => $fromId,
+                    'to_product_id' => $toId,
+                    'from_quantity' => $fromQty,
+                    'to_quantity' => $toQty,
+                    'batch_reference' => null, // Multi-batch FIFO conversion
+                    'converted_by' => auth()->id(),
+                    'notes' => $validated['notes'] ?? null,
+                ]);
 
-            return $this->success($conversion->load(['fromProduct', 'toProduct']), 'Conversion completed successfully', 201);
+                foreach ($stocks as $stock) {
+                    if ($remainingToDebit <= 0) break;
+
+                    $debitAmount = min($stock->current_quantity, $remainingToDebit);
+                    $stock->decrement('current_quantity', $debitAmount);
+                    $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                    $currentBatch = $stock->batch_reference;
+                    $destSegmentQty = $debitAmount * $ratio;
+
+                    // Credit destination stock for this batch segment
+                    $destStock = SalesStoreStock::firstOrCreate(
+                        [
+                            'sales_store_id' => $storeId,
+                            'product_id' => $toId,
+                            'batch_reference' => $currentBatch,
+                        ],
+                        [
+                            'current_quantity' => 0,
+                            'updated_by' => auth()->id(),
+                        ]
+                    );
+                    $destStock->increment('current_quantity', $destSegmentQty);
+                    $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+
+                    // Log movements for this batch segment
+                    SalesStoreMovement::create([
+                        'movement_date' => now()->toDateString(),
+                        'sales_store_id' => $storeId,
+                        'product_id' => $fromId,
+                        'batch_reference' => $currentBatch,
+                        'movement_type' => 'dispatch_out',
+                        'quantity' => $debitAmount,
+                        'reference_id' => $conversion->id,
+                        'created_by' => auth()->id(),
+                        'notes' => "Converted " . $debitAmount . " bulk trays into packaged units" . ($currentBatch ? " (FIFO Batch: {$currentBatch})" : ""),
+                    ]);
+
+                    SalesStoreMovement::create([
+                        'movement_date' => now()->toDateString(),
+                        'sales_store_id' => $storeId,
+                        'product_id' => $toId,
+                        'batch_reference' => $currentBatch,
+                        'movement_type' => 'transfer_in',
+                        'quantity' => $destSegmentQty,
+                        'reference_id' => $conversion->id,
+                        'created_by' => auth()->id(),
+                        'notes' => "Obtained from bulk conversion" . ($currentBatch ? " (FIFO Batch: {$currentBatch})" : ""),
+                    ]);
+
+                    $remainingToDebit -= $debitAmount;
+                }
+
+                return $this->success($conversion->load(['fromProduct', 'toProduct']), 'Conversion completed successfully via FIFO', 201);
+            }
         });
+    }
+
+    private function productSupportsBatch($product)
+    {
+        if ($product->category === 'eggs') {
+            return true;
+        }
+        if ($product->category === 'poultry' && $product->code !== 'POU-LVE') {
+            return true;
+        }
+        return false;
     }
 }
