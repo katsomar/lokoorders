@@ -86,6 +86,9 @@ export default function DriversPage() {
   const [logisticsCapacity, setLogisticsCapacity] = useState("300");
   const [logisticsPhotoFile, setLogisticsPhotoFile] = useState<File | null>(null);
   const [logisticsPhotoPreview, setLogisticsPhotoPreview] = useState<string | null>(null);
+  const [logisticsConsumptionPerKm, setLogisticsConsumptionPerKm] = useState("");
+  const [logisticsAddedFuelPerShift, setLogisticsAddedFuelPerShift] = useState("");
+  const [logisticsTankCapacity, setLogisticsTankCapacity] = useState("");
 
   // Register Driver Modal State
   const [showRegisterDriverModal, setShowRegisterDriverModal] = useState(false);
@@ -203,6 +206,9 @@ export default function DriversPage() {
     setLogisticsModel(selectedVehicleForLogistics.model || "");
     setLogisticsCapacity((selectedVehicleForLogistics.max_crates_capacity ?? 300).toString());
     setLogisticsPhotoFile(null);
+    setLogisticsConsumptionPerKm((selectedVehicleForLogistics.consumption_per_km ?? "").toString());
+    setLogisticsAddedFuelPerShift((selectedVehicleForLogistics.added_fuel_per_shift ?? "0").toString());
+    setLogisticsTankCapacity((selectedVehicleForLogistics.fuel_tank_capacity ?? "").toString());
     
     // Find the IDs of the drivers who have this vehicle registration number
     const assignedIds = drivers
@@ -241,6 +247,13 @@ export default function DriversPage() {
       formData.append("max_crates_capacity", logisticsCapacity);
       formData.append("status", logisticsStatus);
       formData.append("fuel_level", logisticsFuelLevel.toString());
+      if (logisticsConsumptionPerKm) {
+        formData.append("consumption_per_km", logisticsConsumptionPerKm);
+      }
+      formData.append("added_fuel_per_shift", logisticsAddedFuelPerShift || "0");
+      if (logisticsTankCapacity) {
+        formData.append("fuel_tank_capacity", logisticsTankCapacity);
+      }
       if (logisticsPhotoFile) {
         formData.append("vehicle_photo", logisticsPhotoFile);
       }
@@ -1012,6 +1025,48 @@ export default function DriversPage() {
                         className="w-full accent-brand-forest h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
                       />
                       <span className="font-mono font-bold text-xs text-gray-700 w-12 text-right">{logisticsFuelLevel}%</span>
+                    </div>
+                  </div>
+
+                  {/* Fuel metrics */}
+                  <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-brand-sage/35">
+                    <div>
+                      <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Consumption (L/km)</label>
+                      <Input 
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="e.g. 0.15" 
+                        value={logisticsConsumptionPerKm}
+                        onChange={(e) => setLogisticsConsumptionPerKm(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 px-2"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Refueled (L)</label>
+                      <Input 
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g. 45" 
+                        value={logisticsAddedFuelPerShift}
+                        onChange={(e) => setLogisticsAddedFuelPerShift(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 px-2"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Tank Cap. (L)</label>
+                      <Input 
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        placeholder="e.g. 80" 
+                        value={logisticsTankCapacity}
+                        onChange={(e) => setLogisticsTankCapacity(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 px-2"
+                      />
                     </div>
                   </div>
 
