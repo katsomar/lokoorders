@@ -58,4 +58,9 @@ class CustomerController extends Controller
 
         return $this->success($customer, 'Customer registered successfully', 201);
     }
+
+    public function zones()
+    {
+        return $this->success(\App\Models\DeliveryZone::all());
+    }
 }

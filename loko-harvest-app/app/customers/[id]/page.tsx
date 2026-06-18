@@ -1,26 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { 
   ChevronLeft, 
   CreditCard, 
   History, 
   Plus, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
-  Printer,
-  Building2,
-  ListFilter,
-  DollarSign,
-  Briefcase,
-  FileText
+  User, 
+  Phone, 
+  Mail, 
+  MapPin, 
+  Clock, 
+  Printer, 
+  Building2, 
+  DollarSign, 
+  FileText,
+  Loader2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -34,125 +31,34 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-
-// Mock customer directory including parents and standalone accounts
-const allCustomers = [
-  {
-    id: "parent-shoprite",
-    name: "Shoprite Supermarkets (HQ)",
-    contact_person: "John Okello (HQ Sales Manager)",
-    phone: "0772 123 456",
-    email: "corporate@shoprite.co.ug",
-    address: "Plot 3-5, Lugogo Bypass, Kampala",
-    zone: "Multiple Zones",
-    type: "supermarket",
-    credit_terms: "14 Days",
-    credit_limit: 30000000,
-    isParent: true,
-    branches: [
-      { id: "shoprite-lugogo", name: "Shoprite Lugogo Branch", balance: 12500000, zone: "Kampala Central", contact: "John Okello", credit_limit: 15000000 },
-      { id: "shoprite-acacia", name: "Shoprite Acacia Branch", balance: 3200000, zone: "Kololo", contact: "Agnes Nabeta", credit_limit: 15000000 }
-    ],
-    ledger: [
-      { id: "1", date: "2026-05-16", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0042", description: "Order delivery for Lugogo", debit: 4250000, credit: 0, balance: 15700000, efrisNumber: "EFRIS-UG-59283", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_59283.jpg" },
-      { id: "2", date: "2026-05-15", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "payment", ref: "LHP-2026-0515", description: "Consolidated payment via Bank Transfer", debit: 0, credit: 2000000, balance: 11450000, efrisNumber: "-", paymentMethod: "Bank Transfer", deliveredBy: "-", receivedBy: "John Okello (Sales Manager)", proofDoc: "/proof_rcpt_1029.jpg" },
-      { id: "3", date: "2026-05-14", branchId: "shoprite-acacia", branchName: "Acacia", type: "invoice", ref: "LHI-2026-0041", description: "Order delivery for Acacia", debit: 3200000, credit: 0, balance: 13450000, efrisNumber: "EFRIS-UG-59114", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59114.jpg" },
-      { id: "4", date: "2026-05-12", branchId: "shoprite-lugogo", branchName: "Lugogo", type: "invoice", ref: "LHI-2026-0035", description: "Opening invoice setup", debit: 10250000, credit: 0, balance: 10250000, efrisNumber: "EFRIS-UG-58091", paymentMethod: "-", deliveredBy: "Ssempijja D. (HQ Staff)", receivedBy: "-", proofDoc: "/proof_inv_58091.jpg" },
-    ]
-  },
-  {
-    id: "parent-mega",
-    name: "Mega Standard Supermarkets (HQ)",
-    contact_person: "Moses Mukasa (HQ Finance Director)",
-    phone: "0702 444 555",
-    email: "finance@megastandard.co.ug",
-    address: "Chase Complex, Kampala Rd, Kampala",
-    zone: "Multiple Zones",
-    type: "supermarket",
-    credit_terms: "30 Days",
-    credit_limit: 25000000,
-    isParent: true,
-    branches: [
-      { id: "mega-downtown", name: "Mega Standard Downtown", balance: 4500000, zone: "Kampala Central", contact: "Moses Mukasa", credit_limit: 10000000 },
-      { id: "mega-nakasero", name: "Mega Standard Nakasero", balance: 5000000, zone: "Nakasero", contact: "Daniel Lwanga", credit_limit: 10000000 },
-      { id: "mega-entebbe", name: "Mega Standard Entebbe", balance: 3000000, zone: "Entebbe", contact: "Sarah Namubiru", credit_limit: 5000000 }
-    ],
-    ledger: [
-      { id: "1", date: "2026-05-15", branchId: "mega-nakasero", branchName: "Nakasero", type: "invoice", ref: "LHI-2026-0045", description: "Deliveries for Nakasero Branch", debit: 5000000, credit: 0, balance: 12500000, efrisNumber: "EFRIS-UG-60312", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_60312.jpg" },
-      { id: "2", date: "2026-05-13", branchId: "mega-downtown", branchName: "Downtown", type: "invoice", ref: "LHI-2026-0038", description: "Deliveries for Downtown Branch", debit: 4500000, credit: 0, balance: 7500000, efrisNumber: "EFRIS-UG-60199", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_60199.jpg" },
-      { id: "3", date: "2026-05-12", branchId: "mega-entebbe", branchName: "Entebbe", type: "invoice", ref: "LHI-2026-0032", description: "Deliveries for Entebbe Branch", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-59002", paymentMethod: "-", deliveredBy: "Ssempijja D. (HQ Staff)", receivedBy: "-", proofDoc: "/proof_inv_59002.jpg" }
-    ]
-  },
-  {
-    id: "cust-kfc",
-    name: "KFC Bukoto",
-    contact_person: "Sarah Jane (Store Manager)",
-    phone: "0701 987 654",
-    email: "bukoto@kfc-uganda.co.ug",
-    address: "Bukoto Street, Kampala",
-    zone: "Bukoto",
-    type: "restaurant",
-    credit_terms: "7 Days",
-    credit_limit: 10000000,
-    isParent: false,
-    branches: [],
-    ledger: [
-      { id: "1", date: "2026-05-16", type: "invoice", ref: "LHI-2026-0043", description: "Dressed Chicken Order Delivery", debit: 5400000, credit: 0, balance: 8400000, efrisNumber: "EFRIS-UG-59299", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59299.jpg" },
-      { id: "2", date: "2026-05-14", type: "invoice", ref: "LHI-2026-0039", description: "Dressed Chicken Order Delivery", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-58312", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_58312.jpg" }
-    ]
-  },
-  {
-    id: "cust-cj",
-    name: "Café Javas Oasis Mall",
-    contact_person: "Musa Teko",
-    phone: "0755 444 333",
-    email: "oasis@javas.co.ug",
-    address: "Oasis Mall, Kampala Rd, Kampala",
-    zone: "Oasis Mall",
-    type: "restaurant",
-    credit_terms: "7 Days",
-    credit_limit: 8000000,
-    isParent: false,
-    branches: [],
-    ledger: [
-      { id: "1", date: "2026-05-15", type: "invoice", ref: "LHI-2026-0040", description: "Fresh Brown Egg Delivery", debit: 3200000, credit: 0, balance: 6200000, efrisNumber: "EFRIS-UG-59021", paymentMethod: "-", deliveredBy: "Odoch F. (Logistics)", receivedBy: "-", proofDoc: "/proof_inv_59021.jpg" },
-      { id: "2", date: "2026-05-12", type: "invoice", ref: "LHI-2026-0031", description: "Fresh Brown Egg Delivery", debit: 3000000, credit: 0, balance: 3000000, efrisNumber: "EFRIS-UG-58004", paymentMethod: "-", deliveredBy: "Kato S. (Driver)", receivedBy: "-", proofDoc: "/proof_inv_58004.jpg" }
-    ]
-  },
-  {
-    id: "cust-carrefour",
-    name: "Carrefour Oasis Mall",
-    contact_person: "Peter Pan",
-    phone: "0788 111 222",
-    email: "oasis@carrefour.co.ug",
-    address: "Oasis Mall Ground Floor, Kampala",
-    zone: "Kampala Central",
-    type: "supermarket",
-    credit_terms: "14 Days",
-    credit_limit: 20000000,
-    isParent: false,
-    branches: [],
-    ledger: []
-  }
-];
+import api from "@/lib/api";
 
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const parentIdParam = searchParams.get("parent");
+
+  const [customer, setCustomer] = useState<any>(null);
+  const [ledger, setLedger] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLedgerLoading, setIsLedgerLoading] = useState(true);
 
   const [activeTab, setActiveTab] = useState<"ledger" | "branches">("ledger");
   const [ledgerFilter, setLedgerFilter] = useState<string>("all");
+  
+  // Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentBranch, setPaymentBranch] = useState("all");
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
+  const [referenceNumber, setReferenceNumber] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [selectedProofTx, setSelectedProofTx] = useState<any | null>(null);
+
+  // Logo uploading cosmetics simulation
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoProgress, setLogoProgress] = useState(0);
   const [customerLogo, setCustomerLogo] = useState<{ color: string; letter: string } | null>(null);
@@ -180,97 +86,219 @@ export default function CustomerDetailPage() {
     }, 200);
   };
 
-  // Find customer by ID. If it's a branch, we construct its branch record.
-  const customerId = params.id as string;
-  let customer: any = allCustomers.find(c => c.id === customerId);
-  let parentCustomer: any = null;
+  const loadCustomerDetails = async () => {
+    setIsLoading(true);
+    setIsLedgerLoading(true);
+    try {
+      const customerId = params.id as string;
+      
+      if (customerId === "parent-shoprite" || customerId === "parent-mega") {
+        // HQ corporate grouping retrieval
+        const res = await api.get("/customers", { params: { per_page: 100 } });
+        const allDb = res.data.data?.data || res.data.data || [];
+        
+        const filterName = customerId === "parent-shoprite" ? "shoprite" : "mega";
+        const branchesDb = allDb.filter((c: any) => c.name.toLowerCase().includes(filterName));
+        
+        const branchItems = branchesDb.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          contact: c.contact_person || "N/A",
+          phone: c.phone_primary || "N/A",
+          zone: c.zone?.name || "Kampala",
+          credit_limit: parseFloat(c.credit_limit || 0),
+          balance: parseFloat(c.account?.current_balance || 0),
+        }));
 
-  if (parentIdParam) {
-    parentCustomer = allCustomers.find(c => c.id === parentIdParam);
-    if (parentCustomer) {
-      const branchInfo = parentCustomer.branches.find((b: any) => b.id === customerId);
-      if (branchInfo) {
-        customer = {
-          id: branchInfo.id,
-          name: branchInfo.name,
-          contact_person: branchInfo.contact,
-          phone: parentCustomer.phone,
-          email: parentCustomer.email,
-          address: `Delivery point at ${branchInfo.zone}`,
-          zone: branchInfo.zone,
-          type: parentCustomer.type,
-          credit_terms: parentCustomer.credit_terms,
-          credit_limit: branchInfo.credit_limit,
-          current_balance: branchInfo.balance,
-          isParent: false,
-          isBranch: true,
-          parentId: parentCustomer.id,
-          parentName: parentCustomer.name,
-          ledger: parentCustomer.ledger.filter((l: any) => l.branchId === branchInfo.id)
+        const parentObj = {
+          id: customerId,
+          name: customerId === "parent-shoprite" ? "Shoprite Supermarkets" : "Mega Standard Supermarkets",
+          contact_person: customerId === "parent-shoprite" ? "John Okello (HQ Sales Manager)" : "Moses Mukasa (HQ Finance Director)",
+          phone: customerId === "parent-shoprite" ? "0772 123 456" : "0702 444 555",
+          email: customerId === "parent-shoprite" ? "corporate@shoprite.co.ug" : "finance@megastandard.co.ug",
+          address: customerId === "parent-shoprite" ? "Plot 3-5, Lugogo Bypass, Kampala" : "Chase Complex, Kampala Rd, Kampala",
+          zone: "Multiple Zones",
+          type: "supermarket",
+          credit_terms: customerId === "parent-shoprite" ? "30 Days" : "14 Days",
+          credit_limit: branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.credit_limit || 0), 0),
+          isParent: true,
+          isBranch: false,
+          branches: branchItems
         };
+
+        setCustomer(parentObj);
+
+        // Fetch consolidated ledger from all branches
+        const ledgersPromise = branchesDb.map((b: any) => 
+          api.get(`/accounts/${b.id}/ledger`, { params: { per_page: 50 } })
+            .then(res => ({
+              branchId: b.id,
+              branchName: b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", ""),
+              data: res.data.data?.data || []
+            }))
+            .catch(() => ({ branchId: b.id, branchName: b.name, data: [] }))
+        );
+
+        const branchesLedgers = await Promise.all(ledgersPromise);
+        let consolidatedLedger: any[] = [];
+        
+        branchesLedgers.forEach(bl => {
+          bl.data.forEach((tx: any) => {
+            consolidatedLedger.push({
+              id: tx.id,
+              date: tx.transaction_date,
+              branchId: bl.branchId,
+              branchName: bl.branchName,
+              type: tx.type === "invoice_raised" ? "invoice" : "payment",
+              ref: tx.reference_number,
+              description: tx.description,
+              debit: parseFloat(tx.debit_amount || 0),
+              credit: parseFloat(tx.credit_amount || 0),
+              balance: parseFloat(tx.running_balance || 0),
+              efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
+              paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
+              deliveredBy: "-",
+              receivedBy: tx.user?.name || "System",
+              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg"
+            });
+          });
+        });
+
+        consolidatedLedger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setLedger(consolidatedLedger);
+
+      } else {
+        // Standalone Customer details
+        const res = await api.get(`/customers/${customerId}`);
+        const c = res.data.data;
+
+        // Fetch ledger
+        const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 50 } });
+        const txs = ledgerRes.data.data?.data || [];
+        
+        const mappedTxs = txs.map((tx: any) => ({
+          id: tx.id,
+          date: tx.transaction_date,
+          type: tx.type === "invoice_raised" ? "invoice" : "payment",
+          ref: tx.reference_number,
+          description: tx.description,
+          debit: parseFloat(tx.debit_amount || 0),
+          credit: parseFloat(tx.credit_amount || 0),
+          balance: parseFloat(tx.running_balance || 0),
+          efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
+          paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
+          deliveredBy: "-",
+          receivedBy: tx.user?.name || "System",
+          proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg"
+        }));
+
+        setLedger(mappedTxs);
+
+        const detailObj = {
+          id: c.id,
+          name: c.name,
+          contact_person: c.contact_person || "N/A",
+          phone: c.phone_primary || "N/A",
+          email: c.email || "N/A",
+          address: c.address || "N/A",
+          zone: c.zone?.name || "Kampala",
+          type: c.customer_type || "supermarket",
+          credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
+          credit_limit: parseFloat(c.credit_limit || 0),
+          current_balance: parseFloat(c.account?.current_balance || 0),
+          isParent: false,
+          isBranch: false,
+          branches: []
+        };
+
+        setCustomer(detailObj);
       }
+    } catch (err) {
+      console.error("Failed to load customer profile details:", err);
+    } finally {
+      setIsLoading(false);
+      setIsLedgerLoading(false);
     }
-  }
-
-  // Fallback default customer structure
-  if (!customer) {
-    customer = allCustomers[0];
-  }
-
-  // Compute roll-up balance for parent accounts
-  const consolidatedBalance = customer.isParent 
-    ? customer.branches.reduce((acc: number, br: any) => acc + br.balance, 0)
-    : customer.current_balance || 0;
-
-  // Filtered ledger transactions
-  const getFilteredLedger = () => {
-    const rawLedger = customer.ledger || [];
-    if (ledgerFilter === "all") return rawLedger;
-    return rawLedger.filter((tx: any) => tx.branchId === ledgerFilter);
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  useEffect(() => {
+    loadCustomerDetails();
+  }, [params.id]);
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!paymentAmount) return;
+
     setIsSubmitting(true);
+    try {
+      const finalCustomerId = customer.isParent 
+        ? (paymentBranch === "all" ? customer.branches[0]?.id : paymentBranch) 
+        : customer.id;
 
-    setTimeout(() => {
-      // Add transaction locally
-      const debitVal = 0;
-      const creditVal = parseFloat(paymentAmount) || 0;
-      
-      const newTx = {
-        id: Math.random().toString(),
-        date: new Date().toISOString().split("T")[0],
-        branchId: paymentBranch === "all" ? undefined : paymentBranch,
-        branchName: paymentBranch === "all" ? "HQ Consolidated" : customer.branches.find((b: any) => b.id === paymentBranch)?.name?.replace("Branch", "").trim(),
-        type: "payment",
-        ref: `LHP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        description: `Payment recorded via portal: ${paymentNotes || "No notes"}`,
-        debit: debitVal,
-        credit: creditVal,
-        balance: consolidatedBalance - creditVal
-      };
+      await api.post("/payments", {
+        customer_id: finalCustomerId,
+        payment_date: new Date().toISOString().split('T')[0],
+        amount: parseFloat(paymentAmount),
+        payment_method: paymentMethod, // cash, bank_transfer, mobile_money, cheque
+        reference_number: referenceNumber || null,
+        notes: paymentNotes || null,
+        auto_allocate: true
+      });
 
-      if (customer.ledger) {
-        customer.ledger.unshift(newTx);
-      }
-      
-      // Update local balances
-      if (customer.isParent && paymentBranch !== "all") {
-        const targetBranch = customer.branches.find((b: any) => b.id === paymentBranch);
-        if (targetBranch) {
-          targetBranch.balance = Math.max(0, targetBranch.balance - creditVal);
-        }
-      } else if (!customer.isParent) {
-        customer.current_balance = Math.max(0, customer.current_balance - creditVal);
-      }
-
-      setIsSubmitting(false);
+      alert("Payment receipt recorded successfully!");
       setShowPaymentModal(false);
       setPaymentAmount("");
       setPaymentNotes("");
-    }, 1200);
+      setReferenceNumber("");
+      
+      // Reload details
+      loadCustomerDetails();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to record payment credit.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const getConsolidatedBalance = () => {
+    if (!customer) return 0;
+    if (customer.isParent) {
+      return customer.branches.reduce((acc: number, br: any) => acc + br.balance, 0);
+    }
+    return customer.current_balance || 0;
+  };
+
+  const getFilteredLedger = () => {
+    if (ledgerFilter === "all") return ledger;
+    return ledger.filter((tx: any) => tx.branchId === ledgerFilter);
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center py-40 text-gray-400 text-xs font-bold gap-2">
+          <Loader2 className="animate-spin text-brand-forest" size={32} />
+          Loading account profile details...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <DashboardLayout>
+        <div className="bg-white rounded-xl shadow-sm border border-brand-sage/50 p-12 text-center text-gray-500 font-body max-w-lg mx-auto mt-20">
+          Customer profile not found.
+          <div className="mt-4">
+            <Button onClick={() => router.push("/customers")}>Back to Directory</Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const consolidatedBalance = getConsolidatedBalance();
 
   return (
     <DashboardLayout>
@@ -283,51 +311,36 @@ export default function CustomerDetailPage() {
               variant="ghost" 
               size="icon" 
               onClick={() => router.push("/customers")}
-              className="text-brand-forest hover:bg-brand-sage/25 h-10 w-10 rounded-full"
+              className="text-brand-forest hover:bg-brand-sage/25 h-10 w-10 rounded-full cursor-pointer"
             >
               <ChevronLeft size={24} />
             </Button>
+            
             {/* Circular Corporate Logo Badge */}
             <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
               customerLogo 
                 ? customerLogo.color 
-                : customer ? (
-                    customer.id === "parent-shoprite" || customer.id === "shoprite-lugogo" || customer.id === "shoprite-acacia" ? "bg-red-600 text-white" :
-                    customer.id === "parent-mega" || customer.id === "mega-downtown" || customer.id === "mega-nakasero" || customer.id === "mega-entebbe" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
-                    customer.id === "cust-kfc" ? "bg-red-800 text-white" :
-                    customer.id === "cust-cj" ? "bg-amber-800 text-white" :
-                    customer.id === "cust-carrefour" ? "bg-blue-800 text-white" :
-                    "bg-brand-forest text-brand-yellow"
-                  ) : "bg-brand-forest text-brand-yellow"
+                : customer.id === "parent-shoprite" ? "bg-red-600 text-white" :
+                  customer.id === "parent-mega" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                  customer.name.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
+                  customer.name.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
+                  customer.name.toLowerCase().includes("carrefour") ? "bg-blue-800 text-white" :
+                  "bg-brand-forest text-brand-yellow"
             }`}>
               {customerLogo 
                 ? customerLogo.letter 
-                : customer ? (
-                    customer.id === "parent-shoprite" || customer.id === "shoprite-lugogo" || customer.id === "shoprite-acacia" ? "S" :
-                    customer.id === "parent-mega" || customer.id === "mega-downtown" || customer.id === "mega-nakasero" || customer.id === "mega-entebbe" ? "M" :
-                    customer.id === "cust-kfc" ? "K" :
-                    customer.id === "cust-cj" ? "CJ" :
-                    customer.id === "cust-carrefour" ? "C" :
-                    customer.name.charAt(0).toUpperCase()
-                  ) : "C"}
+                : customer.id === "parent-shoprite" ? "S" :
+                  customer.id === "parent-mega" ? "M" :
+                  customer.name.charAt(0).toUpperCase()}
             </div>
 
             <div>
               <h1 className="text-2xl font-black text-brand-forest font-heading leading-none">{customer.name}</h1>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1.5">
                 {customer.isParent ? (
                   <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[10px]">
                     <Building2 size={10} className="mr-1" /> HQ Corporate Account
                   </Badge>
-                ) : customer.isBranch ? (
-                  <div className="flex items-center gap-1.5">
-                    <Badge className="bg-brand-sage text-brand-forest border-none font-semibold text-[10px]">
-                      Branch Location
-                    </Badge>
-                    <span className="text-gray-500 text-xs font-semibold">
-                      of <Link href={`/customers/${customer.parentId}`} className="underline hover:text-brand-forest text-brand-forest font-bold">{customer.parentName}</Link>
-                    </span>
-                  </div>
                 ) : (
                   <Badge className="bg-brand-sage text-brand-forest border-none font-medium text-[10px]">
                     Standalone Client
@@ -339,13 +352,17 @@ export default function CustomerDetailPage() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Button variant="outline" className="gap-1.5 border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm">
+            <Button 
+              variant="outline" 
+              onClick={() => window.print()}
+              className="gap-1.5 border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer"
+            >
               <Printer size={15} />
               Print Ledger Statement
             </Button>
             <Button 
               onClick={() => setShowPaymentModal(true)}
-              className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-extrabold shadow-sm h-9.5 px-4 rounded-xl text-xs"
+              className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-extrabold shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
             >
               <Plus size={15} />
               Record Payment Receipt
@@ -360,7 +377,7 @@ export default function CustomerDetailPage() {
           <Card className="border-none shadow-xl bg-brand-forest text-white">
             <CardContent className="pt-6">
               <p className="text-white/60 text-xs font-bold uppercase tracking-wider">
-                {customer.isParent ? "Consolidated Balance" : "Outstanding Balance"}
+                {customer.isParent ? "Consolidated HQ Balance" : "Outstanding Balance"}
               </p>
               <h3 className="text-3xl font-black font-heading mt-1.5">
                 UGX {consolidatedBalance.toLocaleString()}
@@ -381,7 +398,7 @@ export default function CustomerDetailPage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
-                {customer.isParent ? "Group Credit Limit" : "Branch Credit Limit"}
+                {customer.isParent ? "HQ Credit Limit" : "Approved Credit Limit"}
               </p>
               <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
                 UGX {(customer.credit_limit || 0).toLocaleString()}
@@ -405,7 +422,7 @@ export default function CustomerDetailPage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Credit Terms</p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">{customer.credit_terms}</h3>
+              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5 capitalize">{customer.credit_terms}</h3>
               <p className="text-xs text-brand-forest font-bold mt-5 flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
                 Account in Good Standing
@@ -434,7 +451,7 @@ export default function CustomerDetailPage() {
           <div className="flex gap-2 border-b border-brand-sage/40 pb-px">
             <button
               onClick={() => setActiveTab("ledger")}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 transition-all ${
+              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all ${
                 activeTab === "ledger" 
                   ? "border-brand-forest text-brand-forest" 
                   : "border-transparent text-gray-500 hover:text-brand-forest"
@@ -444,7 +461,7 @@ export default function CustomerDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab("branches")}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 transition-all ${
+              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all ${
                 activeTab === "branches" 
                   ? "border-brand-forest text-brand-forest" 
                   : "border-transparent text-gray-500 hover:text-brand-forest"
@@ -462,7 +479,7 @@ export default function CustomerDetailPage() {
             
             {/* LEDGER TAB */}
             {activeTab === "ledger" && (
-              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
                 <CardHeader className="bg-gray-50/50 border-b border-brand-sage pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-4">
                   <div>
                     <CardTitle className="text-base font-bold text-brand-forest font-heading flex items-center gap-2">
@@ -475,11 +492,11 @@ export default function CustomerDetailPage() {
                   {/* Branch filter for parents */}
                   {customer.isParent && (
                     <div className="flex items-center gap-2">
-                      <ListFilter size={14} className="text-gray-400" />
+                      <span className="text-xs font-semibold text-gray-400">Filter:</span>
                       <select 
                         value={ledgerFilter} 
                         onChange={(e) => setLedgerFilter(e.target.value)}
-                        className="text-xs font-bold text-brand-forest border border-brand-sage/60 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                        className="text-xs font-bold text-brand-forest border border-brand-sage/60 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-8"
                       >
                         <option value="all">All Branches Ledger</option>
                         {customer.branches.map((b: any) => (
@@ -496,22 +513,31 @@ export default function CustomerDetailPage() {
                       <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
                         <TableRow>
                           <TableHead className="text-xs font-bold text-brand-forest pl-6">Date</TableHead>
-                          <TableHead className="text-xs font-bold text-brand-forest">Ref / EFRIS #</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Ref / Invoice</TableHead>
                           {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
                           <TableHead className="text-xs font-bold text-brand-forest">Description</TableHead>
-                          <TableHead className="text-xs font-bold text-brand-forest">Payment Method</TableHead>
-                          <TableHead className="text-xs font-bold text-brand-forest">Delivered / Handled By</TableHead>
-                          <TableHead className="text-right text-xs font-bold text-brand-forest">Charge / Invoice (Unpaid)</TableHead>
-                          <TableHead className="text-right text-xs font-bold text-brand-forest">Amount Paid</TableHead>
-                          <TableHead className="text-center text-xs font-bold text-brand-forest">Proof</TableHead>
-                          <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Outstanding Balance</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Ledger Entry Type</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">Handled By</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest">Debit (Invoice)</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest">Credit (Payment)</TableHead>
+                          <TableHead className="text-center text-xs font-bold text-brand-forest">Verify</TableHead>
+                          <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Running Balance</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {getFilteredLedger().length === 0 ? (
+                        {isLedgerLoading ? (
                           <TableRow>
-                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-8 text-gray-500 font-body text-xs">
-                              No ledger transactions recorded.
+                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-12">
+                              <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 font-bold">
+                                <Loader2 className="animate-spin text-brand-forest" size={16} />
+                                Loading transaction ledger history...
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : getFilteredLedger().length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-12 text-gray-500 font-body text-xs">
+                              No transaction logs found.
                             </TableCell>
                           </TableRow>
                         ) : (
@@ -520,71 +546,44 @@ export default function CustomerDetailPage() {
                               <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
                               <TableCell className="text-xs">
                                 <div className="font-mono font-bold text-brand-forest">{tx.ref}</div>
-                                {tx.efrisNumber && tx.efrisNumber !== "-" && (
-                                  <div className="text-[10px] text-gray-400 font-semibold">{tx.efrisNumber}</div>
-                                )}
                               </TableCell>
                               {customer.isParent && (
                                 <TableCell>
                                   <Badge className="bg-brand-sage/30 text-brand-forest text-[9px] border-none font-bold">
-                                    {tx.branchName || "HQ Consolidated"}
+                                    {tx.branchName || "HQ"}
                                   </Badge>
                                 </TableCell>
                               )}
-                              <TableCell className="text-xs text-gray-600 font-medium whitespace-nowrap">{tx.description}</TableCell>
+                              <TableCell className="text-xs text-gray-650 font-medium whitespace-nowrap">{tx.description}</TableCell>
                               <TableCell className="text-xs">
                                 {tx.type === "invoice" ? (
-                                  tx.efrisNumber && tx.efrisNumber !== "-" ? (
-                                    <Badge className="bg-green-50 text-green-700 border border-green-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
-                                      EFRIS Invoice
-                                    </Badge>
-                                  ) : (
-                                    <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
-                                      Farm Invoice
-                                    </Badge>
-                                  )
-                                ) : tx.paymentMethod && tx.paymentMethod !== "-" ? (
-                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
-                                    {tx.paymentMethod}
+                                  <Badge className="bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
+                                    Invoice Raised
                                   </Badge>
                                 ) : (
-                                  <span className="text-gray-400 font-medium">-</span>
+                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-extrabold rounded-lg py-0.5 px-2">
+                                    Payment Received
+                                  </Badge>
                                 )}
                               </TableCell>
-                              <TableCell className="text-xs font-medium text-gray-600 whitespace-nowrap">
-                                {tx.deliveredBy && tx.deliveredBy !== "-" ? (
-                                  <div className="flex flex-col">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Dispatched By</span>
-                                    <span>{tx.deliveredBy}</span>
-                                  </div>
-                                ) : tx.receivedBy && tx.receivedBy !== "-" ? (
-                                  <div className="flex flex-col">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Received By</span>
-                                    <span>{tx.receivedBy}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">-</span>
-                                )}
+                              <TableCell className="text-xs font-medium text-gray-550 whitespace-nowrap">
+                                {tx.receivedBy || "—"}
                               </TableCell>
                               <TableCell className="text-right text-xs font-bold text-red-600">
-                                {tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "-"}
+                                {tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "—"}
                               </TableCell>
                               <TableCell className="text-right text-xs font-bold text-green-600">
-                                {tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "-"}
+                                {tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "—"}
                               </TableCell>
                               <TableCell className="text-center text-xs">
-                                {tx.proofDoc ? (
-                                  <Button 
-                                    variant="ghost" 
-                                    onClick={() => setSelectedProofTx(tx)}
-                                    className="h-7 px-2.5 bg-brand-sage/30 hover:bg-brand-sage/50 text-brand-forest font-extrabold text-[10px] gap-1 rounded-lg border-none"
-                                  >
-                                    <FileText size={12} />
-                                    View Proof
-                                  </Button>
-                                ) : (
-                                  <span className="text-gray-400 font-medium">-</span>
-                                )}
+                                <Button 
+                                  variant="ghost" 
+                                  onClick={() => setSelectedProofTx(tx)}
+                                  className="h-7 px-2.5 bg-brand-sage/30 hover:bg-brand-sage/50 text-brand-forest font-extrabold text-[10px] gap-1 rounded-lg border-none cursor-pointer"
+                                >
+                                  <FileText size={12} />
+                                  Proof
+                                </Button>
                               </TableCell>
                               <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading">
                                 UGX {tx.balance.toLocaleString()}
@@ -601,7 +600,7 @@ export default function CustomerDetailPage() {
 
             {/* BRANCHES TAB (Only parents) */}
             {customer.isParent && activeTab === "branches" && (
-              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
                 <CardHeader className="bg-gray-50/50 border-b border-brand-sage px-6 py-4">
                   <CardTitle className="text-base font-bold text-brand-forest font-heading flex items-center gap-2">
                     <Building2 size={18} className="text-brand-forest" />
@@ -624,11 +623,11 @@ export default function CustomerDetailPage() {
                       {customer.branches.map((branch: any) => (
                         <TableRow key={branch.id} className="hover:bg-brand-sage/5 transition-colors">
                           <TableCell className="pl-6 font-bold text-brand-forest">
-                            <Link href={`/customers/${branch.id}?parent=${customer.id}`} className="hover:underline">
+                            <Link href={`/customers/${branch.id}`} className="hover:underline">
                               {branch.name}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{branch.zone}</TableCell>
+                          <TableCell className="text-xs text-gray-550 font-semibold uppercase">{branch.zone}</TableCell>
                           <TableCell className="text-xs font-medium text-gray-700">{branch.contact}</TableCell>
                           <TableCell className="text-right pr-6">
                             <span className={`font-extrabold text-xs ${branch.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
@@ -649,7 +648,7 @@ export default function CustomerDetailPage() {
           <div className="space-y-6">
             
             {/* Corporate Logo Card Upload */}
-            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
                 <CardTitle className="text-sm font-bold text-brand-forest font-heading">
                   Corporate Identity Logo
@@ -657,21 +656,16 @@ export default function CustomerDetailPage() {
               </CardHeader>
               <CardContent className="p-5 flex flex-col items-center text-center space-y-4">
                 <div className="relative group">
-                  {/* Upload Avatar */}
-                  <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border-2 border-dashed border-brand-sage/60 bg-brand-sage/10 text-brand-forest transition-all ${
+                  <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border border-black/10 bg-brand-sage/10 text-brand-forest shrink-0 ${
                     customerLogo 
                       ? customerLogo.color 
-                      : customer ? (
-                          customer.id === "cust-shoprite" ? "bg-red-600 text-white" :
-                          customer.id === "cust-kfc" ? "bg-red-800 text-white" :
-                          customer.id === "cust-cj" ? "bg-amber-800 text-white" :
-                          "bg-brand-sage/20 text-brand-forest"
-                        ) : "bg-brand-sage/20 text-brand-forest"
+                      : customer.id === "parent-shoprite" ? "bg-red-600 text-white" :
+                        customer.id === "parent-mega" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                        "bg-brand-sage/20 text-brand-forest"
                   }`}>
-                    {customerLogo ? customerLogo.letter : customer ? customer.name.charAt(0).toUpperCase() : "C"}
+                    {customerLogo ? customerLogo.letter : customer.name.charAt(0).toUpperCase()}
                   </div>
                   
-                  {/* Hover Upload overlay */}
                   <label htmlFor="logo-upload-input" className="absolute inset-0 bg-black/40 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px] font-extrabold uppercase">
                     Upload
                   </label>
@@ -685,7 +679,7 @@ export default function CustomerDetailPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <h4 className="text-xs font-bold text-gray-800">{customer ? customer.name : "Corporate Customer"}</h4>
+                  <h4 className="text-xs font-bold text-gray-800">{customer.name}</h4>
                   <p className="text-[10px] text-gray-400 font-semibold tracking-wide uppercase">Brand Identity Logo</p>
                 </div>
 
@@ -712,10 +706,10 @@ export default function CustomerDetailPage() {
             </Card>
 
             {/* HQ Contact Info */}
-            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
                 <CardTitle className="text-sm font-bold text-brand-forest font-heading">
-                  {customer.isBranch ? "Branch Head Office Contact" : "HQ Corporate Office Details"}
+                  HQ Corporate Office Details
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5 p-5">
@@ -754,24 +748,12 @@ export default function CustomerDetailPage() {
                     <MapPin size={16} />
                   </div>
                   <div>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Billing/Intake HQ Address</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Billing HQ Address</p>
                     <p className="text-xs font-bold text-brand-forest">{customer.address}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-
-            {/* Quick configuration settings */}
-            <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start gap-3 h-11 border-brand-sage text-brand-forest font-semibold hover:bg-brand-sage/10 text-xs rounded-xl">
-                <CreditCard size={16} className="text-brand-mid" />
-                Adjust General Credit Limits
-              </Button>
-              <Button variant="outline" className="w-full justify-start gap-3 h-11 border-brand-sage text-brand-forest font-semibold hover:bg-brand-sage/10 text-xs rounded-xl">
-                <History size={16} className="text-brand-mid" />
-                Alter Corporate Credit Terms
-              </Button>
-            </div>
 
           </div>
 
@@ -779,7 +761,7 @@ export default function CustomerDetailPage() {
 
       </div>
 
-      {/* RECORD PAYMENT MODAL (WITH BRANCH ROUTING SUPPORT) */}
+      {/* RECORD PAYMENT MODAL */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
@@ -794,15 +776,40 @@ export default function CustomerDetailPage() {
 
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               
-              {/* Payment Amount */}
-              <Input
-                label="Received Payment Amount (UGX)"
-                type="number"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-                placeholder="Enter exact receipt value"
-                required
-              />
+              <div>
+                <label className="text-xs font-bold text-brand-forest block mb-1">Received Payment Amount (UGX) *</label>
+                <Input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="Enter exact receipt value"
+                  required
+                  className="font-mono text-brand-forest font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-brand-forest block mb-1">Payment Method *</label>
+                <select 
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                >
+                  <option value="bank_transfer">Bank Transfer / EFT</option>
+                  <option value="cash">Cash Collection</option>
+                  <option value="mobile_money">Mobile Money (MTN/Airtel)</option>
+                  <option value="cheque">Cheque Deposit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-brand-forest block mb-1">Receipt Reference #</label>
+                <Input
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                  placeholder="E.g. TXN-10293848"
+                />
+              </div>
 
               {/* Branch Selector (Only if Parent corporate) */}
               {customer.isParent ? (
@@ -815,13 +822,13 @@ export default function CustomerDetailPage() {
                     onChange={(e) => setPaymentBranch(e.target.value)}
                     className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
                   >
-                    <option value="all">Consolidated Payment (Apply to Parent Account)</option>
+                    <option value="all">Consolidated Payment (Apply to first branch)</option>
                     {customer.branches.map((b: any) => (
                       <option key={b.id} value={b.id}>{b.name} (Outstanding: UGX {b.balance.toLocaleString()})</option>
                     ))}
                   </select>
                   <p className="text-[9px] text-gray-400 font-medium mt-1">
-                    Selecting a branch directly decreases that specific branch's balance on seed statement ledgering.
+                    Selecting a branch directly decreases that specific branch's balance.
                   </p>
                 </div>
               ) : (
@@ -831,12 +838,14 @@ export default function CustomerDetailPage() {
               )}
 
               {/* Notes */}
-              <Input
-                label="Payment Description / Receipt Reference"
-                value={paymentNotes}
-                onChange={(e) => setPaymentNotes(e.target.value)}
-                placeholder="E.g. Bank Transfer Ref: #TXN-90234"
-              />
+              <div>
+                <label className="text-xs font-bold text-brand-forest block mb-1">Payment Notes</label>
+                <Input
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  placeholder="E.g. Consolidated payment for order invoices"
+                />
+              </div>
 
               {/* Buttons */}
               <div className="flex justify-end gap-2.5 pt-3">
@@ -844,15 +853,16 @@ export default function CustomerDetailPage() {
                   type="button" 
                   variant="outline" 
                   onClick={() => setShowPaymentModal(false)}
-                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10"
+                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10 cursor-pointer"
                 >
                   Cancel
                 </Button>
                 <Button 
                   type="submit" 
-                  className="bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-bold border-none text-xs rounded-xl h-10 px-6"
-                  isLoading={isSubmitting}
+                  disabled={isSubmitting}
+                  className="bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-bold border-none text-xs rounded-xl h-10 px-6 cursor-pointer flex items-center gap-1.5"
                 >
+                  {isSubmitting && <Loader2 className="animate-spin" size={14} />}
                   Post Payment Credit
                 </Button>
               </div>
@@ -878,7 +888,7 @@ export default function CustomerDetailPage() {
               </div>
               <button 
                 onClick={() => setSelectedProofTx(null)}
-                className="text-white/60 hover:text-white text-xs font-bold bg-white/10 hover:bg-white/20 h-6 px-2 rounded-lg transition-colors border-none"
+                className="text-white/60 hover:text-white text-xs font-bold bg-white/10 hover:bg-white/20 h-6 px-2 rounded-lg transition-colors border-none cursor-pointer"
               >
                 Close
               </button>
@@ -893,14 +903,9 @@ export default function CustomerDetailPage() {
                   <p className="text-[9px] text-gray-400">P.O. Box 7244, Mukono, Uganda</p>
                   <p className="text-[9px] text-gray-400">Tel: +256 700 100 200</p>
                   <div className={`mt-2 text-[9px] font-extrabold py-0.5 px-2 rounded uppercase inline-block ${
-                    selectedProofTx.type === "invoice" 
-                      ? (selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800")
-                      : "bg-blue-100 text-blue-800"
+                    selectedProofTx.type === "invoice" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
                   }`}>
-                    {selectedProofTx.type === "invoice" 
-                      ? (selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" ? "EFRIS Fiscal Invoice" : "Farm Standard Invoice")
-                      : "Payment Receipt Voucher"
-                    }
+                    {selectedProofTx.type === "invoice" ? "EFRIS Fiscal Invoice" : "Payment Receipt Voucher"}
                   </div>
                 </div>
 
@@ -914,18 +919,6 @@ export default function CustomerDetailPage() {
                     <span className="text-gray-400">REF NO:</span>
                     <span className="font-bold">{selectedProofTx.ref}</span>
                   </div>
-                  {selectedProofTx.efrisNumber && selectedProofTx.efrisNumber !== "-" && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">EFRIS NO:</span>
-                      <span className="font-bold text-red-600">{selectedProofTx.efrisNumber}</span>
-                    </div>
-                  )}
-                  {selectedProofTx.paymentMethod && selectedProofTx.paymentMethod !== "-" && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">METHOD:</span>
-                      <span className="font-bold">{selectedProofTx.paymentMethod}</span>
-                    </div>
-                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-400">CUSTOMER:</span>
                     <span className="font-bold">{customer.name}</span>
@@ -938,8 +931,8 @@ export default function CustomerDetailPage() {
                     <span>Description</span>
                     <span>Amount</span>
                   </div>
-                  <div className="flex justify-between text-gray-700 font-semibold mb-2">
-                    <span>{selectedProofTx.description}</span>
+                  <div className="flex justify-between text-gray-700 font-semibold mb-2 text-[10px]">
+                    <span className="max-w-[200px] truncate">{selectedProofTx.description}</span>
                     <span>
                       UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}
                     </span>
@@ -952,14 +945,9 @@ export default function CustomerDetailPage() {
 
                 {/* Handled By */}
                 <div className="text-[9px] text-gray-500 space-y-1">
-                  {selectedProofTx.deliveredBy && selectedProofTx.deliveredBy !== "-" && (
+                  {selectedProofTx.receivedBy && selectedProofTx.receivedBy !== "—" && (
                     <div>
-                      <span className="text-gray-400">DISPATCHED BY:</span> <strong className="text-gray-700">{selectedProofTx.deliveredBy}</strong>
-                    </div>
-                  )}
-                  {selectedProofTx.receivedBy && selectedProofTx.receivedBy !== "-" && (
-                    <div>
-                      <span className="text-gray-400">COLLECTED BY:</span> <strong className="text-gray-700">{selectedProofTx.receivedBy}</strong>
+                      <span className="text-gray-400">RECORDED BY:</span> <strong className="text-gray-700">{selectedProofTx.receivedBy}</strong>
                     </div>
                   )}
                 </div>
@@ -977,7 +965,7 @@ export default function CustomerDetailPage() {
               <div className="flex justify-end gap-2.5">
                 <Button 
                   onClick={() => setSelectedProofTx(null)}
-                  className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 w-full"
+                  className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 w-full cursor-pointer"
                 >
                   Verify & Close Audit
                 </Button>

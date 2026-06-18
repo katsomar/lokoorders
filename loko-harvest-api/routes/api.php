@@ -24,6 +24,7 @@ Route::prefix('v1')->group(function () {
         // Customers
         Route::get('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'index']);
         Route::get('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'show']);
+        Route::get('/delivery-zones', [App\Http\Controllers\Api\V1\CustomerController::class, 'zones']);
         
         // Store Transfers
         Route::get('/store-transfers', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'index']);
