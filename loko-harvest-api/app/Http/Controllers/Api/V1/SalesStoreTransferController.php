@@ -17,6 +17,11 @@ class SalesStoreTransferController extends Controller
     public function index(Request $request)
     {
         $transfers = SalesStoreTransfer::with(['product', 'fromStore', 'toStore', 'user'])
+            ->when($request->from_sales_store_id, fn($q) => $q->where('from_sales_store_id', $request->from_sales_store_id))
+            ->when($request->to_sales_store_id, fn($q) => $q->where('to_sales_store_id', $request->to_sales_store_id))
+            ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
+            ->when($request->start_date, fn($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
+            ->when($request->end_date, fn($q) => $q->whereDate('transfer_date', '<=', $request->end_date))
             ->latest()
             ->paginate($request->per_page ?? 15);
 

@@ -403,6 +403,12 @@ export default function SalesStorePage() {
           </div>
           
           <div className="flex gap-2">
+            <Link href="/sales-store/activity">
+              <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+                <History size={15} />
+                Transfer Activity
+              </Button>
+            </Link>
             <Link href="/sales-store/transfers">
               <Button className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none h-9.5 px-4 font-extrabold rounded-xl text-xs shadow-sm cursor-pointer">
                 <ArrowRightLeft size={15} />
