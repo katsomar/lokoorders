@@ -55,8 +55,8 @@ class ReportController extends Controller
             ->select(
                 'users.name',
                 DB::raw('COUNT(deliveries.id) as total_deliveries'),
-                DB::raw('SUM(CASE WHEN deliveries.delivery_status = "delivered" THEN 1 ELSE 0 END) as successful'),
-                DB::raw('AVG(TIMESTAMPDIFF(MINUTE, deliveries.assigned_at, deliveries.actual_delivery_time)) as avg_time_minutes')
+                DB::raw('SUM(CASE WHEN deliveries.status = "delivered" THEN 1 ELSE 0 END) as successful'),
+                DB::raw('AVG(TIMESTAMPDIFF(MINUTE, deliveries.dispatched_at, deliveries.delivered_at)) as avg_time_minutes')
             )
             ->groupBy('users.name')
             ->get();

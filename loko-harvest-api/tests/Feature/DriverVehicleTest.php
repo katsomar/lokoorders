@@ -448,4 +448,123 @@ class DriverVehicleTest extends TestCase
 
         Storage::disk('public')->assertMissing('vehicles/old.jpg');
     }
+
+    public function test_can_manage_delivery_transitions()
+    {
+        $driverUser = User::create([
+            'name' => 'Sarah Driver',
+            'email' => 'sarahdriver@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700111222',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-7777',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Central Kampala',
+            'description' => 'Kampala Central Region',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Supermarket',
+            'email' => 'acme@example.com',
+            'contact_person' => 'John Doe',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 12 Kampala Rd',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Kampala Main Store',
+            'code' => 'KLA-MNS',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-9999',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 50000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        // 1. Test Assign Delivery
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/deliveries/assign', [
+                'order_id' => $order->id,
+                'driver_id' => $driver->id,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $deliveryId = $response->json('data.id');
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $deliveryId,
+            'status' => 'assigned',
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+        ]);
+        
+        $order->refresh();
+        $this->assertEquals('dispatched', $order->status);
+
+        // 2. Test Transit transition
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/transit");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $deliveryId,
+            'status' => 'in_transit',
+        ]);
+
+        // 3. Test Confirm Delivery
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/confirm", [
+                'recipient_name' => 'John Doe Recipient',
+                'recipient_phone' => '0777123456',
+                'delivered_at' => now()->toDateTimeString(),
+                'notes' => 'Delivered to back dock',
+                'signature' => 'data:image/png;base64,fake-signature-data',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $deliveryId,
+            'status' => 'delivered',
+            'delivery_notes' => json_encode([
+                'recipient_name' => 'John Doe Recipient',
+                'recipient_phone' => '0777123456',
+                'notes' => 'Delivered to back dock',
+            ]),
+        ]);
+
+        $order->refresh();
+        $this->assertEquals('delivered', $order->status);
+    }
 }

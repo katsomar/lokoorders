@@ -36,6 +36,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/deliveries', [App\Http\Controllers\Api\V1\DeliveryController::class, 'index']);
         Route::post('/deliveries/assign', [App\Http\Controllers\Api\V1\DeliveryController::class, 'assign']);
         Route::post('/deliveries/{id}/confirm', [App\Http\Controllers\Api\V1\DeliveryController::class, 'confirm']);
+        Route::post('/deliveries/{id}/transit', [App\Http\Controllers\Api\V1\DeliveryController::class, 'transit']);
         
         // Payments
         Route::get('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'index']);

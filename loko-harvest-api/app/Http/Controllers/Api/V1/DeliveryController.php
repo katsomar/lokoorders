@@ -19,12 +19,12 @@ class DeliveryController extends Controller
         // If driver, only show their deliveries
         $user = auth()->user();
         
-        $deliveries = Delivery::with(['order.customer', 'driver.user'])
+        $deliveries = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs'])
             ->when($user->role === 'driver', function($q) use ($user) {
                 $q->whereHas('driver', fn($d) => $d->where('user_id', $user->id));
             })
             ->latest()
-            ->paginate($request->per_page ?? 15);
+            ->get();
 
         return $this->success($deliveries);
     }
@@ -44,8 +44,9 @@ class DeliveryController extends Controller
             $delivery = Delivery::create([
                 'order_id' => $order->id,
                 'driver_id' => $validated['driver_id'],
-                'delivery_status' => 'pending',
-                'assigned_at' => now(),
+                'assigned_by' => auth()->id() ?? \App\Models\User::first()->id,
+                'status' => 'assigned',
+                'dispatched_at' => now(),
             ]);
 
             $order->update(['status' => 'dispatched']);
@@ -71,8 +72,13 @@ class DeliveryController extends Controller
         
         return DB::transaction(function () use ($delivery, $validated) {
             $delivery->update([
-                'delivery_status' => 'delivered',
-                'actual_delivery_time' => $validated['delivered_at'],
+                'status' => 'delivered',
+                'delivered_at' => $validated['delivered_at'],
+                'delivery_notes' => json_encode([
+                    'recipient_name' => $validated['recipient_name'],
+                    'recipient_phone' => $validated['recipient_phone'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                ]),
             ]);
 
             $delivery->order->update(['status' => 'delivered']);
@@ -80,14 +86,29 @@ class DeliveryController extends Controller
             // Save proof
             DeliveryProof::create([
                 'delivery_id' => $delivery->id,
-                'proof_type' => $validated['proof_image'] ? 'photo' : 'signature',
-                'file_path' => $validated['proof_image'] ?? $validated['signature'],
-                'captured_at' => $validated['delivered_at'],
-                'latitude' => $validated['latitude'],
-                'longitude' => $validated['longitude'],
+                'photo_url' => $validated['proof_image'] ?? $validated['signature'] ?? 'N/A',
+                'gps_latitude' => $validated['latitude'] ?? null,
+                'gps_longitude' => $validated['longitude'] ?? null,
+                'confirmed_at' => $validated['delivered_at'],
+                'confirmed_by' => auth()->id() ?? \App\Models\User::first()->id,
             ]);
 
             return $this->success($delivery, 'Delivery confirmed successfully');
         });
+    }
+
+    public function transit(Request $request, $id)
+    {
+        $delivery = Delivery::findOrFail($id);
+
+        if ($delivery->status !== 'assigned') {
+            return $this->error('Only assigned deliveries can be marked as in transit.', 422);
+        }
+
+        $delivery->update([
+            'status' => 'in_transit'
+        ]);
+
+        return $this->success($delivery, 'Delivery is now in transit');
     }
 }

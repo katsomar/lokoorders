@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { 
   Truck, 
@@ -17,8 +17,19 @@ import {
   Phone,
   ShieldCheck,
   AlertCircle,
-  Map
+  Map,
+  Loader2,
+  Navigation,
+  CheckCircle,
+  TrendingUp,
+  AlertTriangle,
+  FileSpreadsheet,
+  Calendar,
+  Compass,
+  Droplet,
+  Check
 } from "lucide-react";
+import api from "@/lib/api";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,171 +43,735 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-const mockDeliveries = [
-  { 
-    id: "1", 
-    order: "LHO-0042", 
-    orderId: "order-42",
-    customer: "Shoprite Lugogo", 
-    driver: "Musa Driver", 
-    phone: "0772 111 222",
-    vehicle: "UBL 482Y (Crate Truck)",
-    zone: "Kampala Central", 
-    status: "pending", 
-    time: "2026-05-18 10:00 AM",
-    items: [
-      { name: "White Large Eggs (Crate of 30)", quantity: 150, packaging: "Special Cardboard Crate" },
-      { name: "Brown Jumbo Eggs (Crate of 30)", quantity: 80, packaging: "Standard Plastic Crate" }
-    ],
-    route: ["HQ Dispatch Center", "Kira Road Bypass", "Shoprite Lugogo Loading Dock"]
-  },
-  { 
-    id: "2", 
-    order: "LHO-0041", 
-    orderId: "order-41",
-    customer: "KFC Bukoto", 
-    driver: "John Okello", 
-    phone: "0752 987 654",
-    vehicle: "UBA 901P (Refrigerated Van)",
-    zone: "Bukoto", 
-    status: "dispatched", 
-    time: "2026-05-16 02:30 PM",
-    items: [
-      { name: "Cream Farm Eggs (Crate of 30)", quantity: 60, packaging: "Standard Plastic Crate" },
-      { name: "Fresh Broiler Chicken (Whole kg)", quantity: 200, packaging: "Vacuum Sealed Carton" }
-    ],
-    route: ["HQ Dispatch Center", "Bukoto Flyover Checkpoint", "KFC Bukoto Receiving Area"]
-  },
-  { 
-    id: "3", 
-    order: "LHO-0040", 
-    orderId: "order-40",
-    customer: "Café Javas", 
-    driver: "Musa Driver", 
-    phone: "0772 111 222",
-    vehicle: "UBL 482Y (Crate Truck)",
-    zone: "Oasis Mall", 
-    status: "delivered", 
-    time: "2026-05-16 11:15 AM",
-    items: [
-      { name: "White Large Eggs (Crate of 30)", quantity: 100, packaging: "Special Cardboard Crate" }
-    ],
-    route: ["HQ Dispatch Center", "Yusuf Lule Checkpoint", "Oasis Mall Service Bay"]
-  },
-  { 
-    id: "4", 
-    order: "LHO-0039", 
-    orderId: "order-39",
-    customer: "Carrefour Oasis", 
-    driver: "Sarah Namubiru", 
-    phone: "0702 333 444",
-    vehicle: "UBB 123T (Light Box Van)",
-    zone: "Kampala Central", 
-    status: "returned", 
-    time: "2026-05-15 03:00 PM",
-    items: [
-      { name: "Brown Jumbo Eggs (Crate of 30)", quantity: 120, packaging: "Standard Plastic Crate" }
-    ],
-    route: ["HQ Dispatch Center", "Garden City Roadblock", "Oasis Mall Entrance"]
-  },
-];
-
 export default function DeliveriesPage() {
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedTab, setSelectedTab] = useState("registry"); // "registry", "dispatch", "fleet"
+  
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
+  
+  // Assign Delivery Modal State
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [isAssigning, setIsAssigning] = useState(false);
 
-  const filteredDeliveries = mockDeliveries.filter(d => 
-    d.order.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    d.driver.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Complete Delivery Modal State
+  const [showCompleteModal, setShowCompleteModal] = useState<any>(null); // holds delivery object
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [verificationMode, setVerificationMode] = useState<"signature" | "photo">("signature");
+  
+  const [photoFile, setPhotoFile] = useState<string | null>(null);
+  const [photoFileName, setPhotoFileName] = useState("");
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  // Canvas Signature Pad State
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [deliveriesRes, driversRes, ordersRes, vehiclesRes] = await Promise.all([
+        api.get("/deliveries"),
+        api.get("/drivers"),
+        api.get("/orders", { params: { per_page: 1000 } }),
+        api.get("/vehicles")
+      ]);
+      
+      // Eager loading response lists
+      setDeliveries(deliveriesRes.data.data || []);
+      setDrivers(driversRes.data.data || []);
+      // /orders returns paginated Laravel wrapper with data array
+      setOrders(ordersRes.data.data?.data || ordersRes.data.data || []);
+      setVehicles(vehiclesRes.data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch logistics delivery records:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // Set up canvas mouse & touch events when signature verification mode is active
+  useEffect(() => {
+    if (verificationMode === "signature" && showCompleteModal) {
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // Clear canvas on mount
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+    }
+  }, [verificationMode, showCompleteModal]);
+
+  // Canvas Drawing Handlers
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    
+    // Scale touch/mouse coordinate relative to actual canvas resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    if ("touches" in e) {
+      if (e.touches.length > 0) {
+        return {
+          x: (e.touches[0].clientX - rect.left) * scaleX,
+          y: (e.touches[0].clientY - rect.top) * scaleY
+        };
+      }
+    } else {
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+    return { x: 0, y: 0 };
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1b4332"; // Brand Forest
+
+    const coords = getCanvasCoordinates(e);
+    ctx.beginPath();
+    ctx.moveTo(coords.x, coords.y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const coords = getCanvasCoordinates(e);
+    ctx.lineTo(coords.x, coords.y);
+    ctx.stroke();
+
+    if ("touches" in e) {
+      e.preventDefault(); // Stop screen scrolling
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPhotoFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPhotoFile(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAssignDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrderId || !selectedDriverId) {
+      alert("Please select both an order and a driver.");
+      return;
+    }
+
+    setIsAssigning(true);
+    try {
+      await api.post("/deliveries/assign", {
+        order_id: selectedOrderId,
+        driver_id: selectedDriverId
+      });
+      alert("Delivery assigned successfully!");
+      setShowAssignModal(false);
+      setSelectedOrderId("");
+      setSelectedDriverId("");
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to assign delivery.");
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleStartTransit = async (deliveryId: string) => {
+    if (!window.confirm("Mark this dispatch route as in transit?")) return;
+    try {
+      await api.post(`/deliveries/${deliveryId}/transit`);
+      alert("Delivery status updated to in transit!");
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to update delivery status.");
+    }
+  };
+
+  const handleCompleteDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showCompleteModal) return;
+    if (!recipientName) {
+      alert("Recipient name is required.");
+      return;
+    }
+
+    let proofPayload = "";
+    if (verificationMode === "signature") {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      proofPayload = canvas.toDataURL("image/png");
+    } else {
+      if (!photoFile) {
+        alert("Please select or capture a proof image.");
+        return;
+      }
+      proofPayload = photoFile;
+    }
+
+    setIsCompleting(true);
+
+    const submitConfirm = (lat: number | null, lng: number | null) => {
+      api.post(`/deliveries/${showCompleteModal.id}/confirm`, {
+        recipient_name: recipientName,
+        recipient_phone: recipientPhone || null,
+        delivered_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+        latitude: lat,
+        longitude: lng,
+        notes: deliveryNotes || "",
+        proof_image: verificationMode === "photo" ? proofPayload : null,
+        signature: verificationMode === "signature" ? proofPayload : null
+      })
+      .then(() => {
+        alert("Delivery confirmed successfully!");
+        setShowCompleteModal(null);
+        setRecipientName("");
+        setRecipientPhone("");
+        setDeliveryNotes("");
+        setPhotoFile(null);
+        setPhotoFileName("");
+        fetchData();
+      })
+      .catch((err: any) => {
+        console.error(err);
+        alert(err.response?.data?.message || "Failed to confirm delivery.");
+      })
+      .finally(() => {
+        setIsCompleting(false);
+      });
+    };
+
+    // Attempt HTML5 Geolocation capture
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          submitConfirm(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.warn("Geolocation denied or unavailable:", error.message);
+          submitConfirm(null, null);
+        },
+        { timeout: 7000 }
+      );
+    } else {
+      submitConfirm(null, null);
+    }
+  };
+
+  const formatDateTime = (dateTimeStr: string | null) => {
+    if (!dateTimeStr) return "N/A";
+    return new Date(dateTimeStr).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true
+    });
+  };
+
+  // Safe checks for arrays
+  const assignableOrders = Array.isArray(orders) 
+    ? orders.filter((o) => o.status === "pending" || o.status === "ready_for_dispatch" || o.status === "processing")
+    : [];
+
+  const filteredDeliveries = Array.isArray(deliveries)
+    ? deliveries.filter(d => {
+        const orderRef = (d.order?.order_number || "").toLowerCase();
+        const customerName = (d.order?.customer?.name || "").toLowerCase();
+        const driverName = (d.driver?.full_name || "").toLowerCase();
+        
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = orderRef.includes(term) || customerName.includes(term) || driverName.includes(term);
+
+        if (statusFilter === "all") return matchesSearch;
+        return matchesSearch && d.status === statusFilter;
+      })
+    : [];
+
+  // Metrics Calculations
+  const metrics = {
+    pendingAssign: assignableOrders.length,
+    activeShipments: Array.isArray(deliveries) 
+      ? deliveries.filter(d => d.status === "assigned" || d.status === "in_transit").length 
+      : 0,
+    completedToday: Array.isArray(deliveries) 
+      ? deliveries.filter(d => d.status === "delivered").length 
+      : 0,
+  };
+
+  // Helper to parse delivery notes (extract JSON if encoded, fallback to plain text)
+  const parseDeliveryNotes = (notesStr: string | null) => {
+    if (!notesStr) return { recipient_name: "", recipient_phone: "", notes: "" };
+    try {
+      const parsed = JSON.parse(notesStr);
+      if (parsed && typeof parsed === "object" && "recipient_name" in parsed) {
+        return parsed;
+      }
+    } catch (e) {
+      // not JSON
+    }
+    return { recipient_name: "", recipient_phone: "", notes: notesStr };
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 font-body">
+        
+        {/* Header Block */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-brand-forest font-heading">Logistics & Deliveries</h1>
-            <p className="text-gray-500 font-body">Track fleet status and delivery fulfillment</p>
+            <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Logistics & Deliveries</h1>
+            <p className="text-gray-500 text-sm mt-0.5">Track fleet status, allocate dispatch orders, and secure shipping manifests</p>
           </div>
-          <Button className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none">
-            <Plus size={18} />
-            Assign Delivery
-          </Button>
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-brand-sage">
-          <div className="relative w-full lg:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <Input 
-              placeholder="Search by order, customer or driver..." 
-              className="pl-10"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <Button variant="outline" className="gap-2">
-              <Filter size={18} />
-              Filter by Zone
+          <div className="flex gap-2.5">
+            <Button 
+              onClick={() => {
+                setSelectedOrderId("");
+                setSelectedDriverId("");
+                setShowAssignModal(true);
+              }}
+              className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold rounded-xl text-xs px-4.5 h-10.5 cursor-pointer shadow-sm transition-all duration-200"
+            >
+              <Plus size={16} />
+              Assign Delivery
             </Button>
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order Ref</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Driver</TableHead>
-              <TableHead>Zone</TableHead>
-              <TableHead>Scheduled/Actual Time</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredDeliveries.map((delivery) => (
-              <TableRow key={delivery.id}>
-                <TableCell className="font-bold text-brand-forest">{delivery.order}</TableCell>
-                <TableCell className="font-medium">{delivery.customer}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <User size={14} className="text-gray-400" />
-                    <span className="text-sm">{delivery.driver}</span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <MapPin size={14} className="text-brand-mid" />
-                    <span className="text-xs">{delivery.zone}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <Clock size={12} />
-                    {delivery.time}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={delivery.status as any}>{delivery.status}</Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setSelectedDelivery(delivery)}
-                    className="gap-2 text-brand-forest hover:bg-brand-sage/20 rounded-lg px-2.5 h-8"
-                  >
-                    Details
-                    <ArrowRight size={14} />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {/* Dashboard Metrics Panel */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="bg-white p-5 rounded-2xl border border-brand-sage/20 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+            <div className="p-3 bg-brand-sage/10 rounded-xl text-brand-forest">
+              <Calendar size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Awaiting Dispatch</p>
+              <h3 className="text-2xl font-extrabold text-brand-forest mt-0.5">{metrics.pendingAssign} Orders</h3>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl border border-brand-sage/20 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+            <div className="p-3 bg-amber-50 rounded-xl text-amber-600">
+              <Truck size={24} className="animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Active Shipments</p>
+              <h3 className="text-2xl font-extrabold text-brand-forest mt-0.5">{metrics.activeShipments} En Route</h3>
+            </div>
+          </div>
+
+          <div className="bg-white p-5 rounded-2xl border border-brand-sage/20 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+            <div className="p-3 bg-green-50 rounded-xl text-green-600">
+              <CheckCircle size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Fulfilled Deliveries</p>
+              <h3 className="text-2xl font-extrabold text-brand-forest mt-0.5">{metrics.completedToday} Delivered</h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-gray-200 gap-6">
+          <button
+            onClick={() => setSelectedTab("registry")}
+            className={`pb-3 text-xs font-bold transition-all border-b-2 uppercase tracking-wider cursor-pointer ${
+              selectedTab === "registry" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Registry Log
+          </button>
+          <button
+            onClick={() => setSelectedTab("dispatch")}
+            className={`pb-3 text-xs font-bold transition-all border-b-2 uppercase tracking-wider cursor-pointer flex items-center gap-1.5 ${
+              selectedTab === "dispatch" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Awaiting Dispatch
+            {metrics.pendingAssign > 0 && (
+              <span className="bg-brand-yellow text-brand-forest px-2 py-0.2 text-[10px] font-black rounded-full">
+                {metrics.pendingAssign}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setSelectedTab("fleet")}
+            className={`pb-3 text-xs font-bold transition-all border-b-2 uppercase tracking-wider cursor-pointer ${
+              selectedTab === "fleet" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Fleet Status
+          </button>
+        </div>
+
+        {/* SEARCH & FILTERS BAR (For registry tab) */}
+        {selectedTab === "registry" && (
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+            <div className="relative w-full max-w-md bg-white rounded-xl shadow-sm border border-brand-sage p-0.5">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Input 
+                placeholder="Search by order, customer or driver..." 
+                className="pl-10 border-none focus-visible:ring-0 shadow-none h-10 text-xs font-semibold text-gray-700"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Filter size={15} className="text-gray-400" />
+              <span className="text-xs text-gray-400 font-bold uppercase">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none"
+              >
+                <option value="all">All Statuses</option>
+                <option value="assigned">Assigned</option>
+                <option value="in_transit">In Transit</option>
+                <option value="delivered">Delivered</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* WORKSPACE CONTENT PANELS */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-24 text-gray-400 text-xs font-bold gap-3.5">
+            <Loader2 className="animate-spin text-brand-forest" size={36} />
+            Eager loading live logistics ledger records...
+          </div>
+        ) : (
+          <>
+            {/* 1. REGISTRY LOG WORKSPACE */}
+            {selectedTab === "registry" && (
+              filteredDeliveries.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/30 p-16 text-center text-gray-500 font-medium text-xs">
+                  No active logistics delivery records found matching criteria.
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-brand-sage/30 overflow-hidden shadow-sm">
+                  <Table>
+                    <TableHeader className="bg-brand-sage/10">
+                      <TableRow>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Order Ref</TableHead>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Customer & Location</TableHead>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Driver & Vehicle</TableHead>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Dispatched Time</TableHead>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Status</TableHead>
+                        <TableHead className="text-right font-extrabold text-brand-forest text-xs py-4">Fulfillment Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredDeliveries.map((delivery) => (
+                        <TableRow key={delivery.id} className="hover:bg-brand-sage/5 border-b border-gray-100 last:border-b-0">
+                          <TableCell className="font-extrabold text-brand-forest text-xs">
+                            {delivery.order?.order_number || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="font-bold text-gray-800 text-xs">{delivery.order?.customer?.name || "N/A"}</div>
+                              <div className="text-[10px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
+                                <MapPin size={11} className="text-brand-sage" />
+                                {delivery.order?.customer?.address || "No address"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <User size={12} className="text-brand-forest" />
+                                <span className="text-xs font-bold text-gray-700">{delivery.driver?.full_name || "Unassigned"}</span>
+                              </div>
+                              <div className="text-[10px] text-gray-400 font-semibold mt-0.5 flex items-center gap-1">
+                                <Truck size={11} />
+                                {delivery.driver?.vehicle_registration !== 'N/A' 
+                                  ? `${delivery.driver?.vehicle_registration} (${delivery.driver?.vehicle_make})` 
+                                  : "No vehicle allocated"}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 font-semibold">
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={12} className="text-gray-400" />
+                              {formatDateTime(delivery.dispatched_at)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={`font-black text-[9px] uppercase tracking-wider px-2.5 py-0.5 border-none ${
+                              delivery.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                              delivery.status === 'in_transit' ? 'bg-amber-100 text-amber-700 animate-pulse' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {delivery.status === 'assigned' ? 'allocated' : delivery.status.replace('_', ' ')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {delivery.status === "assigned" && (
+                                <Button
+                                  onClick={() => handleStartTransit(delivery.id)}
+                                  className="h-8 text-[10px] font-black uppercase text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/50 rounded-xl cursor-pointer"
+                                >
+                                  In Transit
+                                </Button>
+                              )}
+                              
+                              {(delivery.status === "assigned" || delivery.status === "in_transit") && (
+                                <Button
+                                  onClick={() => {
+                                    setRecipientName("");
+                                    setRecipientPhone("");
+                                    setDeliveryNotes("");
+                                    setPhotoFile(null);
+                                    setPhotoFileName("");
+                                    setShowCompleteModal(delivery);
+                                  }}
+                                  className="h-8 text-[10px] font-black uppercase text-green-800 bg-green-50 hover:bg-green-100 border border-green-200/50 rounded-xl cursor-pointer"
+                                >
+                                  Complete
+                                </Button>
+                              )}
+
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => setSelectedDelivery(delivery)}
+                                className="gap-1 text-brand-forest hover:bg-brand-sage/20 rounded-xl px-2.5 h-8 text-xs font-bold cursor-pointer"
+                              >
+                                Details
+                                <ArrowRight size={13} />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )
+            )}
+
+            {/* 2. AWAITING DISPATCH WORKSPACE */}
+            {selectedTab === "dispatch" && (
+              assignableOrders.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/30 p-16 text-center text-gray-500 font-medium text-xs">
+                  All pending orders have been assigned driver dispatch dispatches! Keep up the good work.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {assignableOrders.map((order) => (
+                    <div key={order.id} className="bg-white rounded-2xl border border-brand-sage/25 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative">
+                      {/* Badge Urgency */}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
+                          <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                        </div>
+                        <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 border-none ${
+                          order.urgency === 'critical' ? 'bg-red-100 text-red-700' :
+                          order.urgency === 'urgent' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {order.urgency}
+                        </Badge>
+                      </div>
+
+                      {/* Customer Info */}
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-start gap-2">
+                          <User size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-gray-800">{order.customer?.name || "Client"}</p>
+                            <p className="text-[11px] text-gray-500 font-medium mt-0.5">{order.customer?.address || "No address details"}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <MapPin size={13} className="text-brand-sage shrink-0" />
+                          <span className="font-bold text-gray-600">Delivery Zone: {order.customer?.zone?.name || "N/A"}</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Clock size={13} className="text-gray-400 shrink-0" />
+                          <span className="font-medium text-gray-500">Required: {new Date(order.required_delivery_date).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Footer Assign */}
+                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                        <span className="font-mono text-xs font-black text-brand-forest">UGX {parseFloat(order.total_amount).toLocaleString()}</span>
+                        <Button 
+                          onClick={() => {
+                            setSelectedOrderId(order.id);
+                            setSelectedDriverId("");
+                            setShowAssignModal(true);
+                          }}
+                          className="h-8 text-[10px] font-black uppercase bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none rounded-xl px-3 cursor-pointer shadow-sm"
+                        >
+                          Dispatch Order
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* 3. FLEET STATUS WORKSPACE */}
+            {selectedTab === "fleet" && (
+              drivers.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/30 p-16 text-center text-gray-500 font-medium text-xs">
+                  No active drivers registered in fleet list. Use the Drivers module to register staff.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {drivers.map((driver) => {
+                    // Find corresponding vehicle specs
+                    const allocatedVehicle = vehicles.find(v => v.id === driver.vehicle_id);
+                    const fuelLevel = allocatedVehicle?.fuel_level ?? 0;
+                    const tankCapacity = allocatedVehicle?.fuel_tank_capacity ?? 100;
+                    const fuelPercentage = Math.round((fuelLevel / tankCapacity) * 100) || 0;
+                    
+                    return (
+                      <div key={driver.id} className="bg-white rounded-2xl border border-brand-sage/25 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow">
+                        
+                        {/* Driver basic profile */}
+                        <div className="flex items-center gap-3.5">
+                          {driver.avatar ? (
+                            <img 
+                              src={driver.avatar} 
+                              alt={driver.name} 
+                              className="h-10.5 w-10.5 rounded-full object-cover border border-brand-sage/40"
+                            />
+                          ) : (
+                            <div className="h-10.5 w-10.5 rounded-full bg-brand-sage/10 text-brand-forest font-black flex items-center justify-center text-sm uppercase">
+                              {driver.name.charAt(0)}
+                            </div>
+                          )}
+                          <div>
+                            <h4 className="font-extrabold text-brand-forest text-xs">{driver.name}</h4>
+                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{driver.phone}</span>
+                          </div>
+                        </div>
+
+                        {/* Allocated Vehicle specs */}
+                        <div className="space-y-2 bg-gray-50/70 p-3.5 rounded-xl border border-brand-sage/10 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-gray-400 font-semibold uppercase text-[9px] tracking-wider">Fleet Vehicle</span>
+                            <Badge className={`font-black text-[9px] px-2 py-0.2 uppercase border-none ${
+                              driver.status === 'busy' ? 'bg-amber-100 text-amber-700' :
+                              driver.status === 'available' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {driver.status}
+                            </Badge>
+                          </div>
+                          
+                          {driver.vehicle_registration !== 'N/A' ? (
+                            <div className="space-y-2.5">
+                              <div>
+                                <p className="font-extrabold text-gray-800 text-xs">{driver.vehicle_make}</p>
+                                <p className="font-bold text-brand-sage text-[10px] font-mono mt-0.5">{driver.vehicle_registration}</p>
+                              </div>
+
+                              {/* Fuel Metrics details */}
+                              <div className="grid grid-cols-3 gap-2.5 text-center pt-2.5 border-t border-gray-100">
+                                <div>
+                                  <p className="text-[8px] text-gray-400 font-bold uppercase">Fuel Level</p>
+                                  <p className="font-bold text-gray-800 mt-0.5 flex items-center justify-center gap-0.5">
+                                    <Droplet size={11} className="text-blue-500 shrink-0" />
+                                    {fuelLevel} L ({fuelPercentage}%)
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-gray-400 font-bold uppercase">Tank Size</p>
+                                  <p className="font-bold text-gray-700 mt-0.5 font-mono">{tankCapacity} L</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-gray-400 font-bold uppercase">Consumption</p>
+                                  <p className="font-bold text-gray-700 mt-0.5 font-mono">
+                                    {allocatedVehicle?.consumption_per_km || "0.0"} L/km
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Fuel Level progress bar */}
+                              <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden mt-1">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    fuelPercentage < 20 ? 'bg-red-500' : fuelPercentage < 50 ? 'bg-amber-500' : 'bg-green-600'
+                                  }`} 
+                                  style={{ width: `${Math.min(fuelPercentage, 100)}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-400 italic text-[11px] py-1 text-center font-medium">No vehicle allocated to this driver.</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </>
+        )}
 
         {/* LOGISTICS DETAILS & GATEPASS OVERLAY MODAL */}
         {selectedDelivery && (
@@ -204,55 +779,64 @@ export default function DeliveriesPage() {
             <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
               
               {/* Modal Header */}
-              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white print:hidden">
                 <div className="flex items-center gap-2.5">
-                  <Truck className="text-brand-yellow" size={22} />
+                  <Truck className="text-brand-yellow animate-bounce" size={22} />
                   <div>
                     <h3 className="font-heading font-black text-base text-brand-yellow">Fulfillment & Dispatch Gatepass</h3>
-                    <p className="text-[11px] text-brand-sage font-medium mt-0.5">Logistics specs & shipping manifest for invoice {selectedDelivery.order}</p>
+                    <p className="text-[11px] text-brand-sage font-medium mt-0.5">Logistics specs & shipping manifest for invoice {selectedDelivery.order?.order_number}</p>
                   </div>
                 </div>
                 <Button 
                   onClick={() => setSelectedDelivery(null)} 
                   variant="ghost" 
                   size="icon" 
-                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg"
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer"
                 >
                   <X size={18} />
                 </Button>
               </div>
 
+              {/* Printable Header */}
+              <div className="hidden print:block p-6 text-center border-b border-gray-200">
+                <h1 className="text-2xl font-black text-brand-forest tracking-wider uppercase">Loko Harvest Logistics</h1>
+                <p className="text-xs text-gray-500">Official Dispatch Manifest & Delivery Gatepass</p>
+                <p className="text-[10px] text-gray-400 mt-1">Invoice: {selectedDelivery.order?.order_number} • Issued: {formatDateTime(new Date().toISOString())}</p>
+              </div>
+
               {/* Modal Body */}
-              <div className="p-6 space-y-6">
+              <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto print:overflow-visible print:max-h-none">
                 
                 {/* 1. FLEET & DRIVER PROFILE METRICS */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-gray-50/50 p-4 rounded-xl border border-brand-sage/30 text-xs">
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Assigned Driver</p>
                     <p className="font-bold text-gray-800 mt-0.5 flex items-center gap-1">
-                      <User size={12} className="text-brand-mid" />
-                      {selectedDelivery.driver}
+                      <User size={12} className="text-brand-mid shrink-0" />
+                      {selectedDelivery.driver?.full_name || "N/A"}
                     </p>
                   </div>
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fleet Vehicle</p>
                     <p className="font-bold text-gray-800 mt-0.5 flex items-center gap-1">
-                      <Truck size={12} className="text-brand-mid" />
-                      {selectedDelivery.vehicle}
+                      <Truck size={12} className="text-brand-mid shrink-0" />
+                      {selectedDelivery.driver?.vehicle_registration !== 'N/A'
+                        ? `${selectedDelivery.driver?.vehicle_registration} (${selectedDelivery.driver?.vehicle_make})`
+                        : "No vehicle assigned"}
                     </p>
                   </div>
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Delivery Zone</p>
                     <p className="font-bold text-gray-800 mt-0.5 flex items-center gap-1 font-mono">
-                      <MapPin size={12} className="text-brand-mid" />
-                      {selectedDelivery.zone}
+                      <MapPin size={12} className="text-brand-mid shrink-0" />
+                      {selectedDelivery.order?.customer?.zone?.name || "N/A"}
                     </p>
                   </div>
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Driver Contact</p>
                     <p className="font-bold text-brand-forest mt-0.5 flex items-center gap-1 underline font-mono">
-                      <Phone size={11} />
-                      {selectedDelivery.phone}
+                      <Phone size={11} className="shrink-0" />
+                      {selectedDelivery.driver?.phone || "N/A"}
                     </p>
                   </div>
                 </div>
@@ -267,19 +851,31 @@ export default function DeliveriesPage() {
                     <Table>
                       <TableHeader className="bg-brand-sage/10">
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-brand-forest font-extrabold text-[10px] py-2">Egg Size & Packaging Spec</TableHead>
-                          <TableHead className="text-brand-forest font-extrabold text-[10px] py-2">Packaging Standard</TableHead>
-                          <TableHead className="text-right text-brand-forest font-extrabold text-[10px] py-2">Quantity Loaded</TableHead>
+                          <TableHead className="text-brand-forest font-extrabold text-[10px] py-2.5">Egg Size & Specification</TableHead>
+                          <TableHead className="text-brand-forest font-extrabold text-[10px] py-2.5">Unit</TableHead>
+                          <TableHead className="text-right text-brand-forest font-extrabold text-[10px] py-2.5">Quantity Loaded</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedDelivery.items.map((item: any, idx: number) => (
-                          <TableRow key={idx} className="bg-white border-b border-gray-100 last:border-b-0 hover:bg-transparent">
-                            <TableCell className="font-bold text-gray-700 text-xs py-2.5">{item.name}</TableCell>
-                            <TableCell className="text-gray-500 font-medium text-xs py-2.5">{item.packaging}</TableCell>
-                            <TableCell className="text-right font-extrabold text-brand-forest text-xs py-2.5">{item.quantity} Crates</TableCell>
+                        {selectedDelivery.order?.items && selectedDelivery.order.items.length > 0 ? (
+                          selectedDelivery.order.items.map((item: any, idx: number) => (
+                            <TableRow key={idx} className="bg-white border-b border-gray-100 last:border-b-0 hover:bg-transparent">
+                              <TableCell className="font-bold text-gray-700 text-xs py-2.5">{item.product?.name || "N/A"}</TableCell>
+                              <TableCell className="text-gray-500 font-semibold text-xs py-2.5 capitalize">
+                                {item.product?.unit_of_measure || "trays"}
+                              </TableCell>
+                              <TableCell className="text-right font-extrabold text-brand-forest text-xs py-2.5">
+                                {parseFloat(item.quantity).toFixed(0)} units
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-4 text-xs text-gray-400">
+                              No cargo items found in this order.
+                            </TableCell>
                           </TableRow>
-                        ))}
+                        )}
                       </TableBody>
                     </Table>
                   </div>
@@ -287,77 +883,124 @@ export default function DeliveriesPage() {
 
                 {/* 3. SHIPPED CHECKPOINTS TIMELINE TRACKER */}
                 <div>
-                  <h4 className="text-[10px] text-brand-forest font-black uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <h4 className="text-[10px] text-brand-forest font-black uppercase tracking-wider mb-3.5 flex items-center gap-1.5">
                     <Map size={13} />
                     GPS Shipped Checkpoints & Gatepass Log
                   </h4>
                   
-                  <div className="relative pl-6 space-y-4 border-l border-brand-sage/40 ml-3">
-                    {selectedDelivery.route.map((stop: string, idx: number) => {
-                      const isFirst = idx === 0;
-                      const isLast = idx === selectedDelivery.route.length - 1;
-                      const isPending = selectedDelivery.status === "pending";
-                      const isDelivered = selectedDelivery.status === "delivered";
-                      
-                      let dotColor = "bg-gray-300 border-gray-100";
-                      let logMsg = "Awaiting dispatch authority signoff";
+                  <div className="relative pl-6 space-y-4.5 border-l border-brand-sage/40 ml-3">
+                    {/* Checkpoint 1: HQ dispatch */}
+                    <div className="relative text-xs">
+                      <div className="absolute -left-[30px] top-0.5 h-4.5 w-4.5 rounded-full border-2 bg-green-600 border-green-100 ring-4 ring-green-100 flex items-center justify-center">
+                        <ShieldCheck size={10} className="text-white" />
+                      </div>
+                      <div className="font-bold text-gray-800">HQ Dispatch Center</div>
+                      <div className="text-gray-400 font-medium text-[10px] mt-0.5">
+                        Cargo loaded and dispatch approved at HQ Depot • {formatDateTime(selectedDelivery.dispatched_at)}
+                      </div>
+                    </div>
 
-                      if (isFirst) {
-                        dotColor = "bg-green-600 border-green-100 ring-4 ring-green-100";
-                        logMsg = "Cargo loaded, vehicle sealed, and gatepass approved at HQ Depot";
-                      } else if (isLast) {
-                        if (isDelivered) {
-                          dotColor = "bg-green-600 border-green-100 ring-4 ring-green-100";
-                          logMsg = `Successfully delivered and signed off at ${selectedDelivery.customer} receiving docks`;
-                        } else if (selectedDelivery.status === "dispatched") {
-                          dotColor = "bg-amber-500 border-amber-100 ring-4 ring-amber-100 animate-pulse";
-                          logMsg = `In-transit to destination at ${selectedDelivery.customer}`;
-                        } else if (selectedDelivery.status === "returned") {
-                          dotColor = "bg-red-500 border-red-100 ring-4 ring-red-100";
-                          logMsg = "Delivery returned due to customer site storage limits";
-                        }
-                      } else {
-                        // Mid stops
-                        if (isDelivered || selectedDelivery.status === "dispatched") {
-                          dotColor = "bg-green-600 border-green-100";
-                          logMsg = "Passed bypass checkpoint successfully";
-                        }
-                      }
+                    {/* Checkpoint 2: Transit Status */}
+                    <div className="relative text-xs">
+                      <div className={`absolute -left-[30px] top-0.5 h-4.5 w-4.5 rounded-full border-2 flex items-center justify-center ${
+                        selectedDelivery.status === "in_transit" || selectedDelivery.status === "delivered"
+                          ? "bg-green-600 border-green-100 ring-4 ring-green-100"
+                          : "bg-gray-200 border-gray-100"
+                      }`}>
+                        {(selectedDelivery.status === "in_transit" || selectedDelivery.status === "delivered") ? (
+                          <Compass size={10} className="text-white animate-spin-slow" />
+                        ) : (
+                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                        )}
+                      </div>
+                      <div className="font-bold text-gray-800">Regional Bypass Checkpoint</div>
+                      <div className="text-gray-400 font-medium text-[10px] mt-0.5">
+                        {selectedDelivery.status === "in_transit" || selectedDelivery.status === "delivered"
+                          ? `Passed route transit inspection checkpoint • Status: In Transit`
+                          : "Awaiting dispatch route departure"}
+                      </div>
+                    </div>
 
-                      return (
-                        <div key={idx} className="relative text-xs">
-                          {/* Indicator Dot */}
-                          <div className={`absolute -left-[30px] top-0.5 h-4.5 w-4.5 rounded-full border-2 flex items-center justify-center ${dotColor}`}>
-                            {isFirst && <ShieldCheck size={10} className="text-white" />}
-                            {isLast && isDelivered && <CheckCircle2 size={10} className="text-white" />}
-                            {isLast && selectedDelivery.status === "returned" && <AlertCircle size={10} className="text-white" />}
-                          </div>
+                    {/* Checkpoint 3: Destination Receiving */}
+                    <div className="relative text-xs">
+                      <div className={`absolute -left-[30px] top-0.5 h-4.5 w-4.5 rounded-full border-2 flex items-center justify-center ${
+                        selectedDelivery.status === "delivered"
+                          ? "bg-green-600 border-green-100 ring-4 ring-green-100"
+                          : "bg-gray-200 border-gray-100"
+                      }`}>
+                        {selectedDelivery.status === "delivered" ? (
+                          <CheckCircle2 size={10} className="text-white" />
+                        ) : (
+                          <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                        )}
+                      </div>
+                      <div className="font-bold text-gray-800">{selectedDelivery.order?.customer?.name || "Destination Client"}</div>
+                      <div className="text-gray-400 font-medium text-[10px] mt-0.5 space-y-1">
+                        {selectedDelivery.status === "delivered" ? (
+                          <>
+                            <p>Successfully delivered and signed off at destination receiving dock • {formatDateTime(selectedDelivery.delivered_at)}</p>
+                            
+                            {/* Parse JSON recipient details */}
+                            {(() => {
+                              const noteDetails = parseDeliveryNotes(selectedDelivery.delivery_notes);
+                              return (
+                                <div className="mt-2 bg-gray-50 border border-gray-100 p-2.5 rounded-lg text-gray-600 space-y-1 max-w-md">
+                                  <p className="font-extrabold text-[10px] text-brand-forest">RECIPIENT SPECIFICATIONS:</p>
+                                  <p><span className="font-bold">Contact Name:</span> {noteDetails.recipient_name || "N/A"}</p>
+                                  {noteDetails.recipient_phone && <p><span className="font-bold">Contact Phone:</span> {noteDetails.recipient_phone}</p>}
+                                  {noteDetails.notes && <p><span className="font-bold">Dispatcher Notes:</span> {noteDetails.notes}</p>}
+                                </div>
+                              );
+                            })()}
 
-                          <div className="font-bold text-gray-800">{stop}</div>
-                          <div className="text-gray-400 font-medium text-[10px] mt-0.5">{logMsg}</div>
-                        </div>
-                      );
-                    })}
+                            {/* Render Proof Image/Signature if available */}
+                            {selectedDelivery.proofs?.[0] && (
+                              <div className="mt-2.5">
+                                <p className="font-extrabold text-[10px] text-brand-forest uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                  <ShieldCheck size={12} />
+                                  Verification Signoff Proof:
+                                </p>
+                                <div className="inline-block border border-brand-sage/30 bg-white p-1 rounded-xl shadow-sm">
+                                  <img 
+                                    src={selectedDelivery.proofs[0].photo_url} 
+                                    alt="Signoff verification" 
+                                    className="max-h-24 max-w-[280px] object-contain rounded-lg"
+                                  />
+                                </div>
+                                {selectedDelivery.proofs[0].gps_latitude && (
+                                  <p className="text-[8px] text-gray-400 font-semibold font-mono mt-1 flex items-center gap-1">
+                                    <MapPin size={9} />
+                                    GPS Verification coords: {selectedDelivery.proofs[0].gps_latitude}, {selectedDelivery.proofs[0].gps_longitude}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p>Awaiting client physical delivery checkoff</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
               </div>
 
               {/* Modal Footer / Action buttons */}
-              <div className="bg-gray-50/50 px-6 py-4 flex justify-between items-center border-t border-brand-sage/20">
+              <div className="bg-gray-50/50 px-6 py-4 flex justify-between items-center border-t border-brand-sage/20 print:hidden">
                 <Button 
                   onClick={() => window.print()}
                   variant="outline" 
-                  className="h-9 px-4 rounded-xl text-xs font-extrabold gap-1.5"
+                  className="h-9.5 px-4 rounded-xl text-xs font-extrabold gap-1.5 border-gray-250 cursor-pointer text-gray-700 bg-white hover:bg-gray-50"
                 >
                   <FileText size={14} />
-                  Print Delivery Note
+                  Print Gatepass
                 </Button>
 
                 <div className="flex gap-2">
                   <Link href={`/orders`}>
                     <Button 
-                      className="h-9 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs gap-1.5"
+                      className="h-9.5 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs gap-1.5 cursor-pointer"
                     >
                       View Order Ledger
                       <ArrowRight size={14} />
@@ -365,10 +1008,9 @@ export default function DeliveriesPage() {
                   </Link>
                   <Button 
                     onClick={() => setSelectedDelivery(null)}
-                    variant="primary" 
-                    className="h-9 px-4 rounded-xl text-xs font-bold"
+                    className="h-9.5 px-4 rounded-xl bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold cursor-pointer"
                   >
-                    Close Portal
+                    Close Manifest
                   </Button>
                 </div>
               </div>
@@ -376,6 +1018,282 @@ export default function DeliveriesPage() {
             </div>
           </div>
         )}
+
+        {/* ASSIGN DELIVERY MODAL OVERLAY */}
+        {showAssignModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Assign Delivery</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Assign an order dispatch route to a driver and vehicle</p>
+                </div>
+                <Button 
+                  onClick={() => setShowAssignModal(false)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleAssignDelivery} className="p-6 space-y-5">
+                <div className="space-y-4">
+                  {/* Select Order */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Pending Order *</label>
+                    {assignableOrders.length === 0 ? (
+                      <div className="text-xs text-red-500 font-bold py-2.5 bg-red-50/50 border border-red-100 rounded-xl px-3 flex items-center gap-1.5">
+                        <AlertTriangle size={14} />
+                        No pending orders available for dispatch.
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={selectedOrderId}
+                        onChange={(e) => setSelectedOrderId(e.target.value)}
+                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="">-- Choose Order --</option>
+                        {assignableOrders.map(o => (
+                          <option key={o.id} value={o.id}>
+                            {o.order_number} - {o.customer?.name || "Client"}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* Select Driver */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Active Driver *</label>
+                    <select
+                      required
+                      value={selectedDriverId}
+                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="">-- Choose Driver --</option>
+                      {drivers.map(d => (
+                        <option key={d.id} value={d.id} disabled={d.status === 'offline'}>
+                          {d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? '[Offline]' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                  <Button 
+                    type="button" 
+                    onClick={() => setShowAssignModal(false)} 
+                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-10 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={isAssigning || assignableOrders.length === 0}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-10 px-4 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isAssigning && <Loader2 className="animate-spin" size={13} />}
+                    Assign Dispatch
+                  </Button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* COMPLETE / CONFIRM DELIVERY PROOF OVERLAY MODAL */}
+        {showCompleteModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Confirm Delivery signoff</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Invoice: {showCompleteModal.order?.order_number} • Customer: {showCompleteModal.order?.customer?.name}</p>
+                </div>
+                <Button 
+                  onClick={() => setShowCompleteModal(null)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleCompleteDelivery} className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+                
+                {/* Geolocation info disclaimer */}
+                <div className="bg-green-50 border border-green-200/50 p-3 rounded-xl flex items-start gap-2.5 text-green-800 text-[11px] font-medium leading-relaxed">
+                  <Compass size={18} className="text-green-600 shrink-0 mt-0.5 animate-spin-slow" />
+                  <p>
+                    <strong>GPS Coordinates Tracking:</strong> When you click confirm, the portal will capture your browser's current latitude and longitude values to certify physical site arrival.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Recipient Name */}
+                  <div>
+                    <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Recipient Full Name *</label>
+                    <Input 
+                      required
+                      placeholder="e.g. John Mugisha (Manager)"
+                      className="h-9.5 text-xs font-semibold rounded-xl border border-brand-sage/50"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Recipient Phone */}
+                  <div>
+                    <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Recipient Contact Phone</label>
+                    <Input 
+                      placeholder="e.g. +256772000111"
+                      className="h-9.5 text-xs font-semibold rounded-xl border border-brand-sage/50"
+                      value={recipientPhone}
+                      onChange={(e) => setRecipientPhone(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Delivery Notes */}
+                <div>
+                  <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fulfillment Delivery Notes</label>
+                  <textarea 
+                    placeholder="Provide any recipient remarks, stock count verification anomalies, or returns details..."
+                    className="w-full min-h-[60px] p-2.5 text-xs font-semibold rounded-xl border border-brand-sage/50 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                  />
+                </div>
+
+                {/* Verification Mode Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Verification Proof Mode</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setVerificationMode("signature")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        verificationMode === "signature"
+                          ? "bg-brand-forest/5 text-brand-forest border-brand-forest"
+                          : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Plus size={14} className="rotate-45" /> {/* Signature pencil alternative icon */}
+                      Digital Signature
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVerificationMode("photo")}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        verificationMode === "photo"
+                          ? "bg-brand-forest/5 text-brand-forest border-brand-forest"
+                          : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Truck size={14} />
+                      Upload Photo Proof
+                    </button>
+                  </div>
+                </div>
+
+                {/* Verification Input details */}
+                {verificationMode === "signature" ? (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Draw Recipient Signature *</label>
+                      <button 
+                        type="button"
+                        onClick={clearSignature}
+                        className="text-[10px] text-red-600 hover:text-red-700 font-bold bg-transparent border-none cursor-pointer"
+                      >
+                        Clear Signature
+                      </button>
+                    </div>
+                    <div className="border border-brand-sage/40 rounded-xl overflow-hidden shadow-inner bg-white">
+                      <canvas
+                        ref={canvasRef}
+                        width={600}
+                        height={200}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                        className="w-full h-[140px] cursor-crosshair block"
+                      />
+                    </div>
+                    <p className="text-[9px] text-gray-400 italic">Sign inside the white grid above using your mouse cursor or touchscreen.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Choose Recipient Delivery Photo Proof *</label>
+                    <div className="border-2 border-dashed border-brand-sage/40 rounded-xl p-5 text-center bg-gray-50/50 hover:bg-gray-50 transition-colors relative">
+                      <input 
+                        type="file" 
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                      <div className="space-y-2">
+                        <div className="mx-auto h-9 w-9 bg-brand-sage/10 rounded-full flex items-center justify-center text-brand-forest">
+                          <Truck size={18} />
+                        </div>
+                        <p className="text-xs text-gray-600 font-bold">{photoFileName || "Click to browse photo files"}</p>
+                        <p className="text-[10px] text-gray-400">Accepts PNG, JPG, or JPEG images (Max: 5MB)</p>
+                      </div>
+                    </div>
+                    {photoFile && (
+                      <div className="mt-2.5 text-center">
+                        <img 
+                          src={photoFile} 
+                          alt="Proof preview" 
+                          className="max-h-24 mx-auto object-contain rounded-lg border border-brand-sage/20 shadow-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Submit buttons */}
+                <div className="flex justify-end gap-2.5 pt-3.5 border-t border-brand-sage/30">
+                  <Button 
+                    type="button" 
+                    onClick={() => setShowCompleteModal(null)}
+                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-10 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit"
+                    disabled={isCompleting}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-10 px-4.5 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isCompleting && <Loader2 className="animate-spin" size={13} />}
+                    Verify & Complete Delivery
+                  </Button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
       </div>
     </DashboardLayout>
   );
