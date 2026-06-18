@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
         
         // Customers
         Route::get('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'index']);
+        Route::post('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'store']);
         Route::get('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'show']);
         Route::get('/delivery-zones', [App\Http\Controllers\Api\V1\CustomerController::class, 'zones']);
         

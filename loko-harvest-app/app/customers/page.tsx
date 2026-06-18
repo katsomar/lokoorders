@@ -41,6 +41,7 @@ interface Branch {
   credit_limit: number;
   total_invoiced: number;
   total_paid: number;
+  parent_id?: string;
 }
 
 interface Customer {
@@ -56,6 +57,7 @@ interface Customer {
   balance?: number; // for standalone
   total_invoiced?: number; // for standalone
   total_paid?: number; // for standalone
+  parent_id?: string;
   logoColor?: string;
   logoLetter?: string;
 }
@@ -73,6 +75,7 @@ export default function CustomersPage() {
   // Add Customer modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
+  const [newParentId, setNewParentId] = useState("");
   const [newContactPerson, setNewContactPerson] = useState("");
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
@@ -108,9 +111,20 @@ export default function CustomersPage() {
 
   // Parse flat DB list to Parent-Child structure
   const customers = React.useMemo(() => {
-    const shopriteBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("shoprite"));
-    const megaBranches = dbCustomers.filter(c => c.name.toLowerCase().includes("mega"));
-    const standalones = dbCustomers.filter(c => !c.name.toLowerCase().includes("shoprite") && !c.name.toLowerCase().includes("mega"));
+    // 1. Hardcoded seeded grouping fallback for backward compatibility
+    const shopriteBranches = dbCustomers.filter(c => !c.parent_id && c.name.toLowerCase().includes("shoprite"));
+    const megaBranches = dbCustomers.filter(c => !c.parent_id && c.name.toLowerCase().includes("mega"));
+
+    // 2. Build a branches map for dynamically registered parent-child records
+    const dbBranchesMap: Record<string, any[]> = {};
+    dbCustomers.forEach(c => {
+      if (c.parent_id) {
+        if (!dbBranchesMap[c.parent_id]) {
+          dbBranchesMap[c.parent_id] = [];
+        }
+        dbBranchesMap[c.parent_id].push(c);
+      }
+    });
 
     const list: Customer[] = [];
 
@@ -125,6 +139,7 @@ export default function CustomersPage() {
       credit_limit: parseFloat(c.credit_limit || 0),
       total_invoiced: parseFloat(c.account?.total_invoiced || 0),
       total_paid: parseFloat(c.account?.total_paid || 0),
+      parent_id: c.parent_id || undefined,
     });
 
     if (shopriteBranches.length > 0) {
@@ -165,7 +180,15 @@ export default function CustomersPage() {
       });
     }
 
-    standalones.forEach(c => {
+    dbCustomers.forEach(c => {
+      // Skip if they are registered as a branch under a dynamic parent
+      if (c.parent_id) return;
+
+      // Skip if they are already grouped inside hardcoded shoprite/mega branches
+      const isHardcodedShoprite = shopriteBranches.some(b => b.id === c.id);
+      const isHardcodedMega = megaBranches.some(b => b.id === c.id);
+      if (isHardcodedShoprite || isHardcodedMega) return;
+
       let color = "bg-brand-forest text-brand-yellow";
       let letter = c.name.charAt(0).toUpperCase();
 
@@ -180,22 +203,46 @@ export default function CustomersPage() {
         letter = "C";
       }
 
-      list.push({
-        id: c.id,
-        name: c.name,
-        contact_person: c.contact_person || "N/A",
-        phone: c.phone_primary || "N/A",
-        zone: c.zone?.name || "Kampala",
-        type: c.customer_type || "supermarket",
-        credit_limit: parseFloat(c.credit_limit || 0),
-        isParent: false,
-        logoColor: color,
-        logoLetter: letter,
-        branches: [],
-        balance: parseFloat(c.account?.current_balance || 0),
-        total_invoiced: parseFloat(c.account?.total_invoiced || 0),
-        total_paid: parseFloat(c.account?.total_paid || 0),
-      });
+      const associatedBranches = dbBranchesMap[c.id] || [];
+
+      if (associatedBranches.length > 0) {
+        // Dynamic parent HQ
+        const branches = associatedBranches.map(formatBranch);
+        list.push({
+          id: c.id,
+          name: c.name,
+          contact_person: c.contact_person || "N/A",
+          phone: c.phone_primary || "N/A",
+          zone: c.zone?.name || "Kampala",
+          type: c.customer_type || "supermarket",
+          credit_limit: parseFloat(c.credit_limit || 0) + branches.reduce((acc, br) => acc + br.credit_limit, 0),
+          isParent: true,
+          logoColor: color,
+          logoLetter: letter,
+          branches: branches,
+          total_invoiced: parseFloat(c.account?.total_invoiced || 0) + branches.reduce((acc, br) => acc + br.total_invoiced, 0),
+          total_paid: parseFloat(c.account?.total_paid || 0) + branches.reduce((acc, br) => acc + br.total_paid, 0),
+          balance: parseFloat(c.account?.current_balance || 0) + branches.reduce((acc, br) => acc + br.balance, 0),
+        });
+      } else {
+        // Standalone
+        list.push({
+          id: c.id,
+          name: c.name,
+          contact_person: c.contact_person || "N/A",
+          phone: c.phone_primary || "N/A",
+          zone: c.zone?.name || "Kampala",
+          type: c.customer_type || "supermarket",
+          credit_limit: parseFloat(c.credit_limit || 0),
+          isParent: false,
+          logoColor: color,
+          logoLetter: letter,
+          branches: [],
+          balance: parseFloat(c.account?.current_balance || 0),
+          total_invoiced: parseFloat(c.account?.total_invoiced || 0),
+          total_paid: parseFloat(c.account?.total_paid || 0),
+        });
+      }
     });
 
     return list;
@@ -209,6 +256,7 @@ export default function CustomersPage() {
     try {
       await api.post("/customers", {
         name: newCustomerName,
+        parent_id: newParentId || null,
         contact_person: newContactPerson || "N/A",
         phone_primary: newPhone || "N/A",
         email: newEmail || null,
@@ -224,6 +272,7 @@ export default function CustomersPage() {
       
       // Reset Form
       setNewCustomerName("");
+      setNewParentId("");
       setNewContactPerson("");
       setNewPhone("");
       setNewEmail("");
@@ -669,6 +718,20 @@ export default function CustomersPage() {
                       onChange={(e) => setNewCustomerName(e.target.value)}
                       className="h-9.5 text-xs rounded-xl border-brand-sage/50 placeholder:text-gray-300 font-bold text-gray-800"
                     />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ (Optional)</label>
+                    <select 
+                      value={newParentId}
+                      onChange={(e) => setNewParentId(e.target.value)}
+                      className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="">(None - Register as Standalone or HQ Parent)</option>
+                      {dbCustomers.filter(c => !c.parent_id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

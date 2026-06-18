@@ -34,6 +34,7 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
+            'parent_id' => 'nullable|uuid|exists:customers,id',
             'contact_person' => 'required|string',
             'phone_primary' => 'required|string',
             'phone_secondary' => 'nullable|string',
