@@ -158,11 +158,15 @@ export default function CustomerDetailPage() {
       const resCustomers = await api.get("/customers", { params: { per_page: 100 } });
       const allDb = resCustomers.data.data?.data || resCustomers.data.data || [];
 
-      if (customerId === "parent-shoprite" || customerId === "parent-mega") {
-        // HQ corporate grouping retrieval
-        const filterName = customerId === "parent-shoprite" ? "shoprite" : "mega";
-        const branchesDb = allDb.filter((c: any) => !c.parent_id && c.name.toLowerCase().includes(filterName));
-        
+      const dbCustomer = allDb.find((c: any) => c.id === customerId);
+      if (!dbCustomer) {
+        throw new Error("Customer profile not found");
+      }
+
+      const branchesDb = allDb.filter((c: any) => c.parent_id === customerId);
+
+      if (branchesDb.length > 0) {
+        // It is a dynamic corporate parent HQ!
         const branchItems = branchesDb.map((c: any) => ({
           id: c.id,
           name: c.name,
@@ -178,16 +182,17 @@ export default function CustomerDetailPage() {
         }));
 
         const parentObj = {
-          id: customerId,
-          name: customerId === "parent-shoprite" ? "Shoprite Supermarkets" : "Mega Standard Supermarkets",
-          contact_person: customerId === "parent-shoprite" ? "John Okello (HQ Sales Manager)" : "Moses Mukasa (HQ Finance Director)",
-          phone: customerId === "parent-shoprite" ? "0772 123 456" : "0702 444 555",
-          email: customerId === "parent-shoprite" ? "corporate@shoprite.co.ug" : "finance@megastandard.co.ug",
-          address: customerId === "parent-shoprite" ? "Plot 3-5, Lugogo Bypass, Kampala" : "Chase Complex, Kampala Rd, Kampala",
-          zone: "Multiple Zones",
-          type: "supermarket",
-          credit_terms: customerId === "parent-shoprite" ? "30 Days" : "14 Days",
-          credit_limit: branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.credit_limit || 0), 0),
+          id: dbCustomer.id,
+          name: dbCustomer.name,
+          contact_person: dbCustomer.contact_person || "N/A",
+          phone: dbCustomer.phone_primary || "N/A",
+          email: dbCustomer.email || "N/A",
+          address: dbCustomer.address || "N/A",
+          zone: dbCustomer.zone?.name || "Kampala",
+          type: dbCustomer.customer_type || "supermarket",
+          credit_terms: dbCustomer.credit_terms === "cash" ? "Cash Only" : dbCustomer.credit_terms.replace("_", " "),
+          credit_limit: parseFloat(dbCustomer.credit_limit || 0) + branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.credit_limit || 0), 0),
+          current_balance: parseFloat(dbCustomer.account?.current_balance || 0) + branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.account?.current_balance || 0), 0),
           isParent: true,
           isBranch: false,
           branches: branchItems
@@ -195,8 +200,8 @@ export default function CustomerDetailPage() {
 
         setCustomer(parentObj);
 
-        // Fetch consolidated ledger from all branches
-        const ledgersPromise = branchesDb.map((b: any) => 
+        // Fetch consolidated ledger from all branches + parent
+        const ledgersPromise = [dbCustomer, ...branchesDb].map((b: any) => 
           api.get(`/accounts/${b.id}/ledger`, { params: { per_page: 50 } })
             .then(res => ({
               branchId: b.id,
@@ -244,150 +249,58 @@ export default function CustomerDetailPage() {
         setLedger(consolidatedLedger);
 
       } else {
-        const dbCustomer = allDb.find((c: any) => c.id === customerId);
-        if (!dbCustomer) {
-          throw new Error("Customer profile not found");
-        }
-
-        const branchesDb = allDb.filter((c: any) => c.parent_id === customerId);
-
-        if (branchesDb.length > 0) {
-          // It is a dynamic corporate parent HQ!
-          const branchItems = branchesDb.map((c: any) => ({
-            id: c.id,
-            name: c.name,
-            contact: c.contact_person || "N/A",
-            phone: c.phone_primary || "N/A",
-            zone: c.zone?.name || "Kampala",
-            credit_limit: parseFloat(c.credit_limit || 0),
-            balance: parseFloat(c.account?.current_balance || 0),
-            credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
-            email: c.email || "N/A",
-            address: c.address || "N/A",
-            type: c.customer_type || "supermarket",
+        // Standalone customer or individual branch
+        const c = dbCustomer;
+        const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 50 } });
+        const txs = ledgerRes.data.data?.data || [];
+        
+        const mappedTxs = txs.map((tx: any) => {
+          const items = tx.invoice?.order?.items || [];
+          const mappedItems = items.map((item: any) => ({
+            productName: item.product?.name || "Product",
+            quantity: item.quantity,
+            unit: item.product?.unit_of_measure || "units",
+            unitPrice: parseFloat(item.unit_price || 0)
           }));
 
-          const parentObj = {
-            id: dbCustomer.id,
-            name: dbCustomer.name,
-            contact_person: dbCustomer.contact_person || "N/A",
-            phone: dbCustomer.phone_primary || "N/A",
-            email: dbCustomer.email || "N/A",
-            address: dbCustomer.address || "N/A",
-            zone: dbCustomer.zone?.name || "Kampala",
-            type: dbCustomer.customer_type || "supermarket",
-            credit_terms: dbCustomer.credit_terms === "cash" ? "Cash Only" : dbCustomer.credit_terms.replace("_", " "),
-            credit_limit: parseFloat(dbCustomer.credit_limit || 0) + branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.credit_limit || 0), 0),
-            current_balance: parseFloat(dbCustomer.account?.current_balance || 0) + branchesDb.reduce((acc: number, b: any) => acc + parseFloat(b.account?.current_balance || 0), 0),
-            isParent: true,
-            isBranch: false,
-            branches: branchItems
+          return {
+            id: tx.id,
+            date: tx.transaction_date,
+            type: tx.type === "invoice_raised" ? "invoice" : "payment",
+            ref: tx.reference_number,
+            description: tx.description,
+            debit: parseFloat(tx.debit_amount || 0),
+            credit: parseFloat(tx.credit_amount || 0),
+            balance: parseFloat(tx.running_balance || 0),
+            efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
+            paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
+            deliveredBy: "-",
+            receivedBy: tx.user?.name || "System",
+            proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+            items: mappedItems
           };
+        });
 
-          setCustomer(parentObj);
+        setLedger(mappedTxs);
 
-          // Fetch consolidated ledger from all branches + parent
-          const ledgersPromise = [dbCustomer, ...branchesDb].map((b: any) => 
-            api.get(`/accounts/${b.id}/ledger`, { params: { per_page: 50 } })
-              .then(res => ({
-                branchId: b.id,
-                branchName: b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", ""),
-                data: res.data.data?.data || []
-              }))
-              .catch(() => ({ branchId: b.id, branchName: b.name, data: [] }))
-          );
+        const detailObj = {
+          id: c.id,
+          name: c.name,
+          contact_person: c.contact_person || "N/A",
+          phone: c.phone_primary || "N/A",
+          email: c.email || "N/A",
+          address: c.address || "N/A",
+          zone: c.zone?.name || "Kampala",
+          type: c.customer_type || "supermarket",
+          credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
+          credit_limit: parseFloat(c.credit_limit || 0),
+          current_balance: parseFloat(c.account?.current_balance || 0),
+          isParent: false,
+          isBranch: c.parent_id ? true : false,
+          branches: []
+        };
 
-          const branchesLedgers = await Promise.all(ledgersPromise);
-          let consolidatedLedger: any[] = [];
-          
-          branchesLedgers.forEach(bl => {
-            bl.data.forEach((tx: any) => {
-              const items = tx.invoice?.order?.items || [];
-              const mappedItems = items.map((item: any) => ({
-                productName: item.product?.name || "Product",
-                quantity: item.quantity,
-                unit: item.product?.unit_of_measure || "units",
-                unitPrice: parseFloat(item.unit_price || 0)
-              }));
-
-              consolidatedLedger.push({
-                id: tx.id,
-                date: tx.transaction_date,
-                branchId: bl.branchId,
-                branchName: bl.branchName,
-                type: tx.type === "invoice_raised" ? "invoice" : "payment",
-                ref: tx.reference_number,
-                description: tx.description,
-                debit: parseFloat(tx.debit_amount || 0),
-                credit: parseFloat(tx.credit_amount || 0),
-                balance: parseFloat(tx.running_balance || 0),
-                efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
-                paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-                deliveredBy: "-",
-                receivedBy: tx.user?.name || "System",
-                proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
-                items: mappedItems
-              });
-            });
-          });
-
-          consolidatedLedger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-          setLedger(consolidatedLedger);
-
-        } else {
-          // Standalone customer or individual branch
-          const c = dbCustomer;
-          const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 50 } });
-          const txs = ledgerRes.data.data?.data || [];
-          
-          const mappedTxs = txs.map((tx: any) => {
-            const items = tx.invoice?.order?.items || [];
-            const mappedItems = items.map((item: any) => ({
-              productName: item.product?.name || "Product",
-              quantity: item.quantity,
-              unit: item.product?.unit_of_measure || "units",
-              unitPrice: parseFloat(item.unit_price || 0)
-            }));
-
-            return {
-              id: tx.id,
-              date: tx.transaction_date,
-              type: tx.type === "invoice_raised" ? "invoice" : "payment",
-              ref: tx.reference_number,
-              description: tx.description,
-              debit: parseFloat(tx.debit_amount || 0),
-              credit: parseFloat(tx.credit_amount || 0),
-              balance: parseFloat(tx.running_balance || 0),
-              efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
-              paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-              deliveredBy: "-",
-              receivedBy: tx.user?.name || "System",
-              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
-              items: mappedItems
-            };
-          });
-
-          setLedger(mappedTxs);
-
-          const detailObj = {
-            id: c.id,
-            name: c.name,
-            contact_person: c.contact_person || "N/A",
-            phone: c.phone_primary || "N/A",
-            email: c.email || "N/A",
-            address: c.address || "N/A",
-            zone: c.zone?.name || "Kampala",
-            type: c.customer_type || "supermarket",
-            credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
-            credit_limit: parseFloat(c.credit_limit || 0),
-            current_balance: parseFloat(c.account?.current_balance || 0),
-            isParent: false,
-            isBranch: c.parent_id ? true : false,
-            branches: []
-          };
-
-          setCustomer(detailObj);
-        }
+        setCustomer(detailObj);
       }
     } catch (err) {
       console.error("Failed to load customer profile details:", err);
@@ -806,8 +719,8 @@ export default function CustomerDetailPage() {
             <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
               customerLogo 
                 ? customerLogo.color 
-                : customer.id === "parent-shoprite" ? "bg-red-600 text-white" :
-                  customer.id === "parent-mega" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                : customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
+                  customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
                   customer.name.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
                   customer.name.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
                   customer.name.toLowerCase().includes("carrefour") ? "bg-blue-800 text-white" :
@@ -815,8 +728,8 @@ export default function CustomerDetailPage() {
             }`}>
               {customerLogo 
                 ? customerLogo.letter 
-                : customer.id === "parent-shoprite" ? "S" :
-                  customer.id === "parent-mega" ? "M" :
+                : customer.name.toLowerCase().includes("shoprite") ? "S" :
+                  customer.name.toLowerCase().includes("mega") ? "M" :
                   customer.name.charAt(0).toUpperCase()}
             </div>
 
@@ -1642,8 +1555,8 @@ export default function CustomerDetailPage() {
                   <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border border-black/10 bg-brand-sage/10 text-brand-forest shrink-0 ${
                     customerLogo 
                       ? customerLogo.color 
-                      : customer.id === "parent-shoprite" ? "bg-red-600 text-white" :
-                        customer.id === "parent-mega" ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                      : customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
+                        customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
                         "bg-brand-sage/20 text-brand-forest"
                   }`}>
                     {customerLogo ? customerLogo.letter : customer.name.charAt(0).toUpperCase()}

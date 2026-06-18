@@ -124,4 +124,93 @@ class CustomerConsumptionTest extends TestCase
             ->assertJsonPath('data.product_breakdown.0.product_name', 'Cream Eggs (Trays)')
             ->assertJsonPath('data.product_breakdown.0.total_qty', 30);
     }
+
+    public function test_can_update_customer()
+    {
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/customers/{$this->customer->id}", [
+                'name' => 'Mega Supermarket Updated',
+                'contact_person' => 'New Contact Person',
+                'phone_primary' => '+256772999999',
+                'address' => 'Kampala Central',
+                'delivery_zone_id' => $this->customer->delivery_zone_id,
+                'customer_type' => 'restaurant',
+                'credit_terms' => '7_days',
+                'credit_limit' => 60000000.00,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.name', 'Mega Supermarket Updated')
+            ->assertJsonPath('data.customer_type', 'restaurant');
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $this->customer->id,
+            'name' => 'Mega Supermarket Updated',
+            'customer_type' => 'restaurant',
+        ]);
+    }
+
+    public function test_cannot_delete_customer_with_orders()
+    {
+        // Place an order
+        Order::create([
+            'order_number' => 'LHO-2026-9999',
+            'customer_id' => $this->customer->id,
+            'sales_store_id' => $this->store->id,
+            'order_date' => '2026-06-01',
+            'required_delivery_date' => '2026-06-02',
+            'urgency' => 'normal',
+            'total_amount' => 150000,
+            'created_by' => $this->user->id,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson("/api/v1/customers/{$this->customer->id}");
+
+        $response->assertStatus(422)
+            ->assertJsonPath('message', 'Cannot delete customer because they have order history.');
+
+        $this->assertDatabaseHas('customers', [
+            'id' => $this->customer->id,
+        ]);
+    }
+
+    public function test_can_delete_customer_without_orders()
+    {
+        // Create customer without orders
+        $newCustomer = Customer::create([
+            'name' => 'Deletable Customer',
+            'contact_person' => 'Delete Me',
+            'phone_primary' => '+256772111111',
+            'address' => 'Kampala',
+            'delivery_zone_id' => $this->customer->delivery_zone_id,
+            'customer_type' => 'individual',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'account_status' => 'active',
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        // Initialize customer account
+        $newCustomer->account()->create([
+            'current_balance' => 0.00,
+            'total_invoiced' => 0.00,
+            'total_paid' => 0.00,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson("/api/v1/customers/{$newCustomer->id}");
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('customers', [
+            'id' => $newCustomer->id,
+        ]);
+        $this->assertDatabaseMissing('customer_accounts', [
+            'customer_id' => $newCustomer->id,
+        ]);
+    }
 }
+

@@ -14,7 +14,9 @@ import {
   X,
   Mail,
   Phone,
-  Loader2
+  Loader2,
+  Edit,
+  Trash2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -85,6 +87,20 @@ export default function CustomersPage() {
   const [newCreditLimit, setNewCreditLimit] = useState("10000000");
   const [newCreditTerms, setNewCreditTerms] = useState("7_days");
 
+  // Edit Customer Modal States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState("");
+  const [editParentId, setEditParentId] = useState("");
+  const [editContactPerson, setEditContactPerson] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editZoneId, setEditZoneId] = useState("");
+  const [editType, setEditType] = useState("supermarket");
+  const [editCreditLimit, setEditCreditLimit] = useState("");
+  const [editCreditTerms, setEditCreditTerms] = useState("7_days");
+
   const fetchCustomers = async () => {
     setIsLoading(true);
     try {
@@ -111,11 +127,7 @@ export default function CustomersPage() {
 
   // Parse flat DB list to Parent-Child structure
   const customers = React.useMemo(() => {
-    // 1. Hardcoded seeded grouping fallback for backward compatibility
-    const shopriteBranches = dbCustomers.filter(c => !c.parent_id && c.name.toLowerCase().includes("shoprite"));
-    const megaBranches = dbCustomers.filter(c => !c.parent_id && c.name.toLowerCase().includes("mega"));
-
-    // 2. Build a branches map for dynamically registered parent-child records
+    // Build a branches map for dynamically registered parent-child records
     const dbBranchesMap: Record<string, any[]> = {};
     dbCustomers.forEach(c => {
       if (c.parent_id) {
@@ -142,57 +154,20 @@ export default function CustomersPage() {
       parent_id: c.parent_id || undefined,
     });
 
-    if (shopriteBranches.length > 0) {
-      const branches = shopriteBranches.map(formatBranch);
-      list.push({
-        id: "parent-shoprite",
-        name: "Shoprite Supermarkets",
-        contact_person: "John Okello (HQ Sales Manager)",
-        phone: "0772 123 456",
-        zone: "Multiple Zones",
-        type: "supermarket",
-        credit_limit: branches.reduce((acc, br) => acc + br.credit_limit, 0),
-        isParent: true,
-        logoColor: "bg-red-600 text-white",
-        logoLetter: "S",
-        branches: branches,
-        total_invoiced: branches.reduce((acc, br) => acc + br.total_invoiced, 0),
-        total_paid: branches.reduce((acc, br) => acc + br.total_paid, 0),
-      });
-    }
-
-    if (megaBranches.length > 0) {
-      const branches = megaBranches.map(formatBranch);
-      list.push({
-        id: "parent-mega",
-        name: "Mega Standard Supermarkets",
-        contact_person: "Moses Mukasa (HQ Finance Director)",
-        phone: "0702 444 555",
-        zone: "Multiple Zones",
-        type: "supermarket",
-        credit_limit: branches.reduce((acc, br) => acc + br.credit_limit, 0),
-        isParent: true,
-        logoColor: "bg-brand-forest text-brand-yellow border border-brand-yellow/30",
-        logoLetter: "M",
-        branches: branches,
-        total_invoiced: branches.reduce((acc, br) => acc + br.total_invoiced, 0),
-        total_paid: branches.reduce((acc, br) => acc + br.total_paid, 0),
-      });
-    }
-
     dbCustomers.forEach(c => {
       // Skip if they are registered as a branch under a dynamic parent
       if (c.parent_id) return;
 
-      // Skip if they are already grouped inside hardcoded shoprite/mega branches
-      const isHardcodedShoprite = shopriteBranches.some(b => b.id === c.id);
-      const isHardcodedMega = megaBranches.some(b => b.id === c.id);
-      if (isHardcodedShoprite || isHardcodedMega) return;
-
       let color = "bg-brand-forest text-brand-yellow";
       let letter = c.name.charAt(0).toUpperCase();
 
-      if (c.name.toLowerCase().includes("kfc")) {
+      if (c.name.toLowerCase().includes("shoprite")) {
+        color = "bg-red-600 text-white";
+        letter = "S";
+      } else if (c.name.toLowerCase().includes("mega")) {
+        color = "bg-brand-forest text-brand-yellow border border-brand-yellow/30";
+        letter = "M";
+      } else if (c.name.toLowerCase().includes("kfc")) {
         color = "bg-red-800 text-white";
         letter = "K";
       } else if (c.name.toLowerCase().includes("javas") || c.name.toLowerCase().includes("cafe javas")) {
@@ -290,6 +265,70 @@ export default function CustomersPage() {
       alert(err.response?.data?.message || "Failed to register customer profile.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEditClick = (cust: any) => {
+    setEditingCustomer(cust);
+    
+    // Find matching item in dbCustomers for edit fields
+    const dbItem = dbCustomers.find(c => c.id === cust.id);
+    if (dbItem) {
+      setEditCustomerName(dbItem.name || "");
+      setEditParentId(dbItem.parent_id || "");
+      setEditContactPerson(dbItem.contact_person || "");
+      setEditPhone(dbItem.phone_primary || "");
+      setEditEmail(dbItem.email || "");
+      setEditAddress(dbItem.address || "");
+      setEditZoneId(dbItem.delivery_zone_id || "");
+      setEditType(dbItem.customer_type || "supermarket");
+      setEditCreditLimit(dbItem.credit_limit ? dbItem.credit_limit.toString() : "0");
+      setEditCreditTerms(dbItem.credit_terms || "7_days");
+      setShowEditModal(true);
+    }
+  };
+
+  const handleEditCustomerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCustomer || !editCustomerName || !editZoneId) return;
+
+    setIsSubmitting(true);
+    try {
+      await api.put(`/customers/${editingCustomer.id}`, {
+        name: editCustomerName,
+        parent_id: editParentId || null,
+        contact_person: editContactPerson || "N/A",
+        phone_primary: editPhone || "N/A",
+        email: editEmail || null,
+        address: editAddress || "N/A",
+        delivery_zone_id: editZoneId,
+        customer_type: editType,
+        credit_terms: editCreditTerms,
+        credit_limit: parseFloat(editCreditLimit) || 0
+      });
+
+      alert("Customer profile updated successfully!");
+      setShowEditModal(false);
+      setEditingCustomer(null);
+      fetchCustomers();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to update customer profile.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = async (cust: any) => {
+    if (!confirm(`Are you sure you want to delete ${cust.name}? All branch relationships and account settings will be updated.`)) return;
+
+    try {
+      await api.delete(`/customers/${cust.id}`);
+      alert("Customer profile deleted successfully!");
+      fetchCustomers();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to delete customer. Verify they have no active order history.");
     }
   };
 
@@ -590,6 +629,26 @@ export default function CustomersPage() {
                           </Button>
                         </Link>
 
+                        <Button 
+                          variant="outline" 
+                          size="icon"
+                          onClick={() => handleEditClick(customer)}
+                          className="h-8.5 w-8.5 rounded-xl cursor-pointer text-gray-500 hover:text-brand-forest hover:bg-brand-sage/20 border-brand-sage/40"
+                          title="Edit Customer"
+                        >
+                          <Edit size={14} />
+                        </Button>
+
+                        <Button 
+                          variant="outline" 
+                          size="icon"
+                          onClick={() => handleDeleteClick(customer)}
+                          className="h-8.5 w-8.5 rounded-xl cursor-pointer text-gray-500 hover:text-red-600 hover:bg-red-50 border-brand-sage/40"
+                          title="Delete Customer"
+                        >
+                          <Trash2 size={14} />
+                        </Button>
+
                         {hasBranches && (
                           <Button
                             variant="secondary"
@@ -659,11 +718,31 @@ export default function CustomersPage() {
                                 UGX {branch.credit_limit.toLocaleString()}
                               </TableCell>
                               <TableCell className="text-right pr-6">
-                                <Link href={`/customers/${branch.id}`}>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:bg-brand-sage/30 rounded-lg cursor-pointer">
-                                    <ChevronRight size={14} />
+                                <div className="flex justify-end items-center gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleEditClick(branch)}
+                                    className="h-7 w-7 text-gray-500 hover:bg-brand-sage/30 rounded-lg cursor-pointer"
+                                    title="Edit Branch"
+                                  >
+                                    <Edit size={12} />
                                   </Button>
-                                </Link>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleDeleteClick(branch)}
+                                    className="h-7 w-7 text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-lg cursor-pointer"
+                                    title="Delete Branch"
+                                  >
+                                    <Trash2 size={12} />
+                                  </Button>
+                                  <Link href={`/customers/${branch.id}`}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-gray-500 hover:bg-brand-sage/30 rounded-lg cursor-pointer">
+                                      <ChevronRight size={14} />
+                                    </Button>
+                                  </Link>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -861,6 +940,198 @@ export default function CustomersPage() {
                   >
                     {isSubmitting && <Loader2 className="animate-spin" size={14} />}
                     Confirm & Register
+                  </Button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* EDIT CUSTOMER MODAL OVERLAY */}
+        {showEditModal && editingCustomer && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Edit Customer Profile</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Modify standalone customer or branch details</p>
+                </div>
+                <Button 
+                  onClick={() => { setShowEditModal(false); setEditingCustomer(null); }} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer animate-none"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleEditCustomerSubmit} className="p-6 space-y-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Company / Customer Name *</label>
+                    <Input 
+                      placeholder="e.g. Shoprite Acacia Branch" 
+                      required 
+                      value={editCustomerName}
+                      onChange={(e) => setEditCustomerName(e.target.value)}
+                      className="h-9.5 text-xs rounded-xl border-brand-sage/50 placeholder:text-gray-300 font-bold text-gray-800"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ (Optional)</label>
+                    <select 
+                      value={editParentId}
+                      onChange={(e) => setEditParentId(e.target.value)}
+                      className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="">(None - Standalone or HQ Parent)</option>
+                      {dbCustomers.filter(c => !c.parent_id && c.id !== editingCustomer.id).map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Client Type</label>
+                      <select 
+                        value={editType}
+                        onChange={(e) => setEditType(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="supermarket">Supermarket</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="institution">Institution / Hotel</option>
+                        <option value="wholesaler">Wholesaler</option>
+                        <option value="individual">Individual client</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fulfillment Delivery Zone</label>
+                      <select 
+                        value={editZoneId}
+                        onChange={(e) => setEditZoneId(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        {zones.map(z => (
+                          <option key={z.id} value={z.id}>{z.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Account Manager / Contact Person *</label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        placeholder="e.g. Sarah Jane" 
+                        required
+                        value={editContactPerson}
+                        onChange={(e) => setEditContactPerson(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Financial Email</label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          type="email"
+                          placeholder="billing@company.com" 
+                          value={editEmail}
+                          onChange={(e) => setEditEmail(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Contact Phone *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          placeholder="e.g. 0772000000" 
+                          required
+                          value={editPhone}
+                          onChange={(e) => setEditPhone(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Billing Address *</label>
+                    <Input 
+                      placeholder="e.g. Plot 4, Acacia Avenue, Kampala" 
+                      required
+                      value={editAddress}
+                      onChange={(e) => setEditAddress(e.target.value)}
+                      className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Credit Terms</label>
+                      <select 
+                        value={editCreditTerms}
+                        onChange={(e) => setEditCreditTerms(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="cash">Immediate Cash / Cash On Delivery</option>
+                        <option value="7_days">7 Days Net Terms</option>
+                        <option value="14_days">14 Days Net Terms</option>
+                        <option value="30_days">30 Days Net Terms</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Approved Credit Limit (UGX) *</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                        <Input 
+                          type="number"
+                          placeholder="e.g. 10000000" 
+                          required
+                          value={editCreditLimit}
+                          onChange={(e) => setEditCreditLimit(e.target.value)}
+                          className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50 font-mono text-brand-forest font-bold"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Modal Footer / Actions */}
+                <div className="flex justify-end gap-3 pt-3 border-t border-gray-150/70">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => { setShowEditModal(false); setEditingCustomer(null); }}
+                    className="h-9.5 px-4.5 rounded-xl text-xs font-bold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 cursor-pointer"
+                  >
+                    Cancel Edit
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="h-9.5 px-5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs cursor-pointer flex items-center gap-1"
+                  >
+                    {isSubmitting && <Loader2 className="animate-spin" size={14} />}
+                    Save Changes
                   </Button>
                 </div>
               </form>

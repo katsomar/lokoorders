@@ -233,4 +233,51 @@ class CustomerController extends Controller
             'monthly_trends' => $monthlyTrends
         ]);
     }
+
+    public function update(Request $request, $id)
+    {
+        $customer = Customer::findOrFail($id);
+        
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string',
+            'parent_id' => 'nullable|uuid|exists:customers,id',
+            'contact_person' => 'sometimes|required|string',
+            'phone_primary' => 'sometimes|required|string',
+            'phone_secondary' => 'nullable|string',
+            'email' => 'nullable|email',
+            'address' => 'sometimes|required|string',
+            'delivery_zone_id' => 'sometimes|required|exists:delivery_zones,id',
+            'customer_type' => 'sometimes|required|in:supermarket,restaurant,individual,institution,wholesaler',
+            'credit_terms' => 'sometimes|required|in:cash,7_days,14_days,30_days',
+            'credit_limit' => 'sometimes|required|numeric|min:0',
+            'date_registered' => 'sometimes|required|date',
+        ]);
+
+        $customer->update($validated);
+        return $this->success($customer, 'Customer updated successfully');
+    }
+
+    public function destroy($id)
+    {
+        $customer = Customer::findOrFail($id);
+
+        if ($customer->orders()->exists()) {
+            return $this->error('Cannot delete customer because they have order history.', 422);
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($customer) {
+            // Delete associated customer account
+            if ($customer->account) {
+                $customer->account->delete();
+            }
+
+            // Set parent_id of branches to null
+            Customer::where('parent_id', $customer->id)->update(['parent_id' => null]);
+
+            $customer->delete();
+
+            return $this->success(null, 'Customer deleted successfully');
+        });
+    }
 }
+

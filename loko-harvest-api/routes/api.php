@@ -25,6 +25,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'index']);
         Route::post('/customers', [App\Http\Controllers\Api\V1\CustomerController::class, 'store']);
         Route::get('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'show']);
+        Route::put('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'update']);
+        Route::delete('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'destroy']);
         Route::get('/customers/{id}/consumption-analysis', [App\Http\Controllers\Api\V1\CustomerController::class, 'consumptionAnalysis']);
         Route::get('/delivery-zones', [App\Http\Controllers\Api\V1\CustomerController::class, 'zones']);
         
