@@ -119,6 +119,9 @@ export default function DriversPage() {
   const [editDriverAvatarFile, setEditDriverAvatarFile] = useState<File | null>(null);
   const [editDriverLicenseFile, setEditDriverLicenseFile] = useState<File | null>(null);
   const [isSavingDriver, setIsSavingDriver] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [editDriverAvatarPreview, setEditDriverAvatarPreview] = useState<string | null>(null);
+  const [editDriverLicensePreview, setEditDriverLicensePreview] = useState<string | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -139,6 +142,26 @@ export default function DriversPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (editDriverAvatarFile) {
+      const objectUrl = URL.createObjectURL(editDriverAvatarFile);
+      setEditDriverAvatarPreview(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    } else {
+      setEditDriverAvatarPreview(null);
+    }
+  }, [editDriverAvatarFile]);
+
+  useEffect(() => {
+    if (editDriverLicenseFile) {
+      const objectUrl = URL.createObjectURL(editDriverLicenseFile);
+      setEditDriverLicensePreview(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    } else {
+      setEditDriverLicensePreview(null);
+    }
+  }, [editDriverLicenseFile]);
 
   // Fetch shift logs when a driver is selected
   useEffect(() => {
@@ -1114,11 +1137,23 @@ export default function DriversPage() {
                   <div className="space-y-4 pt-2 border-t border-brand-sage/35">
                     {/* Avatar Upload block */}
                     <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60">
-                        {editDriverAvatarFile ? (
-                          <img src={URL.createObjectURL(editDriverAvatarFile)} alt="Avatar Preview" className="h-full w-full object-cover" />
+                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60 relative group">
+                        {editDriverAvatarPreview ? (
+                          <img 
+                            src={editDriverAvatarPreview} 
+                            alt="Avatar Preview" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(editDriverAvatarPreview)}
+                          />
                         ) : selectedDriverForEdit.avatar ? (
-                          <img src={selectedDriverForEdit.avatar} alt="Avatar Current" className="h-full w-full object-cover" />
+                          <img 
+                            src={selectedDriverForEdit.avatar} 
+                            alt="Avatar Current" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(selectedDriverForEdit.avatar)}
+                          />
                         ) : (
                           <User size={28} />
                         )}
@@ -1136,11 +1171,23 @@ export default function DriversPage() {
 
                     {/* License Upload block */}
                     <div className="flex items-center gap-4">
-                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60">
-                        {editDriverLicenseFile ? (
-                          <img src={URL.createObjectURL(editDriverLicenseFile)} alt="License Preview" className="h-full w-full object-cover" />
+                      <div className="h-14 w-14 rounded-xl bg-brand-sage/30 flex items-center justify-center text-brand-forest shadow-inner overflow-hidden shrink-0 border border-brand-sage/60 relative group">
+                        {editDriverLicensePreview ? (
+                          <img 
+                            src={editDriverLicensePreview} 
+                            alt="License Preview" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(editDriverLicensePreview)}
+                          />
                         ) : selectedDriverForEdit.license_photo ? (
-                          <img src={selectedDriverForEdit.license_photo} alt="License Current" className="h-full w-full object-cover" />
+                          <img 
+                            src={selectedDriverForEdit.license_photo} 
+                            alt="License Current" 
+                            className="h-full w-full object-cover cursor-zoom-in group-hover:scale-105 transition-transform" 
+                            title="Click to view full size"
+                            onClick={() => setLightboxImage(selectedDriverForEdit.license_photo)}
+                          />
                         ) : (
                           <ShieldCheck size={28} />
                         )}
@@ -1510,6 +1557,38 @@ export default function DriversPage() {
                 </div>
               </form>
 
+            </div>
+          </div>
+        )}
+
+        {/* LIGHTBOX / FULL-SIZE IMAGE PREVIEW OVERLAY */}
+        {lightboxImage && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            {/* Backdrop close trigger */}
+            <div 
+              className="absolute inset-0 cursor-zoom-out"
+              onClick={() => setLightboxImage(null)}
+            />
+            
+            <div className="relative max-w-3xl w-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
+              {/* Close Button */}
+              <button 
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="absolute -top-12 right-0 sm:right-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer z-10"
+                title="Close Full Preview"
+              >
+                <X size={20} />
+              </button>
+
+              {/* Image Container */}
+              <div className="bg-white/5 p-2 rounded-3xl border border-white/10 shadow-2xl overflow-hidden max-h-[80vh] flex items-center justify-center">
+                <img 
+                  src={lightboxImage} 
+                  alt="Full preview" 
+                  className="rounded-2xl max-w-full max-h-[78vh] object-contain shadow-inner"
+                />
+              </div>
             </div>
           </div>
         )}
