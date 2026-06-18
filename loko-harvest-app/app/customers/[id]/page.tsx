@@ -109,6 +109,10 @@ export default function CustomerDetailPage() {
           zone: c.zone?.name || "Kampala",
           credit_limit: parseFloat(c.credit_limit || 0),
           balance: parseFloat(c.account?.current_balance || 0),
+          credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
+          email: c.email || "N/A",
+          address: c.address || "N/A",
+          type: c.customer_type || "supermarket",
         }));
 
         const parentObj = {
@@ -186,6 +190,10 @@ export default function CustomerDetailPage() {
             zone: c.zone?.name || "Kampala",
             credit_limit: parseFloat(c.credit_limit || 0),
             balance: parseFloat(c.account?.current_balance || 0),
+            credit_terms: c.credit_terms === "cash" ? "Cash Only" : c.credit_terms.replace("_", " "),
+            email: c.email || "N/A",
+            address: c.address || "N/A",
+            type: c.customer_type || "supermarket",
           }));
 
           const parentObj = {
@@ -375,7 +383,17 @@ export default function CustomerDetailPage() {
     );
   }
 
-  const consolidatedBalance = getConsolidatedBalance();
+  const activeBranch = customer && customer.isParent
+    ? customer.branches.find((b: any) => b.id === activeTab)
+    : null;
+
+  const currentDues = activeBranch ? activeBranch.balance : getConsolidatedBalance();
+  const currentLimit = activeBranch ? activeBranch.credit_limit : (customer ? customer.credit_limit : 0);
+  const currentTerms = activeBranch ? activeBranch.credit_terms : (customer ? customer.credit_terms : "");
+
+  const displayLedger = activeBranch
+    ? ledger.filter((tx: any) => tx.branchId === activeBranch.id)
+    : getFilteredLedger();
 
   return (
     <DashboardLayout>
@@ -454,18 +472,22 @@ export default function CustomerDetailPage() {
           <Card className="border-none shadow-xl bg-brand-forest text-white">
             <CardContent className="pt-6">
               <p className="text-white/60 text-xs font-bold uppercase tracking-wider">
-                {customer.isParent ? "Consolidated HQ Balance" : "Outstanding Balance"}
+                {activeBranch 
+                  ? "Branch Dues" 
+                  : (customer.isParent ? "Consolidated HQ Balance" : "Outstanding Balance")}
               </p>
               <h3 className="text-3xl font-black font-heading mt-1.5">
-                UGX {consolidatedBalance.toLocaleString()}
+                UGX {currentDues.toLocaleString()}
               </h3>
               
               <div className="mt-4 flex items-center gap-2 text-xs">
                 <Clock size={14} className="text-brand-yellow animate-pulse" />
                 <span className="text-white/80 font-medium">
-                  {customer.isParent 
-                    ? `Consolidated from ${customer.branches.length} active branches` 
-                    : "Payment due within normal credit cycle"}
+                  {activeBranch 
+                    ? "Branch location outstanding dues" 
+                    : (customer.isParent 
+                      ? `Consolidated from ${customer.branches.length} active branches` 
+                      : "Payment due within normal credit cycle")}
                 </span>
               </div>
             </CardContent>
@@ -475,22 +497,24 @@ export default function CustomerDetailPage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
-                {customer.isParent ? "HQ Credit Limit" : "Approved Credit Limit"}
+                {activeBranch 
+                  ? "Branch Credit Limit" 
+                  : (customer.isParent ? "HQ Credit Limit" : "Approved Credit Limit")}
               </p>
               <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
-                UGX {(customer.credit_limit || 0).toLocaleString()}
+                UGX {currentLimit.toLocaleString()}
               </h3>
               
               <div className="mt-4 w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                 <div 
                   className={`h-full rounded-full ${
-                    (customer.credit_limit || 0) > 0 && (consolidatedBalance / customer.credit_limit) > 0.8 ? "bg-red-500" : "bg-brand-forest"
+                    currentLimit > 0 && (currentDues / currentLimit) > 0.8 ? "bg-red-500" : "bg-brand-forest"
                   }`} 
-                  style={{ width: `${customer.credit_limit && customer.credit_limit > 0 ? Math.min(100, (consolidatedBalance / customer.credit_limit) * 100) : 0}%` }}
+                  style={{ width: `${currentLimit > 0 ? Math.min(100, (currentDues / currentLimit) * 100) : 0}%` }}
                 />
               </div>
               <p className="text-[10px] text-gray-400 mt-2 font-bold text-right">
-                {customer.credit_limit && customer.credit_limit > 0 ? Math.round((consolidatedBalance / customer.credit_limit) * 100) : 0}% credit utilization
+                {currentLimit > 0 ? Math.round((currentDues / currentLimit) * 100) : 0}% credit utilization
               </p>
             </CardContent>
           </Card>
@@ -499,7 +523,7 @@ export default function CustomerDetailPage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Credit Terms</p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5 capitalize">{customer.credit_terms}</h3>
+              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5 capitalize">{currentTerms}</h3>
               <p className="text-xs text-brand-forest font-bold mt-5 flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-green-500" />
                 Account in Good Standing
@@ -507,28 +531,38 @@ export default function CustomerDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Total Branches / Standalone details */}
+          {/* Card 4: Location/Branch or Count */}
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
-                {customer.isParent ? "Active Branches" : "Account Level"}
-              </p>
-              <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
-                {customer.isParent ? `${customer.branches.length} Branches` : "Standalone Point"}
-              </h3>
-              <p className="text-xs text-gray-400 mt-5 font-semibold">
-                {customer.isParent ? "Click 'Branches' tab to view breakdown" : "Accumulates personal outstanding dues"}
-              </p>
+              {activeBranch ? (
+                <>
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Branch Location</p>
+                  <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">{activeBranch.zone}</h3>
+                  <p className="text-xs text-gray-400 mt-5 font-semibold">Dedicated delivery zone</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">
+                    {customer.isParent ? "Active Branches" : "Account Level"}
+                  </p>
+                  <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1.5">
+                    {customer.isParent ? `${customer.branches.length} Branches` : "Standalone Point"}
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-5 font-semibold">
+                    {customer.isParent ? "Select a branch tab to view details" : "Accumulates personal outstanding dues"}
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* Tab Toggle (Only for Parent Accounts) */}
         {customer.isParent && (
-          <div className="flex gap-2 border-b border-brand-sage/40 pb-px">
+          <div className="flex gap-2 border-b border-brand-sage/40 pb-px overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab("ledger")}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all ${
+              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
                 activeTab === "ledger" 
                   ? "border-brand-forest text-brand-forest" 
                   : "border-transparent text-gray-500 hover:text-brand-forest"
@@ -538,7 +572,7 @@ export default function CustomerDetailPage() {
             </button>
             <button
               onClick={() => setActiveTab("branches")}
-              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all ${
+              className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
                 activeTab === "branches" 
                   ? "border-brand-forest text-brand-forest" 
                   : "border-transparent text-gray-500 hover:text-brand-forest"
@@ -546,6 +580,19 @@ export default function CustomerDetailPage() {
             >
               Branch Breakdown ({customer.branches.length})
             </button>
+            {customer.branches.map((b: any) => (
+              <button
+                key={b.id}
+                onClick={() => setActiveTab(b.id)}
+                className={`pb-3 text-sm font-bold border-b-2 px-4 cursor-pointer transition-all shrink-0 ${
+                  activeTab === b.id 
+                    ? "border-brand-forest text-brand-forest" 
+                    : "border-transparent text-gray-500 hover:text-brand-forest"
+                }`}
+              >
+                {b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", "")}
+              </button>
+            ))}
           </div>
         )}
 
@@ -555,19 +602,21 @@ export default function CustomerDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             
             {/* LEDGER TAB */}
-            {activeTab === "ledger" && (
+            {(activeTab === "ledger" || activeBranch) && (
               <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
                 <CardHeader className="bg-gray-50/50 border-b border-brand-sage pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 px-6 py-4">
                   <div>
                     <CardTitle className="text-base font-bold text-brand-forest font-heading flex items-center gap-2">
                       <History size={18} className="text-brand-forest" />
-                      {customer.isParent ? "Consolidated Corporate Ledger" : "Account Transaction Ledger"}
+                      {activeBranch 
+                        ? `${activeBranch.name} Ledger` 
+                        : (customer.isParent ? "Consolidated Corporate Ledger" : "Account Transaction Ledger")}
                     </CardTitle>
                     <CardDescription className="text-xs">Audit ledger of in-store delivery debits and receipt credits</CardDescription>
                   </div>
                   
-                  {/* Branch filter for parents */}
-                  {customer.isParent && (
+                  {/* Branch filter for parents (only show on consolidated tab) */}
+                  {customer.isParent && !activeBranch && (
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-gray-400">Filter:</span>
                       <select 
@@ -611,14 +660,14 @@ export default function CustomerDetailPage() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ) : getFilteredLedger().length === 0 ? (
+                        ) : displayLedger.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-12 text-gray-500 font-body text-xs">
                               No transaction logs found.
                             </TableCell>
                           </TableRow>
                         ) : (
-                          getFilteredLedger().map((tx: any) => (
+                          displayLedger.map((tx: any) => (
                             <TableRow key={tx.id} className="hover:bg-brand-sage/5 transition-colors">
                               <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
                               <TableCell className="text-xs">
@@ -782,11 +831,11 @@ export default function CustomerDetailPage() {
               </CardContent>
             </Card>
 
-            {/* HQ Contact Info */}
+            {/* HQ / Branch Contact Info */}
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
                 <CardTitle className="text-sm font-bold text-brand-forest font-heading">
-                  HQ Corporate Office Details
+                  {activeBranch ? "Branch Office Details" : "HQ Corporate Office Details"}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5 p-5">
@@ -795,8 +844,8 @@ export default function CustomerDetailPage() {
                     <User size={16} />
                   </div>
                   <div>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Account Manager</p>
-                    <p className="text-xs font-bold text-gray-800">{customer.contact_person}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Account Manager / Contact</p>
+                    <p className="text-xs font-bold text-gray-800">{activeBranch ? activeBranch.contact : customer.contact_person}</p>
                   </div>
                 </div>
                 
@@ -806,7 +855,7 @@ export default function CustomerDetailPage() {
                   </div>
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Contact Phone</p>
-                    <p className="text-xs font-bold text-gray-800">{customer.phone}</p>
+                    <p className="text-xs font-bold text-gray-800">{activeBranch ? activeBranch.phone : customer.phone}</p>
                   </div>
                 </div>
 
@@ -816,7 +865,7 @@ export default function CustomerDetailPage() {
                   </div>
                   <div>
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Financial Email</p>
-                    <p className="text-xs font-bold text-gray-800">{customer.email}</p>
+                    <p className="text-xs font-bold text-gray-800">{activeBranch ? activeBranch.email : customer.email}</p>
                   </div>
                 </div>
 
@@ -825,8 +874,8 @@ export default function CustomerDetailPage() {
                     <MapPin size={16} />
                   </div>
                   <div>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Billing HQ Address</p>
-                    <p className="text-xs font-bold text-brand-forest">{customer.address}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">{activeBranch ? "Branch Address" : "Billing HQ Address"}</p>
+                    <p className="text-xs font-bold text-brand-forest">{activeBranch ? activeBranch.address : customer.address}</p>
                   </div>
                 </div>
               </CardContent>
