@@ -14,7 +14,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'index']);
         Route::post('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'store']);
         Route::get('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'show']);
+        Route::put('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'update']);
+        Route::delete('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'destroy']);
         Route::post('/orders/{id}/status', [App\Http\Controllers\Api\V1\OrderController::class, 'updateStatus']);
+
         
         // Products
         Route::get('/products', [App\Http\Controllers\Api\V1\ProductController::class, 'index']);

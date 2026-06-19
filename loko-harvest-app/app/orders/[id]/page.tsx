@@ -13,7 +13,9 @@ import {
   MapPin,
   Warehouse,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -104,6 +106,20 @@ export default function OrderDetailPage() {
       setIsUpdatingStatus(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete order ${order?.order_number}? This will refund store stock and reverse account invoices.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/orders/${orderId}`);
+      alert("Order deleted successfully!");
+      router.push("/orders");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete order.");
+    }
+  };
+
 
   const getNextStatus = (currentStatus: string) => {
     switch (currentStatus) {
@@ -204,6 +220,27 @@ export default function OrderDetailPage() {
               <Printer size={14} />
               Print Order
             </Button>
+            {!(order.status === "dispatched" || order.status === "delivered") && (
+              <>
+                <Link href={`/orders/${order.id}/edit`}>
+                  <Button 
+                    variant="outline" 
+                    className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm"
+                  >
+                    <Pencil size={14} />
+                    Edit Order
+                  </Button>
+                </Link>
+                <Button 
+                  variant="outline" 
+                  onClick={handleDelete}
+                  className="h-9.5 px-4 text-xs font-extrabold text-red-600 hover:text-red-700 border-red-200/50 hover:bg-red-50 rounded-xl gap-1.5 shadow-sm bg-white"
+                >
+                  <Trash2 size={14} />
+                  Delete Order
+                </Button>
+              </>
+            )}
             {nextStatus && (
               <Button 
                 onClick={handleStatusTransition}

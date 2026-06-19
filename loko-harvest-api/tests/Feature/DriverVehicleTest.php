@@ -842,4 +842,197 @@ class DriverVehicleTest extends TestCase
             'quantity' => 10,
         ]);
     }
+
+    public function test_can_update_order()
+    {
+        $zone = \App\Models\DeliveryZone::create(['name' => 'Kampala Central']);
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Corp',
+            'contact_person' => 'Jane Doe',
+            'phone_primary' => '0788111222',
+            'email' => 'jane@acme.com',
+            'address' => 'Kampala Rd',
+            'delivery_zone_id' => $zone->id,
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Sales Store A',
+            'code' => 'SSA',
+            'location' => 'Kampala Main',
+        ]);
+
+        $eggs = \App\Models\Product::create([
+            'name' => 'Golden Eggs',
+            'code' => 'EGG-GLD',
+            'category' => 'eggs',
+            'unit_of_measure' => 'trays',
+            'default_unit_price' => 12000,
+            'sales_unit_price' => 15000,
+        ]);
+
+        // Seed stock
+        \App\Models\SalesStoreStock::create([
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-X1',
+            'current_quantity' => 100,
+            'updated_by' => $this->user->id,
+        ]);
+
+        // Create order
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-8800',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-19',
+            'required_delivery_date' => '2026-06-20',
+            'urgency' => 'normal',
+            'total_amount' => 150000, // 10 trays * 15000
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        \App\Models\OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-X1',
+            'quantity' => 10,
+            'unit_price' => 15000,
+            'line_total' => 150000,
+        ]);
+
+        // Deduct stock manually
+        \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+            ->where('product_id', $eggs->id)
+            ->where('batch_reference', 'BATCH-X1')
+            ->decrement('current_quantity', 10);
+
+        // Update order via PUT
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->putJson("/api/v1/orders/{$order->id}", [
+                'customer_id' => $customer->id,
+                'sales_store_id' => $salesStore->id,
+                'order_date' => '2026-06-19',
+                'required_delivery_date' => '2026-06-20',
+                'urgency' => 'urgent',
+                'items' => [
+                    [
+                        'product_id' => $eggs->id,
+                        'quantity' => 15,
+                        'unit_price' => 15000,
+                        'batch_reference' => 'BATCH-X1',
+                    ]
+                ],
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        // Verify stock is refunded (100 - 15 = 85)
+        $stock = \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+            ->where('product_id', $eggs->id)
+            ->where('batch_reference', 'BATCH-X1')
+            ->first();
+        $this->assertEquals(85, (float)$stock->current_quantity);
+
+        // Verify order items count
+        $this->assertDatabaseHas('order_items', [
+            'order_id' => $order->id,
+            'product_id' => $eggs->id,
+            'quantity' => 15,
+        ]);
+    }
+
+    public function test_can_delete_order()
+    {
+        $zone = \App\Models\DeliveryZone::create(['name' => 'Kampala Central']);
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Corp',
+            'contact_person' => 'Jane Doe',
+            'phone_primary' => '0788111222',
+            'email' => 'jane@acme.com',
+            'address' => 'Kampala Rd',
+            'delivery_zone_id' => $zone->id,
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Sales Store A',
+            'code' => 'SSA',
+            'location' => 'Kampala Main',
+        ]);
+
+        $eggs = \App\Models\Product::create([
+            'name' => 'Golden Eggs',
+            'code' => 'EGG-GLD',
+            'category' => 'eggs',
+            'unit_of_measure' => 'trays',
+            'default_unit_price' => 12000,
+            'sales_unit_price' => 15000,
+        ]);
+
+        // Seed stock
+        \App\Models\SalesStoreStock::create([
+            'sales_store_id' => $salesStore->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-Y1',
+            'current_quantity' => 100,
+            'updated_by' => $this->user->id,
+        ]);
+
+        // Create order
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-8801',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-19',
+            'required_delivery_date' => '2026-06-20',
+            'urgency' => 'normal',
+            'total_amount' => 150000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        \App\Models\OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $eggs->id,
+            'batch_reference' => 'BATCH-Y1',
+            'quantity' => 10,
+            'unit_price' => 15000,
+            'line_total' => 150000,
+        ]);
+
+        // Deduct stock manually
+        \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+            ->where('product_id', $eggs->id)
+            ->where('batch_reference', 'BATCH-Y1')
+            ->decrement('current_quantity', 10);
+
+        // Delete order via DELETE
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->deleteJson("/api/v1/orders/{$order->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        // Verify stock is fully refunded (100)
+        $stock = \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+            ->where('product_id', $eggs->id)
+            ->where('batch_reference', 'BATCH-Y1')
+            ->first();
+        $this->assertEquals(100, (float)$stock->current_quantity);
+
+        // Verify order is deleted
+        $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+        $this->assertDatabaseMissing('order_items', ['order_id' => $order->id]);
+    }
 }

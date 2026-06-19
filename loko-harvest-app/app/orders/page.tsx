@@ -8,7 +8,9 @@ import {
   MoreVertical, 
   Eye, 
   Download,
-  Loader2
+  Loader2,
+  Pencil,
+  Trash2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -98,6 +100,21 @@ export default function OrdersPage() {
       console.error("Failed to load metrics:", err);
     }
   };
+
+  const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
+    if (!window.confirm(`Are you sure you want to delete order ${orderNumber}? This will refund store stock and reverse account invoices.`)) {
+      return;
+    }
+    try {
+      await api.delete(`/orders/${orderId}`);
+      alert("Order deleted successfully!");
+      fetchOrders();
+      fetchMetrics();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete order.");
+    }
+  };
+
 
   useEffect(() => {
     fetchOrders();
@@ -316,18 +333,19 @@ export default function OrdersPage() {
                   <TableHead className="text-xs font-bold text-brand-forest pl-6">Order #</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Customer Details</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Fulfillment Store</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Order Date</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Required Delivery</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Urgency</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Status</TableHead>
                   <TableHead className="text-right text-xs font-bold text-brand-forest">Total Value</TableHead>
-                  <TableHead className="text-right text-xs font-bold text-brand-forest pr-6 w-[80px]"></TableHead>
+                  <TableHead className="text-right text-xs font-bold text-brand-forest pr-6 w-[120px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12">
+                    <TableCell colSpan={10} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
                         <Loader2 className="animate-spin text-brand-forest" size={24} />
                         Loading orders pipeline...
@@ -336,7 +354,7 @@ export default function OrdersPage() {
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-gray-500 font-body text-xs">
+                    <TableCell colSpan={10} className="text-center py-12 text-gray-500 font-body text-xs">
                       No orders found matching the filter criteria.
                     </TableCell>
                   </TableRow>
@@ -366,6 +384,24 @@ export default function OrdersPage() {
                         <TableCell className="text-xs font-semibold text-gray-700">
                           {storeName}
                         </TableCell>
+                        <TableCell className="text-xs font-semibold text-gray-700">
+                          {(() => {
+                            const batchRefs = Array.from(
+                              new Set((order.items || []).map((item: any) => item.batch_reference).filter(Boolean))
+                            ) as string[];
+                            return batchRefs.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {batchRefs.map(b => (
+                                  <span key={b} className="bg-brand-sage/15 border border-brand-sage/30 text-brand-forest px-2 py-0.5 rounded text-[10px] uppercase font-mono font-bold">
+                                    {b}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 italic text-[11px] font-body">FIFO / None</span>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell className="text-xs text-gray-500 font-medium">
                           {format(new Date(order.order_date), "dd/MM/yyyy")}
                         </TableCell>
@@ -381,12 +417,41 @@ export default function OrdersPage() {
                         <TableCell className="text-right text-xs font-extrabold text-brand-forest font-heading">
                           UGX {parseFloat(order.total_amount).toLocaleString()}
                         </TableCell>
-                        <TableCell className="text-right pr-6">
-                          <Link href={`/orders/${order.id}`}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
-                              <Eye size={14} />
-                            </Button>
-                          </Link>
+                        <TableCell className="text-right pr-6 whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <Link href={`/orders/${order.id}`}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:bg-brand-sage/30 rounded-lg">
+                                <Eye size={14} />
+                              </Button>
+                            </Link>
+                            
+                            {!(order.status === "dispatched" || order.status === "delivered") ? (
+                              <>
+                                <Link href={`/orders/${order.id}/edit`}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-lg">
+                                    <Pencil size={14} />
+                                  </Button>
+                                </Link>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleDeleteOrder(order.id, order.order_number)}
+                                  className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg"
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 cursor-not-allowed" disabled>
+                                  <Pencil size={14} />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 cursor-not-allowed" disabled>
+                                  <Trash2 size={14} />
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
