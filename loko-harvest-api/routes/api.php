@@ -30,6 +30,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'show']);
         Route::put('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'update']);
         Route::delete('/customers/{id}', [App\Http\Controllers\Api\V1\CustomerController::class, 'destroy']);
+        Route::post('/customers/{id}/logo', [App\Http\Controllers\Api\V1\CustomerController::class, 'uploadLogo']);
         Route::get('/customers/{id}/consumption-analysis', [App\Http\Controllers\Api\V1\CustomerController::class, 'consumptionAnalysis']);
         Route::get('/delivery-zones', [App\Http\Controllers\Api\V1\CustomerController::class, 'zones']);
         

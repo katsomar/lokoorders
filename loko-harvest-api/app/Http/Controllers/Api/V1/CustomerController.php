@@ -279,5 +279,28 @@ class CustomerController extends Controller
             return $this->success(null, 'Customer deleted successfully');
         });
     }
+
+    public function uploadLogo(Request $request, $id)
+    {
+        $customer = Customer::findOrFail($id);
+
+        $request->validate([
+            'logo' => 'required|image|max:2048',
+        ]);
+
+        $path = $request->file('logo')->store('customers/logos', 'public');
+
+        // Delete old logo file if exists
+        if ($customer->logo_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($customer->logo_path);
+        }
+
+        $customer->update(['logo_path' => $path]);
+
+        return $this->success([
+            'logo_url' => url('storage/' . $path),
+            'logo_path' => $path,
+        ], 'Logo uploaded successfully');
+    }
 }
 

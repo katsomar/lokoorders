@@ -119,32 +119,46 @@ export default function CustomerDetailPage() {
   
   const [selectedProofTx, setSelectedProofTx] = useState<any | null>(null);
 
-  // Logo uploading cosmetics simulation
+  // Logo uploading real logic
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoProgress, setLogoProgress] = useState(0);
-  const [customerLogo, setCustomerLogo] = useState<{ color: string; letter: string } | null>(null);
 
-  const handleSimulateLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0 || !customer) return;
     
+    const file = e.target.files[0];
+    const formData = new FormData();
+    formData.append("logo", file);
+
     setLogoUploading(true);
-    setLogoProgress(0);
-    
-    const interval = setInterval(() => {
-      setLogoProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setLogoUploading(false);
-          const firstLetter = customer ? customer.name.charAt(0).toUpperCase() : "C";
-          setCustomerLogo({
-            color: "bg-brand-forest text-brand-yellow border border-brand-yellow/30 shadow-md",
-            letter: firstLetter
-          });
-          return 100;
+    setLogoProgress(10);
+    try {
+      setLogoProgress(35);
+      const res = await api.post(`/customers/${customer.id}/logo`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
+          setLogoProgress(percentCompleted);
         }
-        return prev + 20;
       });
-    }, 200);
+      setLogoProgress(100);
+      
+      if (res.data.data?.logo_url) {
+        setCustomer((prev: any) => ({
+          ...prev,
+          logo_url: res.data.data.logo_url
+        }));
+      }
+      alert("Logo uploaded successfully!");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to upload logo.");
+    } finally {
+      setLogoUploading(false);
+      setLogoProgress(0);
+    }
   };
 
   const loadCustomerDetails = async () => {
@@ -716,22 +730,26 @@ export default function CustomerDetailPage() {
             </Button>
             
             {/* Circular Corporate Logo Badge */}
-            <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
-              customerLogo 
-                ? customerLogo.color 
-                : customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
-                  customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
-                  customer.name.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
-                  customer.name.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
-                  customer.name.toLowerCase().includes("carrefour") ? "bg-blue-800 text-white" :
-                  "bg-brand-forest text-brand-yellow"
-            }`}>
-              {customerLogo 
-                ? customerLogo.letter 
-                : customer.name.toLowerCase().includes("shoprite") ? "S" :
+            {customer.logo_url ? (
+              <img 
+                src={customer.logo_url} 
+                alt={customer.name} 
+                className="h-12 w-12 rounded-xl object-cover shadow-sm select-none shrink-0 border border-brand-sage/40 bg-white"
+              />
+            ) : (
+              <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
+                customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
+                customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                customer.name.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
+                customer.name.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
+                customer.name.toLowerCase().includes("carrefour") ? "bg-blue-800 text-white" :
+                "bg-brand-forest text-brand-yellow"
+              }`}>
+                {customer.name.toLowerCase().includes("shoprite") ? "S" :
                   customer.name.toLowerCase().includes("mega") ? "M" :
                   customer.name.charAt(0).toUpperCase()}
-            </div>
+              </div>
+            )}
 
             <div>
               <h1 className="text-2xl font-black text-brand-forest font-heading leading-none">{customer.name}</h1>
@@ -1552,15 +1570,21 @@ export default function CustomerDetailPage() {
               </CardHeader>
               <CardContent className="p-5 flex flex-col items-center text-center space-y-4">
                 <div className="relative group">
-                  <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border border-black/10 bg-brand-sage/10 text-brand-forest shrink-0 ${
-                    customerLogo 
-                      ? customerLogo.color 
-                      : customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
-                        customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
-                        "bg-brand-sage/20 text-brand-forest"
-                  }`}>
-                    {customerLogo ? customerLogo.letter : customer.name.charAt(0).toUpperCase()}
-                  </div>
+                  {customer.logo_url ? (
+                    <img 
+                      src={customer.logo_url} 
+                      alt={customer.name} 
+                      className="h-20 w-20 rounded-2xl object-cover shadow-md select-none border border-black/10 shrink-0 bg-white"
+                    />
+                  ) : (
+                    <div className={`h-20 w-20 rounded-2xl font-heading font-black text-xl flex items-center justify-center shadow-md select-none border border-black/10 bg-brand-sage/10 text-brand-forest shrink-0 ${
+                      customer.name.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
+                      customer.name.toLowerCase().includes("mega") ? "bg-brand-forest text-brand-yellow border border-brand-yellow/30" :
+                      "bg-brand-sage/20 text-brand-forest"
+                    }`}>
+                      {customer.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   
                   <label htmlFor="logo-upload-input" className="absolute inset-0 bg-black/40 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px] font-extrabold uppercase">
                     Upload
@@ -1569,7 +1593,7 @@ export default function CustomerDetailPage() {
                     type="file" 
                     id="logo-upload-input" 
                     accept="image/*" 
-                    onChange={handleSimulateLogoUpload} 
+                    onChange={handleLogoUpload} 
                     className="hidden" 
                   />
                 </div>
@@ -1582,7 +1606,7 @@ export default function CustomerDetailPage() {
                 {logoUploading ? (
                   <div className="w-full space-y-2">
                     <div className="flex justify-between items-center text-[10px] font-bold text-brand-forest">
-                      <span>Simulating Secure Upload...</span>
+                      <span>Uploading Logo...</span>
                       <span>{logoProgress}%</span>
                     </div>
                     <div className="w-full bg-gray-150 h-1.5 rounded-full overflow-hidden">

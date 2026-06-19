@@ -313,19 +313,27 @@ export default function OrderDetailPage() {
                     
                     {/* Customer Info with Corporate Logo Badge */}
                     <div className="flex gap-3.5">
-                      <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
-                        order.customer?.name?.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
-                        order.customer?.name?.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
-                        order.customer?.name?.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
-                        order.customer?.name?.toLowerCase().includes("mega") ? "bg-blue-800 text-white" :
-                        "bg-brand-forest text-brand-yellow"
-                      }`}>
-                        {order.customer?.name?.toLowerCase().includes("shoprite") ? "S" :
-                         order.customer?.name?.toLowerCase().includes("kfc") ? "K" :
-                         order.customer?.name?.toLowerCase().includes("javas") ? "CJ" :
-                         order.customer?.name?.toLowerCase().includes("mega") ? "M" :
-                         order.customer?.name?.charAt(0).toUpperCase()}
-                      </div>
+                      {order.customer?.logo_url ? (
+                        <img 
+                          src={order.customer.logo_url} 
+                          alt={order.customer.name} 
+                          className="h-12 w-12 rounded-xl object-cover shadow-sm select-none shrink-0 border border-brand-sage/40 bg-white"
+                        />
+                      ) : (
+                        <div className={`h-12 w-12 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${
+                          order.customer?.name?.toLowerCase().includes("shoprite") ? "bg-red-600 text-white" :
+                          order.customer?.name?.toLowerCase().includes("kfc") ? "bg-red-800 text-white" :
+                          order.customer?.name?.toLowerCase().includes("javas") ? "bg-amber-800 text-white" :
+                          order.customer?.name?.toLowerCase().includes("mega") ? "bg-blue-800 text-white" :
+                          "bg-brand-forest text-brand-yellow"
+                        }`}>
+                          {order.customer?.name?.toLowerCase().includes("shoprite") ? "S" :
+                           order.customer?.name?.toLowerCase().includes("kfc") ? "K" :
+                           order.customer?.name?.toLowerCase().includes("javas") ? "CJ" :
+                           order.customer?.name?.toLowerCase().includes("mega") ? "M" :
+                           order.customer?.name?.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div>
                         <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Customer Outlet</p>
                         <p className="font-bold text-gray-800 text-xs mt-0.5">{order.customer?.name || "N/A"}</p>

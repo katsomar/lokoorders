@@ -212,5 +212,24 @@ class CustomerConsumptionTest extends TestCase
             'customer_id' => $newCustomer->id,
         ]);
     }
+
+    public function test_can_upload_customer_logo()
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('logo.jpg', 100, 'image/jpeg');
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/customers/{$this->customer->id}/logo", [
+                'logo' => $file,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->customer->refresh();
+        $this->assertNotNull($this->customer->logo_path);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($this->customer->logo_path);
+    }
 }
 

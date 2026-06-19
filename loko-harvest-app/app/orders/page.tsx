@@ -375,9 +375,17 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className={`h-8 w-8 rounded-xl font-heading font-black text-xs flex items-center justify-center shadow-sm select-none shrink-0 ${getLogoColor(name)}`}>
-                              {logoLetter}
-                            </div>
+                            {order.customer?.logo_url ? (
+                              <img 
+                                src={order.customer.logo_url} 
+                                alt={name} 
+                                className="h-8 w-8 rounded-xl object-cover shadow-sm select-none shrink-0 border border-brand-sage/40 bg-white"
+                              />
+                            ) : (
+                              <div className={`h-8 w-8 rounded-xl font-heading font-black text-xs flex items-center justify-center shadow-sm select-none shrink-0 ${getLogoColor(name)}`}>
+                                {logoLetter}
+                              </div>
+                            )}
                             <span className="font-bold text-gray-800 text-xs">{name}</span>
                           </div>
                         </TableCell>

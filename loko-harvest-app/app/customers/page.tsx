@@ -62,6 +62,7 @@ interface Customer {
   parent_id?: string;
   logoColor?: string;
   logoLetter?: string;
+  logo_url?: string | null;
 }
 
 export default function CustomersPage() {
@@ -194,6 +195,7 @@ export default function CustomersPage() {
           isParent: true,
           logoColor: color,
           logoLetter: letter,
+          logo_url: c.logo_url,
           branches: branches,
           total_invoiced: parseFloat(c.account?.total_invoiced || 0) + branches.reduce((acc, br) => acc + br.total_invoiced, 0),
           total_paid: parseFloat(c.account?.total_paid || 0) + branches.reduce((acc, br) => acc + br.total_paid, 0),
@@ -212,6 +214,7 @@ export default function CustomersPage() {
           isParent: false,
           logoColor: color,
           logoLetter: letter,
+          logo_url: c.logo_url,
           branches: [],
           balance: parseFloat(c.account?.current_balance || 0),
           total_invoiced: parseFloat(c.account?.total_invoiced || 0),
@@ -565,9 +568,17 @@ export default function CustomersPage() {
                     
                     {/* Left Column: Name & Account Level */}
                     <div className="flex items-start gap-3.5">
-                      <div className={`h-11 w-11 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${customer.logoColor || "bg-brand-forest text-brand-yellow"}`}>
-                        {customer.logoLetter || customer.name.charAt(0).toUpperCase()}
-                      </div>
+                      {customer.logo_url ? (
+                        <img 
+                          src={customer.logo_url} 
+                          alt={customer.name} 
+                          className="h-11 w-11 rounded-xl object-cover shadow-sm select-none shrink-0 border border-brand-sage/40 bg-white"
+                        />
+                      ) : (
+                        <div className={`h-11 w-11 rounded-xl font-heading font-black text-sm flex items-center justify-center shadow-sm select-none shrink-0 ${customer.logoColor || "bg-brand-forest text-brand-yellow"}`}>
+                          {customer.logoLetter || customer.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Link 
