@@ -198,6 +198,7 @@ export default function CustomerDetailPage() {
         const parentObj = {
           id: dbCustomer.id,
           name: dbCustomer.name,
+          logo_url: dbCustomer.logo_url,
           contact_person: dbCustomer.contact_person || "N/A",
           phone: dbCustomer.phone_primary || "N/A",
           email: dbCustomer.email || "N/A",
@@ -300,6 +301,7 @@ export default function CustomerDetailPage() {
         const detailObj = {
           id: c.id,
           name: c.name,
+          logo_url: c.logo_url,
           contact_person: c.contact_person || "N/A",
           phone: c.phone_primary || "N/A",
           email: c.email || "N/A",
@@ -1569,7 +1571,7 @@ export default function CustomerDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-5 flex flex-col items-center text-center space-y-4">
-                <div className="relative group">
+                <label htmlFor="logo-upload-input" className="relative group cursor-pointer block">
                   {customer.logo_url ? (
                     <img 
                       src={customer.logo_url} 
@@ -1586,9 +1588,9 @@ export default function CustomerDetailPage() {
                     </div>
                   )}
                   
-                  <label htmlFor="logo-upload-input" className="absolute inset-0 bg-black/40 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-[10px] font-extrabold uppercase">
+                  <div className="absolute inset-0 bg-black/40 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-extrabold uppercase">
                     Upload
-                  </label>
+                  </div>
                   <input 
                     type="file" 
                     id="logo-upload-input" 
@@ -1596,7 +1598,7 @@ export default function CustomerDetailPage() {
                     onChange={handleLogoUpload} 
                     className="hidden" 
                   />
-                </div>
+                </label>
 
                 <div className="space-y-1">
                   <h4 className="text-xs font-bold text-gray-800">{customer.name}</h4>
