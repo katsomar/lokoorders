@@ -17,7 +17,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $orders = Order::with(['customer', 'salesStore', 'items.product'])
+        $orders = Order::with(['customer.parent', 'salesStore', 'items.product'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('order_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {
@@ -93,7 +93,7 @@ class OrderController extends Controller
 
     public function show($id)
     {
-        $order = Order::with(['customer.zone', 'salesStore', 'items.product', 'invoice', 'deliveries', 'statusHistory.user'])->findOrFail($id);
+        $order = Order::with(['customer.zone', 'customer.parent', 'salesStore', 'items.product', 'invoice', 'deliveries', 'statusHistory.user'])->findOrFail($id);
         return $this->success($order);
     }
 

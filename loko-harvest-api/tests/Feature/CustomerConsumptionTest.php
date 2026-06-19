@@ -231,5 +231,31 @@ class CustomerConsumptionTest extends TestCase
         $this->assertNotNull($this->customer->logo_path);
         \Illuminate\Support\Facades\Storage::disk('public')->assertExists($this->customer->logo_path);
     }
+
+    public function test_branch_inherits_parent_logo()
+    {
+        $this->customer->update(['logo_path' => 'customers/logos/parent.png']);
+
+        $branch = Customer::create([
+            'name' => 'Mega Supermarket Branch 1',
+            'parent_id' => $this->customer->id,
+            'contact_person' => 'Branch Contact',
+            'phone_primary' => '+256772000001',
+            'address' => 'Wandegeya',
+            'delivery_zone_id' => $this->customer->delivery_zone_id,
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'account_status' => 'active',
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson("/api/v1/customers/{$branch->id}");
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.logo_url', url('storage/customers/logos/parent.png'));
+    }
 }
 

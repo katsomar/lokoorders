@@ -12,9 +12,18 @@ class Customer extends Model
 
     public function getLogoUrlAttribute()
     {
-        return $this->logo_path 
-            ? (filter_var($this->logo_path, FILTER_VALIDATE_URL) ? $this->logo_path : url('storage/' . $this->logo_path)) 
-            : null;
+        if ($this->logo_path) {
+            return filter_var($this->logo_path, FILTER_VALIDATE_URL) ? $this->logo_path : url('storage/' . $this->logo_path);
+        }
+
+        if ($this->parent_id) {
+            $parent = $this->relationLoaded('parent') ? $this->parent : $this->parent;
+            if ($parent && $parent->logo_path) {
+                return filter_var($parent->logo_path, FILTER_VALIDATE_URL) ? $parent->logo_path : url('storage/' . $parent->logo_path);
+            }
+        }
+
+        return null;
     }
 
     public function orders() { return $this->hasMany(Order::class); }
