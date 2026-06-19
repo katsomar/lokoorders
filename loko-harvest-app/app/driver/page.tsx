@@ -55,6 +55,16 @@ export default function DriverDashboard() {
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
 
+  interface AssignedDelivery {
+    id: string;
+    order: string;
+    customer: string;
+    zone: string;
+    status: string;
+    time: string;
+    crates: number;
+  }
+
   interface DashboardStats {
     driver_id: string;
     driver_name: string;
@@ -70,6 +80,7 @@ export default function DriverDashboard() {
       max_capacity: number;
       fuel_level: number;
     };
+    assigned_route: AssignedDelivery[];
   }
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -205,42 +216,55 @@ export default function DriverDashboard() {
                 </div>
 
                 <div className="space-y-3.5">
-                  {mockAssignedDeliveries.map((delivery, index) => (
-                    <motion.div
-                      key={delivery.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <Link href={`/driver/deliveries/${delivery.id}`}>
-                        <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
-                          <div className="flex gap-3.5">
-                            <div className="h-11 w-11 rounded-xl bg-brand-sage/20 border border-brand-sage/30 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage/40 transition-colors">
-                              <Package size={22} />
+                  {stats && stats.assigned_route.length > 0 ? (
+                    stats.assigned_route.map((delivery, index) => (
+                      <motion.div
+                        key={delivery.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <Link href={`/driver/deliveries/${delivery.id}`}>
+                          <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
+                            <div className="flex gap-3.5">
+                              <div className="h-11 w-11 rounded-xl bg-brand-sage/20 border border-brand-sage/30 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage/40 transition-colors">
+                                <Package size={22} />
+                              </div>
+                              <div>
+                                <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{delivery.customer}</h4>
+                                <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
+                                  <MapPin size={11} className="text-brand-mid" />
+                                  {delivery.zone}
+                                </div>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-brand-yellow/20">{delivery.order}</span>
+                                  <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                                    <Clock size={10} /> {delivery.time}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{delivery.customer}</h4>
-                              <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
-                                <MapPin size={11} className="text-brand-mid" />
-                                {delivery.zone}
-                              </div>
-                              <div className="flex items-center gap-2 mt-2">
-                                <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-brand-yellow/20">{delivery.order}</span>
-                                <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-                                  <Clock size={10} /> {delivery.time}
-                                </span>
-                              </div>
+                            
+                            <div className="flex items-center gap-1 text-brand-forest">
+                              <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
+                              <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
                             </div>
                           </div>
-                          
-                          <div className="flex items-center gap-1 text-brand-forest">
-                            <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
-                            <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
-                          </div>
-                        </div>
-                      </Link>
-                    </motion.div>
-                  ))}
+                        </Link>
+                      </motion.div>
+                    ))
+                  ) : loading ? (
+                    <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400 animate-pulse">
+                      <Truck size={32} className="mx-auto mb-2 text-gray-300" />
+                      <p className="text-xs font-bold text-gray-500">Loading Active Route...</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
+                      <Truck size={32} className="mx-auto mb-2 text-gray-300" />
+                      <p className="text-xs font-bold text-gray-500">No Active Route Assigned</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Please check back later or contact supervisor.</p>
+                    </div>
+                  )}
                 </div>
               </div>
 

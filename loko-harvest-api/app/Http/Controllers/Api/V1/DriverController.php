@@ -38,7 +38,7 @@ class DriverController extends Controller
         // 2. Pending deliveries (assigned or in_transit)
         $pendingDeliveries = \App\Models\Delivery::where('driver_id', $driver->id)
             ->whereIn('status', ['assigned', 'in_transit'])
-            ->with(['order.items'])
+            ->with(['order.customer.zone', 'order.items'])
             ->get();
 
         $pendingOrdersCount = $pendingDeliveries->count();
@@ -68,6 +68,22 @@ class DriverController extends Controller
 
         $avatar = $driver->avatar_path ? (filter_var($driver->avatar_path, FILTER_VALIDATE_URL) ? $driver->avatar_path : url('storage/' . $driver->avatar_path)) : null;
 
+        $assignedRoute = $pendingDeliveries->map(function ($delivery) {
+            $crates = $delivery->order && $delivery->order->items 
+                ? (int)$delivery->order->items->sum('quantity') 
+                : 0;
+
+            return [
+                'id' => $delivery->id,
+                'order' => $delivery->order ? $delivery->order->order_number : 'N/A',
+                'customer' => $delivery->order && $delivery->order->customer ? $delivery->order->customer->name : 'N/A',
+                'zone' => $delivery->order && $delivery->order->customer && $delivery->order->customer->zone ? $delivery->order->customer->zone->name : 'N/A',
+                'status' => $delivery->status,
+                'time' => $delivery->dispatched_at ? \Illuminate\Support\Carbon::parse($delivery->dispatched_at)->format('g:i A') : 'N/A',
+                'crates' => $crates,
+            ];
+        });
+
         return $this->success([
             'driver_id' => $driver->id,
             'driver_name' => $driver->full_name,
@@ -78,6 +94,7 @@ class DriverController extends Controller
             'pending_orders_count' => $pendingOrdersCount,
             'pending_crates_sum' => (int)$pendingCratesSum,
             'vehicle' => $vehicleSpecs,
+            'assigned_route' => $assignedRoute,
         ]);
     }
 
