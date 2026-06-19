@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import api from "@/lib/api";
 
 const mockAssignedDeliveries = [
   { id: "1", order: "LHO-0042", customer: "Shoprite Lugogo", zone: "Kampala Central", status: "pending", time: "10:00 AM", crates: 230 },
@@ -54,16 +55,57 @@ export default function DriverDashboard() {
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
 
+  interface DashboardStats {
+    driver_id: string;
+    driver_name: string;
+    rating: number;
+    completed_today: number;
+    total_today: number;
+    pending_orders_count: number;
+    pending_crates_sum: number;
+    vehicle: {
+      plate: string;
+      make_model: string;
+      max_capacity: number;
+      fuel_level: number;
+    };
+  }
+
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const response = await api.get("/driver/dashboard");
+        if (response.data?.success) {
+          setStats(response.data.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch driver stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStats();
+  }, []);
+
   const handleLogout = () => {
     clearAuth();
     router.push("/login");
   };
 
+  const completionPercentage = stats
+    ? stats.total_today > 0
+      ? (stats.completed_today / stats.total_today) * 100
+      : 0
+    : 85;
+
   return (
     <div className="min-h-screen bg-[#F4F6F5] flex flex-col font-body pb-24 text-gray-800">
       
       {/* 🟢 TOP PREMIUM BRAND HEADER */}
-      <header className="bg-brand-forest text-white p-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden shrink-0">
+      <header className={`bg-brand-forest text-white p-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden shrink-0 ${loading ? "animate-pulse" : ""}`}>
         
         {/* Subtle Background Glow Details */}
         <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-brand-yellow/10 blur-xl pointer-events-none" />
@@ -72,14 +114,14 @@ export default function DriverDashboard() {
         <div className="flex justify-between items-center mb-6 relative z-10">
           <div className="flex items-center gap-3.5">
             <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-brand-yellow font-black text-xl font-heading shadow-inner">
-              {user?.name?.charAt(0) || "M"}
+              {stats ? stats.driver_name.charAt(0) : (user?.name?.charAt(0) || "M")}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-brand-yellow font-bold uppercase tracking-wider">Fulfillment Driver</span>
                 <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
               </div>
-              <h2 className="text-lg font-black font-heading leading-tight">{user?.name || "Musa Driver"}</h2>
+              <h2 className="text-lg font-black font-heading leading-tight">{stats ? stats.driver_name : (user?.name || "Musa Driver")}</h2>
             </div>
           </div>
 
@@ -87,7 +129,7 @@ export default function DriverDashboard() {
             {/* System Rating Badge inside Header */}
             <div className="flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-xl text-[10px] text-brand-yellow font-black border border-brand-yellow/20 shadow-sm">
               <Star size={11} className="fill-brand-yellow text-brand-yellow" />
-              4.95 Rating
+              {stats ? stats.rating.toFixed(2) : "4.95"} Rating
             </div>
             <button 
               onClick={handleLogout} 
@@ -106,22 +148,25 @@ export default function DriverDashboard() {
               <Award className="text-brand-yellow" size={15} />
               <span className="font-extrabold text-white">Daily Route Completion</span>
             </div>
-            <span className="font-mono font-bold text-brand-yellow">12 / 14 Completed</span>
+            <span className="font-mono font-bold text-brand-yellow">{stats ? `${stats.completed_today} / ${stats.total_today}` : "12 / 14"} Completed</span>
           </div>
 
           {/* Styled progress bar */}
           <div className="w-full bg-white/20 h-2.5 rounded-full overflow-hidden shadow-inner flex mb-3">
-            <div className="bg-brand-yellow h-full rounded-full w-[85%] transition-all duration-1000 ease-out" />
+            <div 
+              className="bg-brand-yellow h-full rounded-full transition-all duration-1000 ease-out" 
+              style={{ width: `${completionPercentage}%` }}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4 divide-x divide-white/10 text-center">
             <div>
               <p className="text-white/60 text-[9px] font-bold uppercase tracking-wider">Pending Load</p>
-              <p className="text-xl font-black font-heading text-white mt-0.5">02 Orders</p>
+              <p className="text-xl font-black font-heading text-white mt-0.5">{stats ? String(stats.pending_orders_count).padStart(2, '0') : "02"} Orders</p>
             </div>
             <div>
               <p className="text-white/60 text-[9px] font-bold uppercase tracking-wider">Verified Crates</p>
-              <p className="text-xl font-black font-heading text-white mt-0.5">290 Crates</p>
+              <p className="text-xl font-black font-heading text-white mt-0.5">{stats ? stats.pending_crates_sum : "290"} Crates</p>
             </div>
           </div>
         </div>
@@ -211,7 +256,7 @@ export default function DriverDashboard() {
                       <Truck size={22} />
                     </div>
                     <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Plate: UBL 482Y</span>
+                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Plate: {stats ? stats.vehicle.plate : "UBL 482Y"}</span>
                       <h4 className="text-xs font-black text-brand-forest group-hover:text-brand-mid mt-0.5">Vehicle Loaded Specs</h4>
                     </div>
                   </button>
@@ -388,20 +433,20 @@ export default function DriverDashboard() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Plate Registration</p>
-                  <p className="font-black text-gray-800 text-sm mt-0.5">UBL 482Y</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">{stats ? stats.vehicle.plate : "UBL 482Y"}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Vehicle Make</p>
-                  <p className="font-black text-gray-800 text-sm mt-0.5">Isuzu Cargo Crate</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">{stats ? stats.vehicle.make_model : "Isuzu Cargo Crate"}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Max Load Capacity</p>
-                  <p className="font-black text-gray-800 text-sm mt-0.5">500 Crates Max</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">{stats ? stats.vehicle.max_capacity : 500} Crates Max</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Fuel Level Status</p>
                   <p className="font-black text-green-600 text-sm mt-0.5 flex items-center gap-1">
-                    85% Full
+                    {stats ? stats.vehicle.fuel_level : 85}% Full
                     <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                   </p>
                 </div>

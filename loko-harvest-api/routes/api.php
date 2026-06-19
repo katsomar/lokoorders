@@ -92,6 +92,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/reports/driver-performance', [App\Http\Controllers\Api\V1\ReportController::class, 'driverPerformance']);
         
         // Drivers & Vehicles
+        Route::get('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
         Route::get('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'index']);
         Route::post('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'store']);
         Route::put('/drivers/{id}', [App\Http\Controllers\Api\V1\DriverController::class, 'update']);

@@ -1047,4 +1047,98 @@ class DriverVehicleTest extends TestCase
         $this->assertDatabaseMissing('orders', ['id' => $order->id]);
         $this->assertDatabaseMissing('order_items', ['order_id' => $order->id]);
     }
+
+    public function test_can_fetch_driver_dashboard_stats()
+    {
+        $driverUser = User::create([
+            'name' => 'Sarah Driver',
+            'email' => 'sarahdriver@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700111222',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-7777',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Central Kampala',
+            'description' => 'Kampala Central Region',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Supermarket',
+            'email' => 'acme@example.com',
+            'contact_person' => 'John Doe',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 12 Kampala Rd',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Kampala Main Store',
+            'code' => 'KLA-MNS',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-9999',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 50000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        $product = \App\Models\Product::create([
+            'name' => 'White Eggs',
+            'code' => 'EGG-WHT',
+            'category' => 'eggs',
+            'unit_of_measure' => 'trays',
+            'default_unit_price' => 10000,
+        ]);
+
+        \App\Models\OrderItem::create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 20,
+            'unit_price' => 10000,
+            'line_total' => 200000,
+        ]);
+
+        $delivery = \App\Models\Delivery::create([
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'assigned_by' => $this->user->id,
+            'status' => 'assigned',
+            'dispatched_at' => now(),
+        ]);
+
+        $response = $this->actingAs($driverUser, 'sanctum')
+            ->getJson('/api/v1/driver/dashboard');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.driver_name', 'Sarah Driver')
+            ->assertJsonPath('data.pending_orders_count', 1)
+            ->assertJsonPath('data.pending_crates_sum', 20)
+            ->assertJsonPath('data.vehicle.plate', 'UBL 482Y');
+    }
 }
