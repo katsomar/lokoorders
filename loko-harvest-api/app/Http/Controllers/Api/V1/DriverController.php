@@ -66,9 +66,12 @@ class DriverController extends Controller
             'fuel_level' => $vehicle ? $vehicle->fuel_level : 0,
         ];
 
+        $avatar = $driver->avatar_path ? (filter_var($driver->avatar_path, FILTER_VALIDATE_URL) ? $driver->avatar_path : url('storage/' . $driver->avatar_path)) : null;
+
         return $this->success([
             'driver_id' => $driver->id,
             'driver_name' => $driver->full_name,
+            'avatar' => $avatar,
             'rating' => $rating,
             'completed_today' => $completedToday,
             'total_today' => $totalToday,

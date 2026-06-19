@@ -58,6 +58,7 @@ export default function DriverDashboard() {
   interface DashboardStats {
     driver_id: string;
     driver_name: string;
+    avatar: string | null;
     rating: number;
     completed_today: number;
     total_today: number;
@@ -113,8 +114,12 @@ export default function DriverDashboard() {
 
         <div className="flex justify-between items-center mb-6 relative z-10">
           <div className="flex items-center gap-3.5">
-            <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-brand-yellow font-black text-xl font-heading shadow-inner">
-              {stats ? stats.driver_name.charAt(0) : (user?.name?.charAt(0) || "M")}
+            <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-brand-yellow font-black text-xl font-heading shadow-inner overflow-hidden">
+              {stats?.avatar ? (
+                <img src={stats.avatar} alt={stats.driver_name} className="h-full w-full object-cover" />
+              ) : (
+                stats ? stats.driver_name.charAt(0) : (user?.name?.charAt(0) || "M")
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
