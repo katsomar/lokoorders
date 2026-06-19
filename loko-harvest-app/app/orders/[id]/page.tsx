@@ -40,6 +40,10 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isOverrideModalOpen, setIsOverrideModalOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [overrideErrorMessage, setOverrideErrorMessage] = useState("");
+  const [pendingStatusToRetry, setPendingStatusToRetry] = useState("");
 
   const fetchOrderDetails = async () => {
     setIsLoading(true);
@@ -101,7 +105,40 @@ export default function OrderDetailPage() {
       });
       await fetchOrderDetails();
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to update order status.");
+      const errMsg = err.response?.data?.message || "";
+      if (err.response?.status === 422 && errMsg.includes("Insufficient stock") && errMsg.includes("override reason required")) {
+        setOverrideErrorMessage(errMsg);
+        setPendingStatusToRetry(nextStatus);
+        setIsOverrideModalOpen(true);
+      } else {
+        alert(errMsg || "Failed to update order status.");
+      }
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const handleOverrideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!overrideReason.trim()) {
+      alert("Please provide a reason for the override.");
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+    setIsOverrideModalOpen(false);
+    try {
+      await api.post(`/orders/${orderId}/status`, {
+        status: pendingStatusToRetry,
+        admin_override_reason: overrideReason,
+        notes: `Advanced order stage to ${pendingStatusToRetry?.replace(/_/g, ' ')} with admin override. Reason: ${overrideReason}`
+      });
+      setOverrideReason("");
+      setOverrideErrorMessage("");
+      setPendingStatusToRetry("");
+      await fetchOrderDetails();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update order status with override.");
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -479,6 +516,66 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {isOverrideModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-brand-sage/40 shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-3 text-amber-600">
+                <div className="h-10 w-10 rounded-full bg-amber-50 flex items-center justify-center border border-amber-200">
+                  <AlertTriangle size={20} />
+                </div>
+                <h3 className="font-heading font-black text-base text-brand-forest">Stock Shortage Detected</h3>
+              </div>
+              
+              <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100/80">
+                <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                  {overrideErrorMessage}
+                </p>
+              </div>
+
+              <form onSubmit={handleOverrideSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="override-reason" className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider block">
+                    Admin Override Reason <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="override-reason"
+                    rows={3}
+                    className="w-full text-xs p-3 rounded-xl border border-brand-sage/60 focus:outline-none focus:ring-2 focus:ring-brand-forest/20 focus:border-brand-forest bg-white placeholder-gray-400 font-medium resize-none text-gray-800"
+                    placeholder="Provide justification for proceeding with negative/override stock..."
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsOverrideModalOpen(false);
+                      setOverrideReason("");
+                      setOverrideErrorMessage("");
+                      setPendingStatusToRetry("");
+                    }}
+                    className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="h-9.5 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs"
+                  >
+                    Confirm Override
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
