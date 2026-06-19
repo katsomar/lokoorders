@@ -786,6 +786,12 @@ class DriverVehicleTest extends TestCase
             ]);
 
         $response->assertStatus(201);
+        $orderId = $response->json('data.id');
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$orderId}/status", [
+                'status' => 'processing',
+            ])->assertStatus(200);
+
         $this->assertDatabaseHas('sales_store_stock', [
             'sales_store_id' => $salesStore->id,
             'product_id' => $eggs->id,
@@ -819,6 +825,12 @@ class DriverVehicleTest extends TestCase
             ]);
 
         $response->assertStatus(201);
+        $orderId = $response->json('data.id');
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/orders/{$orderId}/status", [
+                'status' => 'processing',
+            ])->assertStatus(200);
+
         $this->assertDatabaseHas('sales_store_stock', [
             'sales_store_id' => $salesStore->id,
             'product_id' => $eggs->id,
@@ -893,7 +905,7 @@ class DriverVehicleTest extends TestCase
             'required_delivery_date' => '2026-06-20',
             'urgency' => 'normal',
             'total_amount' => 150000, // 10 trays * 15000
-            'status' => 'pending',
+            'status' => 'processing',
             'created_by' => $this->user->id,
         ]);
 
@@ -998,7 +1010,7 @@ class DriverVehicleTest extends TestCase
             'required_delivery_date' => '2026-06-20',
             'urgency' => 'normal',
             'total_amount' => 150000,
-            'status' => 'pending',
+            'status' => 'processing',
             'created_by' => $this->user->id,
         ]);
 
