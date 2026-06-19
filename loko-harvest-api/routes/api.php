@@ -46,6 +46,10 @@ Route::prefix('v1')->group(function () {
         // Payments
         Route::get('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'index']);
         Route::post('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'store']);
+
+        // Invoices
+        Route::get('/invoices', [App\Http\Controllers\Api\V1\InvoiceController::class, 'index']);
+        Route::get('/invoices/{id}', [App\Http\Controllers\Api\V1\InvoiceController::class, 'show']);
         
         // Customer Accounts
         Route::get('/accounts/summary', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'summary']);
