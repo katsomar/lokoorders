@@ -94,6 +94,17 @@ export default function DriverDashboard() {
       supervisor_name: string;
     };
     assigned_route: AssignedDelivery[];
+    performance: {
+      fulfillment_rate: number;
+      fulfillment_trend: string;
+      fuel_economy: number;
+      fuel_efficiency: number;
+      quality_rate: number;
+      damaged_crates_count: number;
+      photo_compliance_rate: number;
+      composite_score: number;
+      league_class: string;
+    };
   }
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -330,32 +341,68 @@ export default function DriverDashboard() {
                     </h4>
                     <p className="text-[10px] text-gray-400 mt-0.5">System performance rating and averages</p>
                   </div>
-                  <Badge className="bg-green-600 text-white font-bold text-[9px] uppercase border-none">Gold Class</Badge>
+                  <Badge className={
+                    stats?.performance?.league_class === "Elite" ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-brand-forest font-black text-[9px] uppercase border-none" :
+                    stats?.performance?.league_class === "Silver" ? "bg-slate-400 text-white font-bold text-[9px] uppercase border-none" :
+                    stats?.performance?.league_class === "Bronze" ? "bg-amber-700 text-white font-bold text-[9px] uppercase border-none" :
+                    "bg-green-600 text-white font-bold text-[9px] uppercase border-none"
+                  }>
+                    {stats ? `${stats.performance.league_class} Class` : "Gold Class"}
+                  </Badge>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3.5 text-xs">
+                  {/* On-Time Fulfillment */}
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[9px] text-gray-400 font-bold uppercase">On-Time Fulfillment</p>
                     <p className="text-lg font-black text-brand-forest mt-0.5 flex items-center gap-1 font-heading">
-                      98.6%
-                      <span className="text-[10px] text-green-600 font-bold flex items-center gap-0.5"><TrendingUp size={10} />+1.2%</span>
+                      {stats ? `${stats.performance.fulfillment_rate}%` : "98.6%"}
+                      <span className={`text-[10px] font-bold flex items-center gap-0.5 ${
+                        !(stats?.performance?.fulfillment_trend || "+1.2%").startsWith("-") ? "text-green-600" : "text-red-500"
+                      }`}>
+                        {!(stats?.performance?.fulfillment_trend || "+1.2%").startsWith("-") ? <TrendingUp size={10} /> : <span className="scale-y-[-1]"><TrendingUp size={10} /></span>}
+                        {stats?.performance?.fulfillment_trend || "+1.2%"}
+                      </span>
                     </p>
                   </div>
+
+                  {/* Fuel Economy */}
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[9px] text-gray-400 font-bold uppercase">Average Fuel Economy</p>
                     <p className="text-lg font-black text-brand-forest mt-0.5 flex items-center gap-1 font-heading">
-                      12.4 km/L
+                      {stats ? `${stats.performance.fuel_economy} km/L` : "12.4 km/L"}
                       <Fuel size={12} className="text-brand-mid" />
                     </p>
                   </div>
+
+                  {/* Photo Proof Compliance */}
+                  <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 col-span-2">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Photo Proof Compliance</p>
+                        <p className="text-xs font-extrabold text-gray-700 mt-0.5">
+                          Fulfillment photo verification rate
+                        </p>
+                      </div>
+                      <div className="h-7 w-7 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 font-black text-[10px]">
+                        {stats ? `${stats.performance.photo_compliance_rate}%` : "98.0%"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fulfillment Status Quality */}
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100 col-span-2">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="text-[9px] text-gray-400 font-bold uppercase">Fulfillment Status Quality</p>
-                        <p className="text-xs font-extrabold text-gray-700 mt-0.5">Zero damaged eggs reported this month!</p>
+                        <p className="text-xs font-extrabold text-gray-700 mt-0.5">
+                          {stats 
+                            ? (stats.performance.damaged_crates_count === 0 ? "Zero damaged crates reported!" : `Only ${stats.performance.damaged_crates_count} damaged crates reported.`)
+                            : "Zero damaged eggs reported this month!"}
+                        </p>
                       </div>
                       <div className="h-7 w-7 rounded-full bg-green-100 flex items-center justify-center text-green-600 font-black text-[10px]">
-                        100%
+                        {stats ? `${stats.performance.quality_rate}%` : "100%"}
                       </div>
                     </div>
                   </div>

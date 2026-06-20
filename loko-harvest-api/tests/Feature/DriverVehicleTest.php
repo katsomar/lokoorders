@@ -1142,7 +1142,21 @@ class DriverVehicleTest extends TestCase
             ->assertJsonPath('data.pending_orders_count', 1)
             ->assertJsonPath('data.pending_crates_sum', 20)
             ->assertJsonPath('data.vehicle.plate', 'UBL 482Y')
-            ->assertJsonStructure(['data' => ['avatar', 'assigned_route']])
+            ->assertJsonStructure(['data' => [
+                'avatar', 
+                'assigned_route', 
+                'performance' => [
+                    'fulfillment_rate',
+                    'fulfillment_trend',
+                    'fuel_economy',
+                    'fuel_efficiency',
+                    'quality_rate',
+                    'damaged_crates_count',
+                    'photo_compliance_rate',
+                    'composite_score',
+                    'league_class'
+                ]
+            ]])
             ->assertJsonCount(1, 'data.assigned_route')
             ->assertJsonPath('data.assigned_route.0.order', 'LHO-2026-9999')
             ->assertJsonPath('data.assigned_route.0.customer', 'Acme Supermarket')
