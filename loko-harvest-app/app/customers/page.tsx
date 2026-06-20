@@ -50,6 +50,8 @@ interface Branch {
   total_invoiced: number;
   total_paid: number;
   parent_id?: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface Customer {
@@ -69,6 +71,8 @@ interface Customer {
   logoColor?: string;
   logoLetter?: string;
   logo_url?: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export default function CustomersPage() {
@@ -163,6 +167,8 @@ export default function CustomersPage() {
       total_invoiced: parseFloat(c.account?.total_invoiced || 0),
       total_paid: parseFloat(c.account?.total_paid || 0),
       parent_id: c.parent_id || undefined,
+      latitude: c.latitude ? parseFloat(c.latitude) : null,
+      longitude: c.longitude ? parseFloat(c.longitude) : null,
     });
 
     dbCustomers.forEach(c => {
@@ -210,6 +216,8 @@ export default function CustomersPage() {
           total_invoiced: parseFloat(c.account?.total_invoiced || 0) + branches.reduce((acc, br) => acc + br.total_invoiced, 0),
           total_paid: parseFloat(c.account?.total_paid || 0) + branches.reduce((acc, br) => acc + br.total_paid, 0),
           balance: parseFloat(c.account?.current_balance || 0) + branches.reduce((acc, br) => acc + br.balance, 0),
+          latitude: c.latitude ? parseFloat(c.latitude) : null,
+          longitude: c.longitude ? parseFloat(c.longitude) : null,
         });
       } else {
         // Standalone
@@ -229,6 +237,8 @@ export default function CustomersPage() {
           balance: parseFloat(c.account?.current_balance || 0),
           total_invoiced: parseFloat(c.account?.total_invoiced || 0),
           total_paid: parseFloat(c.account?.total_paid || 0),
+          latitude: c.latitude ? parseFloat(c.latitude) : null,
+          longitude: c.longitude ? parseFloat(c.longitude) : null,
         });
       }
     });
@@ -623,6 +633,20 @@ export default function CustomersPage() {
                           </span>
                           <span className="text-gray-300 hidden sm:inline">|</span>
                           <span>Contact: <strong className="text-gray-700">{customer.contact_person}</strong> ({customer.phone})</span>
+                          <span className="text-gray-300 hidden sm:inline">|</span>
+                          <span className="flex items-center gap-1">
+                            {customer.latitude && customer.longitude ? (
+                              <span className="text-green-700 bg-green-50 border border-green-200/50 px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                Map Pin Active
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded text-[10px] font-extrabold flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                No Map Pin
+                              </span>
+                            )}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -703,6 +727,7 @@ export default function CustomersPage() {
                           <TableRow className="hover:bg-transparent">
                             <TableHead className="text-brand-forest font-extrabold pl-8 text-[11px]">Branch Location Name</TableHead>
                             <TableHead className="text-brand-forest font-extrabold text-[11px]">Delivery Zone</TableHead>
+                            <TableHead className="text-brand-forest font-extrabold text-[11px]">Map Pin</TableHead>
                             <TableHead className="text-brand-forest font-extrabold text-[11px]">Contact Person</TableHead>
                             <TableHead className="text-right text-brand-forest font-extrabold text-[11px]">Outstanding Balance</TableHead>
                             <TableHead className="text-right text-brand-forest font-extrabold text-[11px]">Credit Limit</TableHead>
@@ -731,6 +756,19 @@ export default function CustomersPage() {
                                   <MapPin size={10} className="text-brand-mid" />
                                   {branch.zone}
                                 </div>
+                              </TableCell>
+                              <TableCell>
+                                {branch.latitude && branch.longitude ? (
+                                  <span className="text-green-700 bg-green-50 border border-green-200/50 px-1.5 py-0.5 rounded text-[10px] font-extrabold inline-flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 bg-amber-50 border border-amber-200/50 px-1.5 py-0.5 rounded text-[10px] font-extrabold inline-flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                    Missing
+                                  </span>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <div className="text-[11px]">
