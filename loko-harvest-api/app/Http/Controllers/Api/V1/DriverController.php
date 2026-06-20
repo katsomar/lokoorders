@@ -54,9 +54,6 @@ class DriverController extends Controller
         // 4. Total today = completed today + pending
         $totalToday = $completedToday + $pendingOrdersCount;
 
-        // 5. Rating
-        $rating = 4.5 + (abs(crc32($driver->id)) % 51) / 100;
-
         // 6. Vehicle specs
         $vehicle = $driver->vehicle;
         $latestDelivery = $pendingDeliveries->first();
@@ -206,6 +203,10 @@ class DriverController extends Controller
 
         // Composite Performance score & rank class
         $compositeScore = ($fulfillmentRate * 0.40) + ($qualityRate * 0.40) + ($fuelEfficiency * 0.20);
+        
+        // Calculate dynamic driver rating from the performance score (mapped 0-100% to 1.0-5.0 scale)
+        $rating = 1.0 + ($compositeScore / 100.0) * 4.0;
+
         if ($compositeScore >= 95) {
             $leagueClass = 'Elite';
         } elseif ($compositeScore >= 85) {
