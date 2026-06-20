@@ -38,7 +38,7 @@ class DriverController extends Controller
         // 2. Pending deliveries (assigned or in_transit)
         $pendingDeliveries = \App\Models\Delivery::where('driver_id', $driver->id)
             ->whereIn('status', ['assigned', 'in_transit'])
-            ->with(['order.customer.zone', 'order.items'])
+            ->with(['order.customer.zone', 'order.items', 'assignedBy'])
             ->get();
 
         $pendingOrdersCount = $pendingDeliveries->count();
@@ -59,11 +59,15 @@ class DriverController extends Controller
 
         // 6. Vehicle specs
         $vehicle = $driver->vehicle;
+        $latestDelivery = $pendingDeliveries->first();
+        $supervisorName = $latestDelivery && $latestDelivery->assignedBy ? $latestDelivery->assignedBy->name : 'HQ Supervisor';
+        
         $vehicleSpecs = [
             'plate' => $vehicle ? $vehicle->registration_number : 'N/A',
             'make_model' => $vehicle ? ($vehicle->make . ' ' . $vehicle->model) : 'N/A',
             'max_capacity' => $vehicle ? $vehicle->max_crates_capacity : 300,
             'fuel_level' => $vehicle ? $vehicle->fuel_level : 0,
+            'supervisor_name' => $supervisorName,
         ];
 
         $avatar = $driver->avatar_path ? (filter_var($driver->avatar_path, FILTER_VALIDATE_URL) ? $driver->avatar_path : url('storage/' . $driver->avatar_path)) : null;

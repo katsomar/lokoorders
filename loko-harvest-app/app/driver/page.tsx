@@ -79,6 +79,7 @@ export default function DriverDashboard() {
       make_model: string;
       max_capacity: number;
       fuel_level: number;
+      supervisor_name: string;
     };
     assigned_route: AssignedDelivery[];
   }
@@ -485,7 +486,7 @@ export default function DriverDashboard() {
                 <ShieldCheck className="text-green-600 shrink-0" size={20} />
                 <div>
                   <h4 className="font-extrabold text-brand-forest text-[11px]">Cargo Gatepass Verified</h4>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Verified & Sealed at Depot Gate by Emma Supervisor.</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">Verified & Sealed at Depot Gate by {stats ? stats.vehicle.supervisor_name : "Emma Supervisor"}.</p>
                 </div>
               </div>
             </div>

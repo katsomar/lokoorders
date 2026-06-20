@@ -12,4 +12,5 @@ class Delivery extends Model
     public function order() { return $this->belongsTo(Order::class); }
     public function driver() { return $this->belongsTo(Driver::class); }
     public function proofs() { return $this->hasMany(DeliveryProof::class); }
+    public function assignedBy() { return $this->belongsTo(User::class, 'assigned_by'); }
 }
