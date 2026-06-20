@@ -69,6 +69,21 @@ export default function DriversPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeDirectoryTab, setActiveDirectoryTab] = useState<"drivers" | "vehicles">("drivers");
 
+  // Vehicle Logs state
+  const [vehicleLogs, setVehicleLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  
+  // Refuel Modal form states
+  const [showRefuelModal, setShowRefuelModal] = useState(false);
+  const [refuelVehicleId, setRefuelVehicleId] = useState("");
+  const [refuelDriverId, setRefuelDriverId] = useState("");
+  const [refuelCustomers, setRefuelCustomers] = useState<string[]>([]);
+  const [refuelAddedFuel, setRefuelAddedFuel] = useState("");
+  const [refuelPrice, setRefuelPrice] = useState("5500");
+  const [refuelNotes, setRefuelNotes] = useState("");
+  const [isSubmittingRefuel, setIsSubmittingRefuel] = useState(false);
+
   // Shift Logs Drawer State
   const [selectedDriverForLogs, setSelectedDriverForLogs] = useState<any | null>(null);
   const [driverShifts, setDriverShifts] = useState<any[]>([]);
@@ -132,15 +147,26 @@ export default function DriversPage() {
   const [editDriverAvatarPreview, setEditDriverAvatarPreview] = useState<string | null>(null);
   const [editDriverLicensePreview, setEditDriverLicensePreview] = useState<string | null>(null);
 
+  const fetchCustomers = async () => {
+    try {
+      const res = await api.get("/customers");
+      setCustomers(res.data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch customer list:", err);
+    }
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [driversRes, vehiclesRes] = await Promise.all([
+      const [driversRes, vehiclesRes, logsRes] = await Promise.all([
         api.get("/drivers"),
-        api.get("/vehicles")
+        api.get("/vehicles"),
+        api.get("/vehicle-logs")
       ]);
       setDrivers(driversRes.data.data || []);
       setVehicles(vehiclesRes.data.data || []);
+      setVehicleLogs(logsRes.data.data || []);
     } catch (err) {
       console.error("Failed to fetch drivers or vehicles registry details:", err);
     } finally {
@@ -150,7 +176,49 @@ export default function DriversPage() {
 
   useEffect(() => {
     fetchData();
+    fetchCustomers();
   }, []);
+
+  const handleSaveRefuel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refuelVehicleId || !refuelAddedFuel || !refuelPrice) {
+      alert("Vehicle, fuel quantity, and fuel price per liter are required.");
+      return;
+    }
+
+    setIsSubmittingRefuel(true);
+    try {
+      const selectedCustomers = customers
+        .filter(c => refuelCustomers.includes(c.id))
+        .map(c => c.name);
+      
+      const destination = selectedCustomers.length > 0 ? selectedCustomers.join(", ") : "Fuel Depot Replenish";
+
+      await api.post("/vehicle-logs", {
+        vehicle_id: refuelVehicleId,
+        driver_id: refuelDriverId || null,
+        log_type: "refuel",
+        destination: destination,
+        added_fuel: parseFloat(refuelAddedFuel),
+        fuel_price_per_liter: parseFloat(refuelPrice),
+        notes: refuelNotes || null,
+      });
+
+      alert("Refueling logged successfully!");
+      setRefuelVehicleId("");
+      setRefuelDriverId("");
+      setRefuelCustomers([]);
+      setRefuelAddedFuel("");
+      setRefuelNotes("");
+      setShowRefuelModal(false);
+      await fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to log refueling.");
+    } finally {
+      setIsSubmittingRefuel(false);
+    }
+  };
 
   useEffect(() => {
     if (editDriverAvatarFile) {
@@ -658,113 +726,216 @@ export default function DriversPage() {
         ) : (
 
           /* VIEW B: VEHICLES FLEET REGISTRY */
-          filteredVehicles.length === 0 ? (
-            <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/50 p-12 text-center text-gray-500 font-body">
-              No vehicles found matching the search criteria.
+          <div className="space-y-6">
+            
+            {/* Header/Controls for Fleet registry tab */}
+            <div className="flex justify-between items-center bg-white p-4.5 rounded-2xl border border-brand-sage/50 shadow-xs mb-1">
+              <div>
+                <h3 className="text-sm font-black text-brand-forest font-heading uppercase tracking-wider">Operational Vehicle Fleet</h3>
+                <p className="text-[10px] text-gray-400 font-medium mt-0.5">Manage and track fleet assets, fuel, and refills</p>
+              </div>
+              <Button
+                onClick={() => {
+                  setShowRefuelModal(true);
+                }}
+                className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-10 cursor-pointer shadow-sm shrink-0"
+              >
+                <Gauge size={15} />
+                Record Refueling
+              </Button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredVehicles.map((vehicle) => (
-                <Card key={vehicle.id} className="border-none shadow-sm hover:shadow-md transition-shadow group overflow-hidden bg-white rounded-2xl">
-                  <CardContent className="p-0">
-                    
-                    {/* Vehicle image header or fallback */}
-                    <div className="h-40 w-full bg-brand-sage/20 relative overflow-hidden flex items-center justify-center text-brand-forest border-b border-brand-sage/30">
-                      <VehicleImage src={vehicle.image} alt={`${vehicle.make} ${vehicle.model}`} />
-                    </div>
 
-                    {/* Premium top vehicle bar */}
-                    <div className="bg-brand-forest/5 p-5 border-b border-brand-sage/30 flex justify-between items-center">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Truck size={18} className="text-brand-mid" />
-                          <h3 className="font-heading font-black text-brand-forest text-base leading-tight">
-                            {vehicle.registration_number}
-                          </h3>
-                        </div>
-                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">{vehicle.make} • {vehicle.model}</p>
-                      </div>
-                      <Badge className={`font-bold text-[8px] uppercase tracking-wider px-2 py-0.5 border-none ${
-                        vehicle.status === "active" ? "bg-green-100 text-green-700" : "bg-amber-100 text-[#C47B00]"
-                      }`}>
-                        {vehicle.status}
-                      </Badge>
-                    </div>
-
-                    <div className="p-6 space-y-5 text-xs">
+            {filteredVehicles.length === 0 ? (
+              <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/50 p-12 text-center text-gray-500 font-body">
+                No vehicles found matching the search criteria.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredVehicles.map((vehicle) => (
+                  <Card key={vehicle.id} className="border-none shadow-sm hover:shadow-md transition-shadow group overflow-hidden bg-white rounded-2xl">
+                    <CardContent className="p-0">
                       
-                      {/* Fuel & Load capacity sliders */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Crate Capacity</span>
-                            <span className="font-mono font-bold text-gray-700">{vehicle.max_crates_capacity}</span>
-                          </div>
-                          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-brand-mid h-full rounded-full" style={{ width: '70%' }} />
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fuel Level</span>
-                            <span className={`font-mono font-bold ${vehicle.fuel_level > 50 ? 'text-green-600' : 'text-amber-500'}`}>{vehicle.fuel_level}%</span>
-                          </div>
-                          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                            <div className={`h-full rounded-full ${vehicle.fuel_level > 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${vehicle.fuel_level}%` }} />
-                          </div>
-                        </div>
+                      {/* Vehicle image header or fallback */}
+                      <div className="h-40 w-full bg-brand-sage/20 relative overflow-hidden flex items-center justify-center text-brand-forest border-b border-brand-sage/30">
+                        <VehicleImage src={vehicle.image} alt={`${vehicle.make} ${vehicle.model}`} />
                       </div>
 
-                      {/* Shared Shift Driver mapping list */}
-                      <div className="bg-brand-sage/10 p-4 rounded-xl border border-brand-sage/40 space-y-2.5">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[9px] text-brand-forest font-black uppercase tracking-wider flex items-center gap-1">
-                            <UserCheck size={12} className="text-brand-mid" />
-                            Assigned Shift Drivers
-                          </span>
-                          <Badge className="bg-brand-forest text-white font-extrabold text-[8px] border-none px-1.5 rounded-md">
-                            {(vehicle.assigned_drivers || []).length} Drivers
-                          </Badge>
-                        </div>
-
-                        {(vehicle.assigned_drivers || []).length > 0 ? (
-                          <div className="space-y-1.5">
-                            {(vehicle.assigned_drivers || []).map((driverName: string) => (
-                              <div key={driverName} className="flex justify-between items-center text-[10px] text-gray-600 bg-white/70 px-2.5 py-1 rounded-md border border-brand-sage/20 font-bold">
-                                <span>{driverName}</span>
-                                <span className="text-[8px] text-green-600 font-extrabold flex items-center gap-0.5">
-                                  <span className="h-1 w-1 rounded-full bg-green-500" /> Active Shift
-                                </span>
-                              </div>
-                            ))}
-                            
-                            {(vehicle.assigned_drivers || []).length > 1 && (
-                              <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-1.5 flex items-center gap-1.5 text-[8px] text-[#A66000] font-bold">
-                                <AlertTriangle size={10} className="shrink-0" />
-                                <span>Shared shift rotation active for this vehicle!</span>
-                              </div>
-                            )}
+                      {/* Premium top vehicle bar */}
+                      <div className="bg-brand-forest/5 p-5 border-b border-brand-sage/30 flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Truck size={18} className="text-brand-mid" />
+                            <h3 className="font-heading font-black text-brand-forest text-base leading-tight">
+                              {vehicle.registration_number}
+                            </h3>
                           </div>
-                        ) : (
-                          <p className="text-[10px] text-gray-400 font-medium italic py-1">No driver assigned to this vehicle yet.</p>
-                        )}
+                          <p className="text-[10px] text-gray-500 font-bold uppercase mt-0.5">{vehicle.make} • {vehicle.model}</p>
+                        </div>
+                        <Badge className={`font-bold text-[8px] uppercase tracking-wider px-2 py-0.5 border-none ${
+                          vehicle.status === "active" ? "bg-green-100 text-green-700" : "bg-amber-100 text-[#C47B00]"
+                        }`}>
+                          {vehicle.status}
+                        </Badge>
                       </div>
 
-                    </div>
+                      <div className="p-6 space-y-5 text-xs">
+                        
+                        {/* Fuel & Load capacity sliders */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[9px] text-gray-400 font-bold tracking-wider uppercase">Crate Capacity</span>
+                              <span className="font-mono font-bold text-gray-700">{vehicle.max_crates_capacity}</span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                              <div className="bg-brand-mid h-full rounded-full" style={{ width: '70%' }} />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[9px] text-gray-400 font-bold tracking-wider uppercase">Fuel Level</span>
+                              <span className={`font-mono font-bold ${vehicle.fuel_level > 50 ? 'text-green-600' : 'text-amber-500'}`}>{vehicle.fuel_level}%</span>
+                            </div>
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${vehicle.fuel_level > 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${vehicle.fuel_level}%` }} />
+                            </div>
+                          </div>
+                        </div>
 
-                    <button 
-                      onClick={() => setSelectedVehicleForLogistics(vehicle)}
-                      className="w-full py-3.5 bg-brand-forest/5 text-brand-forest font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 group-hover:bg-brand-forest/10 transition-colors border-t border-brand-sage/30 cursor-pointer"
-                    >
-                      MANAGE VEHICLE LOGISTICS
-                      <ChevronRight size={12} className="text-brand-forest group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  </CardContent>
-                </Card>
-              ))}
+                        {/* Shared Shift Driver mapping list */}
+                        <div className="bg-brand-sage/10 p-4 rounded-xl border border-brand-sage/40 space-y-2.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] text-brand-forest font-black uppercase tracking-wider flex items-center gap-1">
+                              <UserCheck size={12} className="text-brand-mid" />
+                              Assigned Shift Drivers
+                            </span>
+                            <Badge className="bg-brand-forest text-white font-extrabold text-[8px] border-none px-1.5 rounded-md">
+                              {(vehicle.assigned_drivers || []).length} Drivers
+                            </Badge>
+                          </div>
+
+                          {(vehicle.assigned_drivers || []).length > 0 ? (
+                            <div className="space-y-1.5">
+                              {(vehicle.assigned_drivers || []).map((driverName: string) => (
+                                <div key={driverName} className="flex justify-between items-center text-[10px] text-gray-600 bg-white/70 px-2.5 py-1 rounded-md border border-brand-sage/20 font-bold">
+                                  <span>{driverName}</span>
+                                  <span className="text-[8px] text-green-600 font-extrabold flex items-center gap-0.5">
+                                    <span className="h-1 w-1 rounded-full bg-green-500" /> Active Shift
+                                  </span>
+                                </div>
+                              ))}
+                              
+                              {(vehicle.assigned_drivers || []).length > 1 && (
+                                <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-1.5 flex items-center gap-1.5 text-[8px] text-[#A66000] font-bold">
+                                  <AlertTriangle size={10} className="shrink-0" />
+                                  <span>Shared shift rotation active for this vehicle!</span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-gray-400 font-medium italic py-1">No driver assigned to this vehicle yet.</p>
+                          )}
+                        </div>
+
+                      </div>
+
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedVehicleForLogistics(vehicle)}
+                        className="w-full py-3.5 bg-brand-forest/5 text-brand-forest font-bold text-[10px] uppercase tracking-wider flex items-center justify-center gap-2 group-hover:bg-brand-forest/10 transition-colors border-t border-brand-sage/30 cursor-pointer"
+                      >
+                        MANAGE VEHICLE LOGISTICS
+                        <ChevronRight size={12} className="text-brand-forest group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* VEHICLE MOVEMENT & REFUELING LOGS TABLE */}
+            <div className="bg-white rounded-2xl border border-brand-sage/50 shadow-sm overflow-hidden mt-8">
+              <div className="px-6 py-5 border-b border-brand-sage/35 bg-brand-forest/5 flex justify-between items-center">
+                <div>
+                  <h3 className="font-heading font-black text-brand-forest text-sm uppercase tracking-wider">Vehicle Movement & Refueling Logs</h3>
+                  <p className="text-[10px] text-gray-400 font-medium mt-0.5">Historical ledger of vehicle trips, fuel replenishments, and logs</p>
+                </div>
+                <Badge className="bg-brand-forest text-white font-black text-[9px] border-none px-2 py-0.5 rounded-md">
+                  {vehicleLogs.length} Records
+                </Badge>
+              </div>
+
+              {vehicleLogs.length === 0 ? (
+                <div className="p-8 text-center text-gray-400 text-xs font-semibold">
+                  No logs recorded yet. Use "Record Refueling" to log a refuel.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-brand-sage/10 text-brand-forest font-black border-b border-brand-sage/30 uppercase text-[9px] tracking-wider">
+                        <th className="p-3.5 pl-6">Vehicle</th>
+                        <th className="p-3.5">Log Type</th>
+                        <th className="p-3.5">Driver</th>
+                        <th className="p-3.5">Journeys / Destination</th>
+                        <th className="p-3.5 text-center">Duration</th>
+                        <th className="p-3.5 text-center">Initial Fuel</th>
+                        <th className="p-3.5 text-center">Added Fuel</th>
+                        <th className="p-3.5 text-right">Unit Price</th>
+                        <th className="p-3.5 text-right pr-6">Total Spent</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-brand-sage/20 font-medium text-gray-700">
+                      {vehicleLogs.map((log) => {
+                        const formattedDate = new Date(log.logged_at).toLocaleDateString("en-US", {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        });
+                        return (
+                          <tr key={log.id} className="hover:bg-brand-sage/5 transition-colors">
+                            <td className="p-3.5 pl-6">
+                              <span className="font-extrabold text-brand-forest block">{log.vehicle_registration}</span>
+                              <span className="text-[9px] text-gray-400 font-semibold">{formattedDate}</span>
+                            </td>
+                            <td className="p-3.5">
+                              <Badge className={`font-black text-[8px] uppercase border-none px-2 py-0.5 ${
+                                log.log_type === 'refuel' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {log.log_type}
+                              </Badge>
+                            </td>
+                            <td className="p-3.5 font-bold text-gray-800">{log.driver_name}</td>
+                            <td className="p-3.5 max-w-[200px] truncate" title={log.destination || "N/A"}>
+                              {log.destination || <span className="text-gray-300">N/A</span>}
+                            </td>
+                            <td className="p-3.5 text-center">
+                              {log.duration_minutes ? `${log.duration_minutes} mins` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="p-3.5 text-center font-mono font-bold">
+                              {log.initial_fuel}%
+                            </td>
+                            <td className="p-3.5 text-center font-mono font-black text-brand-forest">
+                              {log.added_fuel > 0 ? `+${log.added_fuel} L` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-bold">
+                              {log.fuel_price_per_liter > 0 ? `UGX ${Math.round(log.fuel_price_per_liter).toLocaleString()}` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="p-3.5 text-right font-mono font-black pr-6 text-brand-forest">
+                              {log.total_spent > 0 ? `UGX ${Math.round(log.total_spent).toLocaleString()}` : <span className="text-gray-300">—</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )
 
+          </div>
         )}
 
         {/* Slide-over Side Drawer Overlay for Driver Shift Logs */}
@@ -1591,6 +1762,167 @@ export default function DriversPage() {
                   >
                     {isSubmittingVehicle && <Loader2 className="animate-spin" size={13} />}
                     Register Vehicle
+                  </Button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        )}
+
+        {/* RECORD REFUELING MODAL OVERLAY */}
+        {showRefuelModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-8">
+              
+              {/* Modal Header */}
+              <div className="bg-brand-forest px-6 py-4 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="font-heading font-black text-base text-brand-yellow">Record Vehicle Refueling</h3>
+                  <p className="text-[11px] text-brand-sage font-medium mt-0.5">Replenish vehicle tank capacity and log cost parameters</p>
+                </div>
+                <Button 
+                  onClick={() => setShowRefuelModal(false)} 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-8 w-8 text-brand-sage hover:text-white hover:bg-white/10 rounded-lg cursor-pointer"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleSaveRefuel} className="p-6 space-y-5">
+                <div className="space-y-4 text-xs">
+                  
+                  {/* Vehicle Selector */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Vehicle *</label>
+                    <select
+                      required
+                      value={refuelVehicleId}
+                      onChange={(e) => setRefuelVehicleId(e.target.value)}
+                      className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="">-- Choose Truck --</option>
+                      {vehicles.map(v => (
+                        <option key={v.id} value={v.id}>{v.registration_number} • {v.make} {v.model}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Driver Selector */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Driver (Who is refueling)</label>
+                    <select
+                      value={refuelDriverId}
+                      onChange={(e) => setRefuelDriverId(e.target.value)}
+                      className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    >
+                      <option value="">-- Choose Driver --</option>
+                      {drivers.map(d => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Customers / Journeys Multi-Select */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Journey Destination Customers</label>
+                    <div className="border border-brand-sage/50 rounded-xl p-3 bg-gray-50/50 max-h-32 overflow-y-auto space-y-2">
+                      {customers.map(c => {
+                        const isChecked = refuelCustomers.includes(c.id);
+                        return (
+                          <label key={c.id} className="flex items-center gap-2 font-bold text-gray-700 cursor-pointer hover:text-brand-forest">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setRefuelCustomers(refuelCustomers.filter(id => id !== c.id));
+                                } else {
+                                  setRefuelCustomers([...refuelCustomers, c.id]);
+                                }
+                              }}
+                              className="accent-brand-forest h-3.5 w-3.5 rounded border-gray-300"
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[9px] text-gray-400 mt-1">Select the customers this truck is refueling for.</p>
+                  </div>
+
+                  {/* Refueled added fuel liters & price */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Liters Added (Qties) *</label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0.1"
+                        placeholder="e.g. 30"
+                        required
+                        value={refuelAddedFuel}
+                        onChange={(e) => setRefuelAddedFuel(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fuel Price per Liter (UGX) *</label>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="1"
+                        placeholder="e.g. 5500"
+                        required
+                        value={refuelPrice}
+                        onChange={(e) => setRefuelPrice(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Auto Total Cost calculation indicator */}
+                  {refuelAddedFuel && refuelPrice && (
+                    <div className="bg-brand-sage/10 p-3 rounded-xl border border-brand-sage/35 text-center">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase">Estimated Refuel Cost</p>
+                      <p className="text-lg font-black text-brand-forest font-heading mt-0.5">
+                        UGX {(parseFloat(refuelAddedFuel) * parseFloat(refuelPrice)).toLocaleString("en-US")}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Refueling Notes</label>
+                    <textarea
+                      placeholder="e.g. Shell Uganda refueling station, receipt #1234"
+                      value={refuelNotes}
+                      onChange={(e) => setRefuelNotes(e.target.value)}
+                      className="w-full h-14 p-2.5 text-xs font-semibold rounded-xl border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
+                    />
+                  </div>
+
+                </div>
+
+                {/* Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                  <Button 
+                    type="button" 
+                    onClick={() => setShowRefuelModal(false)} 
+                    className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmittingRefuel}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-9.5 px-4 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSubmittingRefuel && <Loader2 className="animate-spin" size={13} />}
+                    Record Refuel
                   </Button>
                 </div>
               </form>

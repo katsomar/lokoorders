@@ -102,6 +102,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/vehicles', [App\Http\Controllers\Api\V1\VehicleController::class, 'store']);
         Route::put('/vehicles/{id}/logistics', [App\Http\Controllers\Api\V1\VehicleController::class, 'updateLogistics']);
         Route::delete('/vehicles/{id}', [App\Http\Controllers\Api\V1\VehicleController::class, 'destroy']);
+        Route::get('/vehicle-logs', [App\Http\Controllers\Api\V1\VehicleLogController::class, 'index']);
+        Route::post('/vehicle-logs', [App\Http\Controllers\Api\V1\VehicleLogController::class, 'store']);
 
         // Other module routes will go here
     });

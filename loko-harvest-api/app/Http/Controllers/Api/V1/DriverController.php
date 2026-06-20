@@ -60,6 +60,7 @@ class DriverController extends Controller
         $supervisorName = $latestDelivery && $latestDelivery->assignedBy ? $latestDelivery->assignedBy->name : 'HQ Supervisor';
         
         $vehicleSpecs = [
+            'id' => $vehicle ? $vehicle->id : null,
             'plate' => $vehicle ? $vehicle->registration_number : 'N/A',
             'make_model' => $vehicle ? ($vehicle->make . ' ' . $vehicle->model) : 'N/A',
             'max_capacity' => $vehicle ? $vehicle->max_crates_capacity : 300,

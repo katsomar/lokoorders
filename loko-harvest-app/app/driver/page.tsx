@@ -87,6 +87,7 @@ export default function DriverDashboard() {
     pending_orders_count: number;
     pending_crates_sum: number;
     vehicle: {
+      id: string | null;
       plate: string;
       make_model: string;
       max_capacity: number;
@@ -132,6 +133,40 @@ export default function DriverDashboard() {
   const handleLogout = () => {
     clearAuth();
     router.push("/login");
+  };
+
+  const [newFuelLevel, setNewFuelLevel] = useState<number>(85);
+  const [isUpdatingFuel, setIsUpdatingFuel] = useState(false);
+
+  useEffect(() => {
+    if (stats?.vehicle) {
+      setNewFuelLevel(stats.vehicle.fuel_level);
+    }
+  }, [stats]);
+
+  const handleUpdateFuelLevel = async () => {
+    if (!stats?.vehicle?.id) {
+      alert("No vehicle associated with this driver to update.");
+      return;
+    }
+    setIsUpdatingFuel(true);
+    try {
+      const response = await api.put(`/vehicles/${stats.vehicle.id}/logistics`, {
+        fuel_level: newFuelLevel,
+      });
+      if (response.data?.success) {
+        alert("Fuel level recorded successfully!");
+        const statsRes = await api.get("/driver/dashboard");
+        if (statsRes.data?.success) {
+          setStats(statsRes.data.data);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to record fuel level:", error);
+      alert("Failed to record current fuel level. Please try again.");
+    } finally {
+      setIsUpdatingFuel(false);
+    }
   };
 
   const completionPercentage = stats
@@ -565,6 +600,30 @@ export default function DriverDashboard() {
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Tank Capacity</p>
                   <p className="font-black text-gray-800 text-sm mt-0.5">{fuelTankCapacity} Liters</p>
+                </div>
+              </div>
+
+              <div className="bg-brand-sage/5 p-3.5 rounded-xl border border-brand-sage/30 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Record Current Fuel Level</span>
+                  <span className="font-mono font-black text-xs text-brand-forest">{newFuelLevel}% ({((newFuelLevel / 100) * fuelTankCapacity).toFixed(1)} L)</span>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    value={newFuelLevel} 
+                    onChange={(e) => setNewFuelLevel(parseInt(e.target.value))}
+                    className="flex-1 accent-brand-forest h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                  />
+                  <Button 
+                    onClick={handleUpdateFuelLevel} 
+                    disabled={isUpdatingFuel}
+                    className="h-8 text-[10px] px-3 font-bold bg-brand-forest text-white rounded-lg cursor-pointer shrink-0"
+                  >
+                    {isUpdatingFuel ? "Saving..." : "Record"}
+                  </Button>
                 </div>
               </div>
 
