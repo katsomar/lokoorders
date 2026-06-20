@@ -45,6 +45,8 @@ class CustomerController extends Controller
             'credit_terms' => 'required|in:cash,7_days,14_days,30_days',
             'credit_limit' => 'required|numeric|min:0',
             'date_registered' => 'required|date',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
         ]);
 
         $validated['created_by'] = auth()->id();
@@ -251,6 +253,8 @@ class CustomerController extends Controller
             'credit_terms' => 'sometimes|required|in:cash,7_days,14_days,30_days',
             'credit_limit' => 'sometimes|required|numeric|min:0',
             'date_registered' => 'sometimes|required|date',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
         ]);
 
         $customer->update($validated);

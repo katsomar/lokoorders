@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { 
   Truck, 
   MapPin, 
@@ -31,9 +32,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import api from "@/lib/api";
 
+const DriverRouteMap = dynamic(() => import("@/components/DriverRouteMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-56 bg-brand-sage/10 rounded-2xl flex items-center justify-center animate-pulse text-xs text-gray-400">
+      Loading Route Map...
+    </div>
+  ),
+});
+
 const mockAssignedDeliveries = [
-  { id: "1", order: "LHO-0042", customer: "Shoprite Lugogo", zone: "Kampala Central", status: "pending", time: "10:00 AM", crates: 230 },
-  { id: "2", order: "LHO-0041", customer: "KFC Bukoto", zone: "Bukoto", status: "pending", time: "02:30 PM", crates: 60 },
+  { id: "1", order: "LHO-0042", customer: "Shoprite Lugogo", zone: "Kampala Central", status: "pending", time: "10:00 AM", crates: 230, latitude: null, longitude: null },
+  { id: "2", order: "LHO-0041", customer: "KFC Bukoto", zone: "Bukoto", status: "pending", time: "02:30 PM", crates: 60, latitude: null, longitude: null },
 ];
 
 const mockAlerts = [
@@ -63,6 +73,8 @@ export default function DriverDashboard() {
     status: string;
     time: string;
     crates: number;
+    latitude: number | null;
+    longitude: number | null;
   }
 
   interface DashboardStats {
@@ -502,7 +514,7 @@ export default function DriverDashboard() {
       {/* B. ROUTE MAP MODAL */}
       {showMapModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden border border-brand-sage shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden border border-brand-sage shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="bg-brand-forest text-white px-5 py-4 flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <Map className="text-brand-yellow" size={18} />
@@ -512,38 +524,8 @@ export default function DriverDashboard() {
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5 space-y-4 text-xs">
-              
-              {/* Mock map visual graphics */}
-              <div className="bg-brand-sage/10 border border-brand-sage rounded-2xl h-44 flex flex-col items-center justify-center text-center p-4 relative overflow-hidden shadow-inner">
-                {/* SVG mock map pins */}
-                <div className="absolute top-1/4 left-1/4 h-2 w-2 rounded-full bg-brand-forest ring-4 ring-brand-forest/20 animate-ping" />
-                <div className="absolute bottom-1/3 right-1/4 h-2 w-2 rounded-full bg-brand-yellow ring-4 ring-brand-yellow/20" />
-                
-                {/* Stylized route path */}
-                <svg className="absolute inset-0 h-full w-full pointer-events-none opacity-20" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M 50 40 Q 150 80 200 120 T 350 180" fill="none" stroke="#1B5E20" strokeWidth="4" strokeDasharray="6" />
-                </svg>
-
-                <MapPin size={28} className="text-brand-forest animate-bounce mb-2 z-10" />
-                <p className="font-black text-brand-forest text-[11px] z-10">Real-Time Routing Active</p>
-                <p className="text-[10px] text-gray-500 mt-0.5 z-10">Bypass Central route active (12 mins saved)</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  <span className="font-extrabold text-gray-700">Depot (HQ Center) ➔ Start</span>
-                </div>
-                <div className="flex items-center gap-2 pl-4 border-l border-gray-200 ml-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                  <span className="text-gray-500 font-semibold text-[10px]">Shoprite Lugogo ➔ Current</span>
-                </div>
-                <div className="flex items-center gap-2 pl-4 border-l border-gray-200 ml-1">
-                  <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />
-                  <span className="text-gray-400 font-semibold text-[10px]">KFC Bukoto ➔ Scheduled</span>
-                </div>
-              </div>
+            <div className="p-5 space-y-4 text-xs max-h-[70vh] overflow-y-auto">
+              <DriverRouteMap assignedRoute={stats?.assigned_route || []} />
             </div>
             <div className="bg-gray-50 px-5 py-3 flex justify-end">
               <Button onClick={() => setShowMapModal(false)} variant="primary" className="h-8 text-[11px] rounded-lg">

@@ -1087,6 +1087,8 @@ class DriverVehicleTest extends TestCase
             'credit_limit' => 0.00,
             'date_registered' => now()->toDateString(),
             'created_by' => $this->user->id,
+            'latitude' => 0.3476,
+            'longitude' => 32.5825,
         ]);
 
         $salesStore = \App\Models\SalesStore::create([
@@ -1144,6 +1146,8 @@ class DriverVehicleTest extends TestCase
             ->assertJsonCount(1, 'data.assigned_route')
             ->assertJsonPath('data.assigned_route.0.order', 'LHO-2026-9999')
             ->assertJsonPath('data.assigned_route.0.customer', 'Acme Supermarket')
-            ->assertJsonPath('data.assigned_route.0.crates', 20);
+            ->assertJsonPath('data.assigned_route.0.crates', 20)
+            ->assertJsonPath('data.assigned_route.0.latitude', 0.3476)
+            ->assertJsonPath('data.assigned_route.0.longitude', 32.5825);
     }
 }

@@ -85,6 +85,8 @@ class DriverController extends Controller
                 'status' => $delivery->status,
                 'time' => $delivery->dispatched_at ? \Illuminate\Support\Carbon::parse($delivery->dispatched_at)->format('g:i A') : 'N/A',
                 'crates' => $crates,
+                'latitude' => $delivery->order && $delivery->order->customer && $delivery->order->customer->latitude !== null ? (float)$delivery->order->customer->latitude : null,
+                'longitude' => $delivery->order && $delivery->order->customer && $delivery->order->customer->longitude !== null ? (float)$delivery->order->customer->longitude : null,
             ];
         });
 

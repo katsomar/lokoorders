@@ -2,6 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const MapPicker = dynamic(() => import("@/components/MapPicker"), {
+  ssr: false,
+  loading: () => <div className="h-64 bg-gray-50 flex items-center justify-center border border-brand-sage rounded-xl animate-pulse text-xs text-gray-400">Loading Map Component...</div>
+});
 import { 
   Plus, 
   Search, 
@@ -78,6 +84,8 @@ export default function CustomersPage() {
   // Add Customer modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
+  const [newLatitude, setNewLatitude] = useState<number | null>(null);
+  const [newLongitude, setNewLongitude] = useState<number | null>(null);
   const [newParentId, setNewParentId] = useState("");
   const [newContactPerson, setNewContactPerson] = useState("");
   const [newPhone, setNewPhone] = useState("");
@@ -92,6 +100,8 @@ export default function CustomersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
   const [editCustomerName, setEditCustomerName] = useState("");
+  const [editLatitude, setEditLatitude] = useState<number | null>(null);
+  const [editLongitude, setEditLongitude] = useState<number | null>(null);
   const [editParentId, setEditParentId] = useState("");
   const [editContactPerson, setEditContactPerson] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -243,7 +253,9 @@ export default function CustomersPage() {
         customer_type: newType,
         credit_terms: newCreditTerms,
         credit_limit: parseFloat(newCreditLimit) || 0,
-        date_registered: new Date().toISOString().split('T')[0]
+        date_registered: new Date().toISOString().split('T')[0],
+        latitude: newLatitude,
+        longitude: newLongitude,
       });
 
       alert("Customer registered successfully!");
@@ -255,6 +267,8 @@ export default function CustomersPage() {
       setNewPhone("");
       setNewEmail("");
       setNewAddress("");
+      setNewLatitude(null);
+      setNewLongitude(null);
       setNewType("supermarket");
       setNewCreditLimit("10000000");
       setNewCreditTerms("7_days");
@@ -287,6 +301,8 @@ export default function CustomersPage() {
       setEditType(dbItem.customer_type || "supermarket");
       setEditCreditLimit(dbItem.credit_limit ? dbItem.credit_limit.toString() : "0");
       setEditCreditTerms(dbItem.credit_terms || "7_days");
+      setEditLatitude(dbItem.latitude ? parseFloat(dbItem.latitude) : null);
+      setEditLongitude(dbItem.longitude ? parseFloat(dbItem.longitude) : null);
       setShowEditModal(true);
     }
   };
@@ -307,7 +323,9 @@ export default function CustomersPage() {
         delivery_zone_id: editZoneId,
         customer_type: editType,
         credit_terms: editCreditTerms,
-        credit_limit: parseFloat(editCreditLimit) || 0
+        credit_limit: parseFloat(editCreditLimit) || 0,
+        latitude: editLatitude,
+        longitude: editLongitude,
       });
 
       alert("Customer profile updated successfully!");
@@ -790,7 +808,7 @@ export default function CustomersPage() {
 
               {/* Form Content */}
               <form onSubmit={handleAddCustomerSubmit} className="p-6 space-y-5">
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Company / Customer Name *</label>
                     <Input 
@@ -901,6 +919,18 @@ export default function CustomersPage() {
                     />
                   </div>
 
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
+                    <MapPicker 
+                      lat={newLatitude}
+                      lng={newLongitude}
+                      onChange={(lat, lng) => {
+                        setNewLatitude(lat);
+                        setNewLongitude(lng);
+                      }}
+                    />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Credit Terms</label>
@@ -982,7 +1012,7 @@ export default function CustomersPage() {
 
               {/* Form Content */}
               <form onSubmit={handleEditCustomerSubmit} className="p-6 space-y-5">
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Company / Customer Name *</label>
                     <Input 
@@ -1090,6 +1120,18 @@ export default function CustomersPage() {
                       value={editAddress}
                       onChange={(e) => setEditAddress(e.target.value)}
                       className="h-9.5 text-xs rounded-xl border-brand-sage/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
+                    <MapPicker 
+                      lat={editLatitude}
+                      lng={editLongitude}
+                      onChange={(lat, lng) => {
+                        setEditLatitude(lat);
+                        setEditLongitude(lng);
+                      }}
                     />
                   </div>
 
