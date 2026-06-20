@@ -92,6 +92,9 @@ export default function DriverDashboard() {
       max_capacity: number;
       fuel_level: number;
       supervisor_name: string;
+      fuel_tank_capacity: number;
+      consumption_per_km: number;
+      added_fuel_per_shift: number;
     };
     assigned_route: AssignedDelivery[];
     performance: {
@@ -136,6 +139,14 @@ export default function DriverDashboard() {
       ? (stats.completed_today / stats.total_today) * 100
       : 0
     : 85;
+
+  const fuelTankCapacity = stats?.vehicle?.fuel_tank_capacity ?? 80;
+  const fuelLevel = stats?.vehicle?.fuel_level ?? 85;
+  const consumptionPerKm = stats?.vehicle?.consumption_per_km ?? 0.12;
+  const addedFuelPerShift = stats?.vehicle?.added_fuel_per_shift ?? 0;
+
+  const currentLiters = (fuelLevel / 100) * fuelTankCapacity;
+  const rangeLeftKm = consumptionPerKm > 0 ? (currentLiters / consumptionPerKm) : 0;
 
   return (
     <div className="min-h-screen bg-[#F4F6F5] flex flex-col font-body pb-24 text-gray-800">
@@ -370,7 +381,7 @@ export default function DriverDashboard() {
                   <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                     <p className="text-[9px] text-gray-400 font-bold uppercase">Average Fuel Economy</p>
                     <p className="text-lg font-black text-brand-forest mt-0.5 flex items-center gap-1 font-heading">
-                      {stats ? `${stats.performance.fuel_economy} km/L` : "12.4 km/L"}
+                      {stats ? `${stats.performance.fuel_economy.toFixed(2)} L/km` : "0.12 L/km"}
                       <Fuel size={12} className="text-brand-mid" />
                     </p>
                   </div>
@@ -535,9 +546,25 @@ export default function DriverDashboard() {
                 <div>
                   <p className="text-gray-400 font-bold text-[9px] uppercase">Fuel Level Status</p>
                   <p className="font-black text-green-600 text-sm mt-0.5 flex items-center gap-1">
-                    {stats ? stats.vehicle.fuel_level : 85}% Full
+                    {stats ? stats.vehicle.fuel_level : 85}% ({currentLiters.toFixed(1)} L)
                     <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
                   </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-bold text-[9px] uppercase">Consumption Rate</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">{consumptionPerKm.toFixed(2)} L/km</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-bold text-[9px] uppercase">Operational Range</p>
+                  <p className="font-black text-brand-forest text-sm mt-0.5">~{Math.round(rangeLeftKm)} km left</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-bold text-[9px] uppercase">Refueled Volume</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">+{addedFuelPerShift.toFixed(1)} L (shift)</p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-bold text-[9px] uppercase">Tank Capacity</p>
+                  <p className="font-black text-gray-800 text-sm mt-0.5">{fuelTankCapacity} Liters</p>
                 </div>
               </div>
 
@@ -572,7 +599,10 @@ export default function DriverDashboard() {
               </button>
             </div>
             <div className="p-5 space-y-4 text-xs max-h-[70vh] overflow-y-auto">
-              <DriverRouteMap assignedRoute={stats?.assigned_route || []} />
+              <DriverRouteMap 
+                assignedRoute={stats?.assigned_route || []} 
+                vehicleConsumption={stats?.vehicle?.consumption_per_km || 0.12}
+              />
             </div>
             <div className="bg-gray-50 px-5 py-3 flex justify-end">
               <Button onClick={() => setShowMapModal(false)} variant="primary" className="h-8 text-[11px] rounded-lg">

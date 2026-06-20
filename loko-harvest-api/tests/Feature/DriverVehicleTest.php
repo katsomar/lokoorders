@@ -36,6 +36,9 @@ class DriverVehicleTest extends TestCase
             'model' => 'Cargo Crate Truck',
             'max_crates_capacity' => 500,
             'fuel_level' => 85,
+            'consumption_per_km' => 0.15,
+            'added_fuel_per_shift' => 20.0,
+            'fuel_tank_capacity' => 80.0,
             'status' => 'active',
         ]);
     }
@@ -1142,6 +1145,11 @@ class DriverVehicleTest extends TestCase
             ->assertJsonPath('data.pending_orders_count', 1)
             ->assertJsonPath('data.pending_crates_sum', 20)
             ->assertJsonPath('data.vehicle.plate', 'UBL 482Y')
+            ->assertJsonPath('data.vehicle.fuel_tank_capacity', 80)
+            ->assertJsonPath('data.vehicle.consumption_per_km', 0.15)
+            ->assertJsonPath('data.vehicle.added_fuel_per_shift', 20)
+            ->assertJsonPath('data.performance.fuel_economy', 0.15)
+            ->assertJsonPath('data.performance.fuel_efficiency', 80)
             ->assertJsonStructure(['data' => [
                 'avatar', 
                 'assigned_route', 

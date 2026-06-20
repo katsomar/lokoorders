@@ -65,6 +65,9 @@ class DriverController extends Controller
             'max_capacity' => $vehicle ? $vehicle->max_crates_capacity : 300,
             'fuel_level' => $vehicle ? $vehicle->fuel_level : 0,
             'supervisor_name' => $supervisorName,
+            'fuel_tank_capacity' => $vehicle ? (float)$vehicle->fuel_tank_capacity : 80.0,
+            'consumption_per_km' => $vehicle ? (float)$vehicle->consumption_per_km : 0.12,
+            'added_fuel_per_shift' => $vehicle ? (float)$vehicle->added_fuel_per_shift : 0.0,
         ];
 
         $avatar = $driver->avatar_path ? (filter_var($driver->avatar_path, FILTER_VALIDATE_URL) ? $driver->avatar_path : url('storage/' . $driver->avatar_path)) : null;
@@ -181,13 +184,13 @@ class DriverController extends Controller
             $qualityRate = max(0.0, (1 - ($damagedCratesCount / $totalCratesDelivered)) * 100);
         }
 
-        // Fuel Efficiency (Fleet target economy baseline is 10.0 km/L)
-        $fuelEconomy = $vehicle ? $vehicle->consumption_per_km : 12.0;
+        // Fuel Efficiency (Fleet target baseline is 0.12 L/km)
+        $fuelEconomy = $vehicle ? (float)$vehicle->consumption_per_km : 0.12;
         if (!$fuelEconomy || $fuelEconomy <= 0) {
-            $fuelEconomy = 12.0;
+            $fuelEconomy = 0.12;
         }
-        $baselineTarget = 10.0;
-        $fuelEfficiency = min(100.0, ($fuelEconomy / $baselineTarget) * 100);
+        $baselineTarget = 0.12;
+        $fuelEfficiency = min(100.0, ($baselineTarget / $fuelEconomy) * 100);
 
         // Photo proof compliance rate
         $deliveriesWithProof = 0;
@@ -231,7 +234,7 @@ class DriverController extends Controller
             'performance' => [
                 'fulfillment_rate' => round($fulfillmentRate, 1),
                 'fulfillment_trend' => $fulfillmentTrend,
-                'fuel_economy' => round($fuelEconomy, 1),
+                'fuel_economy' => round($fuelEconomy, 2),
                 'fuel_efficiency' => round($fuelEfficiency, 1),
                 'quality_rate' => round($qualityRate, 1),
                 'damaged_crates_count' => (int)$damagedCratesCount,

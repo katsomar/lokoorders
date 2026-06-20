@@ -18,9 +18,10 @@ interface RouteItem {
 
 interface DriverRouteMapProps {
   assignedRoute: RouteItem[];
+  vehicleConsumption: number;
 }
 
-export default function DriverRouteMap({ assignedRoute }: DriverRouteMapProps) {
+export default function DriverRouteMap({ assignedRoute, vehicleConsumption }: DriverRouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const polylinesRef = useRef<L.Polyline[]>([]);
@@ -155,8 +156,13 @@ export default function DriverRouteMap({ assignedRoute }: DriverRouteMapProps) {
 
             polylinesRef.current.push(polyline);
 
-            const distanceKm = (route.distance / 1000).toFixed(1);
+            const distKmNum = route.distance / 1000;
+            const distanceKm = distKmNum.toFixed(1);
             const durationMins = Math.round(route.duration / 60);
+
+            const fuelNeededLiters = distKmNum * vehicleConsumption;
+            const fuelCostUgx = fuelNeededLiters * 5500;
+            const formattedCost = "UGX " + Math.round(fuelCostUgx).toLocaleString("en-US");
 
             detailsList.push({
               deliveryId: dest.id,
@@ -164,6 +170,8 @@ export default function DriverRouteMap({ assignedRoute }: DriverRouteMapProps) {
               order: dest.order,
               distance: `${distanceKm} km`,
               duration: `${durationMins} mins`,
+              fuelNeeded: fuelNeededLiters,
+              fuelCost: formattedCost,
               color: routeColor,
               polyline: polyline,
             });
@@ -264,7 +272,14 @@ export default function DriverRouteMap({ assignedRoute }: DriverRouteMapProps) {
                     />
                     <div>
                       <h5 className="font-extrabold text-xs text-brand-forest leading-tight">{route.customer}</h5>
-                      <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[8px] font-bold px-1 py-0.2 mt-1 inline-block rounded">{route.order}</span>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[8px] font-bold px-1 py-0.2 rounded">{route.order}</span>
+                        {route.fuelNeeded !== undefined && (
+                          <span className="text-[9px] text-brand-forest/70 font-semibold bg-brand-sage/20 px-1.5 py-0.5 rounded border border-brand-sage/35">
+                            Est. Fuel: {route.fuelNeeded.toFixed(1)} L ({route.fuelCost})
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
