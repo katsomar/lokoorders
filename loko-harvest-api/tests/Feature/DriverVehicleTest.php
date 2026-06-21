@@ -699,6 +699,101 @@ class DriverVehicleTest extends TestCase
         ]);
     }
 
+    public function test_driver_tracking_telemetry()
+    {
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Test Zone',
+            'description' => 'Test Zone Description',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Tracking Customer',
+            'email' => 'tracking@example.com',
+            'contact_person' => 'Track Manager',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 12 Kampala Rd',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'latitude' => 0.347600,
+            'longitude' => 32.582500,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Main Store',
+            'code' => 'MAIN-STORE-GEO',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-GEO2',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 12000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        $driver = \App\Models\Driver::create([
+            'user_id' => $this->user->id,
+            'full_name' => 'Tracking Driver',
+            'phone' => '0777555667',
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-TRACK',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        $assignRes = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/deliveries/assign', [
+                'order_id' => $order->id,
+                'driver_id' => $driver->id,
+            ]);
+        $deliveryId = $assignRes->json('data.id');
+
+        // Mark as in transit
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/transit")
+            ->assertStatus(200);
+
+        // Post tracking coordinates
+        $trackRes1 = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/track", [
+                'latitude' => 0.348000,
+                'longitude' => 32.583000,
+                'distance_traveled' => 0.15,
+                'duration_seconds' => 30,
+                'fuel_consumed' => 0.02
+            ]);
+
+        $trackRes1->assertStatus(200);
+        $this->assertEquals(0.348000, $trackRes1->json('data.current_latitude'));
+        $this->assertEquals(32.583000, $trackRes1->json('data.current_longitude'));
+        $this->assertEquals(0.15, $trackRes1->json('data.distance_traveled'));
+        $this->assertEquals(30, $trackRes1->json('data.duration_seconds'));
+        $this->assertEquals(0.02, $trackRes1->json('data.fuel_consumed'));
+
+        // Post different coordinates to verify history appending
+        $trackRes2 = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/track", [
+                'latitude' => 0.349000,
+                'longitude' => 32.584000,
+                'distance_traveled' => 0.30,
+                'duration_seconds' => 60,
+                'fuel_consumed' => 0.04
+            ]);
+
+        $trackRes2->assertStatus(200);
+        $this->assertCount(2, $trackRes2->json('data.location_history'));
+    }
+
     public function test_can_manage_product_batches_across_stores_and_orders()
     {
         // 1. Setup production stores, sales store, products, and customer

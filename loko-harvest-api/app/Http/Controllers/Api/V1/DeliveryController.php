@@ -80,12 +80,9 @@ class DeliveryController extends Controller
                 (float)$customer->longitude
             );
             
-            // TODO: TEMPORARY BYPASS FOR TESTING - ALLOW CONFIRMATION OUT OF BOUNDS
-            /*
             if ($distance > 15.0) {
                 return $this->error("Out of bounds: Delivery confirmation must be completed within 15 meters of the customer's coordinates. (You are currently " . round($distance) . " meters away)", 422);
             }
-            */
         }
         
         return DB::transaction(function () use ($delivery, $validated, $request) {
@@ -215,5 +212,57 @@ class DeliveryController extends Controller
         ]);
 
         return $this->success($delivery, 'Delivery status reverted to assigned');
+    }
+
+    public function track(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'latitude' => 'required|numeric',
+            'longitude' => 'required|numeric',
+            'distance_traveled' => 'nullable|numeric',
+            'duration_seconds' => 'nullable|integer',
+            'fuel_consumed' => 'nullable|numeric',
+        ]);
+
+        $delivery = Delivery::findOrFail($id);
+
+        if ($delivery->status === 'in_transit') {
+            $lat = (float)$validated['latitude'];
+            $lng = (float)$validated['longitude'];
+
+            $delivery->current_latitude = $lat;
+            $delivery->current_longitude = $lng;
+
+            // Load and append to location history
+            $history = $delivery->location_history ?? [];
+            
+            $shouldAppend = true;
+            if (!empty($history)) {
+                $lastPoint = end($history);
+                // Check if we already have this coordinate (or a very close one) to avoid duplicates
+                if (abs($lastPoint[0] - $lat) < 0.0001 && abs($lastPoint[1] - $lng) < 0.0001) {
+                    $shouldAppend = false;
+                }
+            }
+
+            if ($shouldAppend) {
+                $history[] = [$lat, $lng];
+                $delivery->location_history = $history;
+            }
+
+            if (isset($validated['distance_traveled'])) {
+                $delivery->distance_traveled = (float)$validated['distance_traveled'];
+            }
+            if (isset($validated['duration_seconds'])) {
+                $delivery->duration_seconds = (int)$validated['duration_seconds'];
+            }
+            if (isset($validated['fuel_consumed'])) {
+                $delivery->fuel_consumed = (float)$validated['fuel_consumed'];
+            }
+
+            $delivery->save();
+        }
+
+        return $this->success($delivery, 'Tracking location updated successfully');
     }
 }

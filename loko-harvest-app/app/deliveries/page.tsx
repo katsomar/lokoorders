@@ -33,6 +33,16 @@ import api from "@/lib/api";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import dynamic from "next/dynamic";
+
+const AdminTrackingMap = dynamic(() => import("@/components/AdminTrackingMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 bg-brand-sage/10 rounded-2xl flex items-center justify-center animate-pulse text-xs text-gray-400">
+      Loading Tracking Map...
+    </div>
+  ),
+});
 import { 
   Table, 
   TableBody, 
@@ -76,6 +86,34 @@ export default function DeliveriesPage() {
   // Canvas Signature Pad State
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  const formatDuration = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) {
+      return `${h}h ${m}m ${s}s`;
+    }
+    return `${m}m ${s}s`;
+  };
+
+  // Poll live coordinates and stats for selected delivery in real-time when tracking active
+  useEffect(() => {
+    let trackingInterval: any;
+    if (selectedDelivery && selectedDelivery.status === "in_transit") {
+      trackingInterval = setInterval(async () => {
+        try {
+          const res = await api.get(`/deliveries/${selectedDelivery.id}`);
+          if (res.data?.success) {
+            setSelectedDelivery(res.data.data);
+          }
+        } catch (err) {
+          console.error("Failed to poll active delivery tracking updates:", err);
+        }
+      }, 5000); // Poll every 5 seconds for smooth live admin tracking
+    }
+    return () => clearInterval(trackingInterval);
+  }, [selectedDelivery?.id, selectedDelivery?.status]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -515,6 +553,7 @@ export default function DeliveriesPage() {
                         <TableHead className="font-extrabold text-brand-forest text-xs py-4">Customer & Location</TableHead>
                         <TableHead className="font-extrabold text-brand-forest text-xs py-4">Driver & Vehicle</TableHead>
                         <TableHead className="font-extrabold text-brand-forest text-xs py-4">Dispatched Time</TableHead>
+                        <TableHead className="font-extrabold text-brand-forest text-xs py-4">Completed Time</TableHead>
                         <TableHead className="font-extrabold text-brand-forest text-xs py-4">Status</TableHead>
                         <TableHead className="text-right font-extrabold text-brand-forest text-xs py-4">Fulfillment Actions</TableHead>
                       </TableRow>
@@ -554,38 +593,40 @@ export default function DeliveriesPage() {
                               {formatDateTime(delivery.dispatched_at)}
                             </div>
                           </TableCell>
+                          <TableCell className="text-xs text-gray-500 font-semibold">
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={12} className="text-gray-400" />
+                              {delivery.status === 'delivered' && delivery.delivered_at 
+                                ? formatDateTime(delivery.delivered_at) 
+                                : "—"
+                              }
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge className={`font-black text-[9px] uppercase tracking-wider px-2.5 py-0.5 border-none ${
                               delivery.status === 'delivered' ? 'bg-green-100 text-green-700' :
                               delivery.status === 'in_transit' ? 'bg-amber-100 text-amber-700 animate-pulse' : 'bg-blue-100 text-blue-700'
                             }`}>
-                              {delivery.status === 'assigned' ? 'allocated' : delivery.status.replace('_', ' ')}
+                              {delivery.status === 'assigned' ? 'allocated' : delivery.status === 'delivered' ? 'completed' : delivery.status.replace('_', ' ')}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {delivery.status === "assigned" && (
+                              {delivery.status === "in_transit" && (
                                 <Button
-                                  onClick={() => handleStartTransit(delivery.id)}
-                                  className="h-8 text-[10px] font-black uppercase text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/50 rounded-xl cursor-pointer"
+                                  onClick={() => setSelectedDelivery(delivery)}
+                                  className="h-8 text-[10px] font-black uppercase text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200/50 rounded-xl cursor-pointer"
                                 >
-                                  In Transit
+                                  Track Driver
                                 </Button>
                               )}
-                              
-                              {(delivery.status === "assigned" || delivery.status === "in_transit") && (
+
+                              {delivery.status === "delivered" && (
                                 <Button
-                                  onClick={() => {
-                                    setRecipientName("");
-                                    setRecipientPhone("");
-                                    setDeliveryNotes("");
-                                    setPhotoFile(null);
-                                    setPhotoFileName("");
-                                    setShowCompleteModal(delivery);
-                                  }}
-                                  className="h-8 text-[10px] font-black uppercase text-green-800 bg-green-50 hover:bg-green-100 border border-green-200/50 rounded-xl cursor-pointer"
+                                  onClick={() => setSelectedDelivery(delivery)}
+                                  className="h-8 text-[10px] font-black uppercase text-gray-800 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl cursor-pointer"
                                 >
-                                  Complete
+                                  View Path
                                 </Button>
                               )}
 
@@ -887,6 +928,52 @@ export default function DeliveriesPage() {
                     <Map size={13} />
                     GPS Shipped Checkpoints & Gatepass Log
                   </h4>
+
+                  {/* Real-time Tracking telemetry cards and map */}
+                  <div className="mb-6 space-y-4">
+                    {/* Live Telemetry stats */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Distance Moved</p>
+                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                          {selectedDelivery.distance_traveled !== null && selectedDelivery.distance_traveled !== undefined 
+                            ? `${parseFloat(selectedDelivery.distance_traveled).toFixed(1)} km` 
+                            : "0.0 km"}
+                        </p>
+                      </div>
+
+                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Time Taken</p>
+                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                          {selectedDelivery.duration_seconds 
+                            ? formatDuration(selectedDelivery.duration_seconds) 
+                            : "00m 00s"}
+                        </p>
+                      </div>
+
+                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fuel Used</p>
+                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                          {selectedDelivery.fuel_consumed !== null && selectedDelivery.fuel_consumed !== undefined 
+                            ? `${parseFloat(selectedDelivery.fuel_consumed).toFixed(1)} L` 
+                            : "0.0 L"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Leaflet Map for Admin Tracking */}
+                    {selectedDelivery.order?.customer?.latitude !== null && selectedDelivery.order?.customer?.longitude !== null && (
+                      <AdminTrackingMap
+                        customerLat={Number(selectedDelivery.order.customer.latitude)}
+                        customerLng={Number(selectedDelivery.order.customer.longitude)}
+                        customerName={selectedDelivery.order.customer.name}
+                        currentLat={selectedDelivery.current_latitude ? Number(selectedDelivery.current_latitude) : null}
+                        currentLng={selectedDelivery.current_longitude ? Number(selectedDelivery.current_longitude) : null}
+                        locationHistory={selectedDelivery.location_history}
+                        status={selectedDelivery.status}
+                      />
+                    )}
+                  </div>
                   
                   <div className="relative pl-6 space-y-4.5 border-l border-brand-sage/40 ml-3">
                     {/* Checkpoint 1: HQ dispatch */}

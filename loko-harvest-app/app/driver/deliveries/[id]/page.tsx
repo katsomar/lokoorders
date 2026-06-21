@@ -103,6 +103,11 @@ export default function DeliveryConfirmationPage() {
   const [hasGeofenceCleared, setHasGeofenceCleared] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Tracking states
+  const latestCoordsRef = useRef<{lat: number, lng: number} | null>(null);
+  const latestDistanceRef = useRef<number>(0);
+  const latestFuelUsedRef = useRef<number>(0);
+
   useEffect(() => {
     let interval: any;
     if (step === 2) { // Active dispatch
@@ -112,6 +117,33 @@ export default function DeliveryConfirmationPage() {
     }
     return () => clearInterval(interval);
   }, [step]);
+
+  const secondsElapsedRef = useRef(0);
+  useEffect(() => {
+    secondsElapsedRef.current = secondsElapsed;
+  }, [secondsElapsed]);
+
+  useEffect(() => {
+    let trackingInterval: any;
+    if (step === 2 && deliveryStatus === "Dispatched") {
+      trackingInterval = setInterval(async () => {
+        if (latestCoordsRef.current) {
+          try {
+            await api.post(`/deliveries/${params.id}/track`, {
+              latitude: latestCoordsRef.current.lat,
+              longitude: latestCoordsRef.current.lng,
+              distance_traveled: latestDistanceRef.current,
+              duration_seconds: secondsElapsedRef.current,
+              fuel_consumed: latestFuelUsedRef.current
+            });
+          } catch (err) {
+            console.error("Failed to post driver tracking telemetry:", err);
+          }
+        }
+      }, 10000); // Post every 10 seconds during active transit
+    }
+    return () => clearInterval(trackingInterval);
+  }, [step, deliveryStatus, params.id]);
 
   useEffect(() => {
     async function fetchDelivery() {
@@ -263,9 +295,50 @@ export default function DeliveryConfirmationPage() {
   const handleGeofenceUnlock = async (type?: "document" | "signature") => {
     if (!delivery) return;
     
-    // TODO: TEMPORARY BYPASS FOR TESTING - ALWAYS UNLOCK
-    setHasGeofenceCleared(true);
-    showToast("TEMPORARY BYPASS: Geofence check disabled for testing.");
+    function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371000; // Radius of the earth in meters
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          if (delivery.customer_latitude !== null && delivery.customer_longitude !== null) {
+            const distance = calculateDistanceMeters(
+              lat,
+              lng,
+              delivery.customer_latitude,
+              delivery.customer_longitude
+            );
+
+            if (distance > 15) {
+              const label = type === "signature" ? "sign" : "upload signed document";
+              showToast(`Unable to ${label}: You must be within 15 meters of the customer. (You are currently ${Math.round(distance)} meters away)`);
+              return;
+            }
+          }
+          setHasGeofenceCleared(true);
+          showToast("Geofence verified! Inputs unlocked.");
+        },
+        (error) => {
+          console.warn("Geofence unlock geolocation fetch failed:", error);
+          showToast("Unable to verify geofence: Location request failed or timed out.");
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    } else {
+      showToast("Unable to verify geofence: Geolocation is not supported by your browser.");
+    }
   };
 
   const handleConfirm = async () => {
@@ -300,6 +373,19 @@ export default function DeliveryConfirmationPage() {
 
     const proceedConfirm = async (lat: number, lng: number) => {
       try {
+        // Send final telemetry update
+        try {
+          await api.post(`/deliveries/${params.id}/track`, {
+            latitude: lat,
+            longitude: lng,
+            distance_traveled: latestDistanceRef.current,
+            duration_seconds: secondsElapsedRef.current,
+            fuel_consumed: latestFuelUsedRef.current
+          });
+        } catch (trackErr) {
+          console.error("Failed to send final tracking update:", trackErr);
+        }
+
         const formData = new FormData();
         formData.append("recipient_name", activeDelivery.contact || "John Okello");
         formData.append("recipient_phone", activeDelivery.phone || "");
@@ -344,14 +430,11 @@ export default function DeliveryConfirmationPage() {
               activeDelivery.customer_longitude
             );
 
-            // TODO: TEMPORARY BYPASS FOR TESTING - ALLOW CONFIRMATION OUT OF BOUNDS
-            /*
             if (distance > 15) {
               setGeofenceError(`Out of bounds: You must be within 15 meters of the customer's delivery location to confirm this delivery. (You are currently ${Math.round(distance)} meters away)`);
               setIsLoading(false);
               return;
             }
-            */
           }
 
           proceedConfirm(lat, lng);
@@ -563,6 +646,11 @@ export default function DeliveryConfirmationPage() {
                   onLiveFuelCalculated={(liveFuel, fuelConsumed) => {
                     setLiveFuelLiters(liveFuel);
                     setFuelConsumedLiters(fuelConsumed);
+                  }}
+                  onLocationUpdate={(lat, lng, dist, fuel) => {
+                    latestCoordsRef.current = { lat, lng };
+                    latestDistanceRef.current = dist;
+                    latestFuelUsedRef.current = fuel;
                   }}
                 />
               )}

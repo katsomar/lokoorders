@@ -14,6 +14,7 @@ interface DriverTransitMapProps {
   vehicleFuelTankCapacity: number;
   onRouteCalculated?: (distanceKm: number, durationMins: number) => void;
   onLiveFuelCalculated?: (liveFuelLiters: number, fuelConsumedLiters: number) => void;
+  onLocationUpdate?: (lat: number, lng: number, distanceMoved: number, fuelUsed: number) => void;
 }
 
 function deg2rad(deg: number) {
@@ -42,6 +43,7 @@ export default function DriverTransitMap({
   vehicleFuelTankCapacity,
   onRouteCalculated,
   onLiveFuelCalculated,
+  onLocationUpdate,
 }: DriverTransitMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -101,8 +103,12 @@ export default function DriverTransitMap({
       if (onLiveFuelCalculated) {
         onLiveFuelCalculated(liveLiters, consumedLiters);
       }
+
+      if (onLocationUpdate) {
+        onLocationUpdate(driverLocation[0], driverLocation[1], totalDistance, consumedLiters);
+      }
     }
-  }, [driverLocation, deliveryId, vehicleFuelLevel, vehicleFuelTankCapacity, vehicleConsumption]);
+  }, [driverLocation, deliveryId, vehicleFuelLevel, vehicleFuelTankCapacity, vehicleConsumption, onLocationUpdate]);
 
   // Helper to check if map is centered on driver
   const checkCentering = () => {
