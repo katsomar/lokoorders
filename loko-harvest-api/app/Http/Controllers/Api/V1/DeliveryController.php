@@ -19,7 +19,7 @@ class DeliveryController extends Controller
         // If driver, only show their deliveries
         $user = auth()->user();
         
-        $deliveries = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs'])
+        $deliveries = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs', 'assignedBy'])
             ->when($user->role === 'driver', function($q) use ($user) {
                 $q->whereHas('driver', fn($d) => $d->where('user_id', $user->id));
             })
@@ -193,7 +193,7 @@ class DeliveryController extends Controller
 
     public function show($id)
     {
-        $delivery = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs'])
+        $delivery = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs', 'assignedBy'])
             ->findOrFail($id);
 
         return $this->success($delivery);

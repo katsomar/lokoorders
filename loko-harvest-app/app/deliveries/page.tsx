@@ -380,10 +380,12 @@ export default function DeliveriesPage() {
     return !reqDate || reqDate >= todayStr;
   });
 
-  const missedOrders = assignableOrders.filter(o => {
-    const reqDate = o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : "";
-    return reqDate && reqDate < todayStr;
-  });
+  const missedDeliveries = Array.isArray(deliveries)
+    ? deliveries.filter(d => {
+        const reqDate = d.order?.required_delivery_date ? d.order.required_delivery_date.split(' ')[0] : "";
+        return (d.status === "assigned" || d.status === "in_transit") && reqDate && reqDate < todayStr;
+      })
+    : [];
 
   const filteredDeliveries = Array.isArray(deliveries)
     ? deliveries.filter(d => {
@@ -401,7 +403,7 @@ export default function DeliveriesPage() {
 
   // Metrics Calculations
   const metrics = {
-    pendingAssign: assignableOrders.length,
+    pendingAssign: newOrders.length + missedDeliveries.length,
     activeShipments: Array.isArray(deliveries) 
       ? deliveries.filter(d => d.status === "assigned" || d.status === "in_transit").length 
       : 0,
@@ -699,16 +701,16 @@ export default function DeliveriesPage() {
                     }`}
                   >
                     Missed
-                    {missedOrders.length > 0 && (
+                    {missedDeliveries.length > 0 && (
                       <span className="bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-black rounded-full animate-pulse">
-                        {missedOrders.length}
+                        {missedDeliveries.length}
                       </span>
                     )}
                   </button>
                 </div>
 
                 {/* Subtab Content */}
-                {(dispatchSubtab === "new" ? newOrders : missedOrders).length === 0 ? (
+                {(dispatchSubtab === "new" ? newOrders : missedDeliveries).length === 0 ? (
                   <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/30 p-16 text-center text-gray-500 font-medium text-xs">
                     {dispatchSubtab === "new" 
                       ? "No new pending orders awaiting dispatch." 
@@ -716,59 +718,137 @@ export default function DeliveriesPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {(dispatchSubtab === "new" ? newOrders : missedOrders).map((order) => (
-                      <div key={order.id} className="bg-white rounded-2xl border border-brand-sage/25 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative">
-                        {/* Badge Urgency */}
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
-                            <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
-                          </div>
-                          <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 border-none ${
-                            order.urgency === 'critical' ? 'bg-red-100 text-red-700' :
-                            order.urgency === 'urgent' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
-                          }`}>
-                            {order.urgency}
-                          </Badge>
-                        </div>
-
-                        {/* Customer Info */}
-                        <div className="space-y-2 text-xs">
-                          <div className="flex items-start gap-2">
-                            <User size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                    {dispatchSubtab === "new" ? (
+                      newOrders.map((order) => (
+                        <div key={order.id} className="bg-white rounded-2xl border border-brand-sage/25 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative">
+                          {/* Badge Urgency */}
+                          <div className="flex justify-between items-start">
                             <div>
-                              <p className="font-bold text-gray-800">{order.customer?.name || "Client"}</p>
-                              <p className="text-[11px] text-gray-500 font-medium mt-0.5">{order.customer?.address || "No address details"}</p>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
+                              <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                            </div>
+                            <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 border-none ${
+                              order.urgency === 'critical' ? 'bg-red-100 text-red-700' :
+                              order.urgency === 'urgent' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {order.urgency}
+                            </Badge>
+                          </div>
+
+                          {/* Customer Info */}
+                          <div className="space-y-2 text-xs">
+                            <div className="flex items-start gap-2">
+                              <User size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="font-bold text-gray-800">{order.customer?.name || "Client"}</p>
+                                <p className="text-[11px] text-gray-500 font-medium mt-0.5">{order.customer?.address || "No address details"}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <MapPin size={13} className="text-brand-sage shrink-0" />
+                              <span className="font-bold text-gray-600">Delivery Zone: {order.customer?.zone?.name || "N/A"}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Clock size={13} className="text-gray-400 shrink-0" />
+                              <span className="font-medium text-gray-500">Required: {new Date(order.required_delivery_date).toLocaleDateString()}</span>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <MapPin size={13} className="text-brand-sage shrink-0" />
-                            <span className="font-bold text-gray-600">Delivery Zone: {order.customer?.zone?.name || "N/A"}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Clock size={13} className="text-gray-400 shrink-0" />
-                            <span className="font-medium text-gray-500">Required: {new Date(order.required_delivery_date).toLocaleDateString()}</span>
+                          {/* Footer Assign */}
+                          <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                            <span className="font-mono text-xs font-black text-brand-forest">UGX {parseFloat(order.total_amount).toLocaleString()}</span>
+                            <Button 
+                              onClick={() => {
+                                setSelectedOrderId(order.id);
+                                setSelectedDriverId("");
+                                setShowAssignModal(true);
+                              }}
+                              className="h-8 text-[10px] font-black uppercase bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none rounded-xl px-3 cursor-pointer shadow-sm"
+                            >
+                              Dispatch Order
+                            </Button>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      missedDeliveries.map((delivery) => (
+                        <div key={delivery.id} className="bg-white rounded-2xl border border-red-200/60 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative flex flex-col justify-between">
+                          <div className="space-y-4">
+                            {/* Badge Urgency */}
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
+                                <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{delivery.order?.order_number || "N/A"}</h4>
+                              </div>
+                              <Badge className="text-[9px] font-black uppercase px-2 py-0.5 border-none bg-red-100 text-red-700">
+                                Missed
+                              </Badge>
+                            </div>
 
-                        {/* Footer Assign */}
-                        <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                          <span className="font-mono text-xs font-black text-brand-forest">UGX {parseFloat(order.total_amount).toLocaleString()}</span>
-                          <Button 
-                            onClick={() => {
-                              setSelectedOrderId(order.id);
-                              setSelectedDriverId("");
-                              setShowAssignModal(true);
-                            }}
-                            className="h-8 text-[10px] font-black uppercase bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none rounded-xl px-3 cursor-pointer shadow-sm"
-                          >
-                            Dispatch Order
-                          </Button>
+                            {/* Customer Info */}
+                            <div className="space-y-3.5 text-xs">
+                              <div className="flex items-start gap-2">
+                                <User size={13} className="text-gray-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="font-bold text-gray-800">{delivery.order?.customer?.name || "Client"}</p>
+                                  <p className="text-[11px] text-gray-500 font-medium mt-0.5">{delivery.order?.customer?.address || "No address details"}</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <MapPin size={13} className="text-brand-sage shrink-0" />
+                                <span className="font-bold text-gray-600">Delivery Zone: {delivery.order?.customer?.zone?.name || "N/A"}</span>
+                              </div>
+
+                              {/* Assigned Driver & Assigner info */}
+                              <div className="bg-red-50/40 border border-red-100/60 p-3 rounded-xl space-y-2 text-gray-700">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-450 text-[10px] uppercase w-24 shrink-0">Assigned Driver:</span>
+                                  <span className="font-extrabold text-gray-800">
+                                    {delivery.driver?.full_name || "N/A"}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-gray-450 text-[10px] uppercase w-24 shrink-0">Assigned By:</span>
+                                  <span className="font-extrabold text-gray-800">
+                                    {delivery.assigned_by?.name || "HQ Supervisor"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Date Created & Expected Delivery Date */}
+                              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                                <div>
+                                  <span className="text-[9px] text-gray-400 font-bold uppercase block">Date Created</span>
+                                  <span className="font-semibold text-gray-600 mt-0.5 block text-[11px] font-mono">
+                                    {new Date(delivery.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[9px] text-gray-400 font-bold uppercase block">Expected Delivery</span>
+                                  <span className="font-black text-red-600 mt-0.5 block text-[11px] font-mono">
+                                    {delivery.order?.required_delivery_date ? new Date(delivery.order.required_delivery_date).toLocaleDateString() : "N/A"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer Action to track/view detail */}
+                          <div className="pt-3.5 border-t border-gray-100 flex items-center justify-between mt-4">
+                            <span className="font-mono text-xs font-black text-brand-forest">UGX {parseFloat(delivery.order?.total_amount || "0").toLocaleString()}</span>
+                            <Button 
+                              onClick={() => setSelectedDelivery(delivery)}
+                              className="h-8 text-[10px] font-black uppercase bg-brand-forest hover:bg-brand-forest/90 text-white border-none rounded-xl px-3.5 cursor-pointer shadow-sm"
+                            >
+                              Track Delivery
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 )}
               </div>
