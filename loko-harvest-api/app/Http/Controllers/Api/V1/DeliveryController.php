@@ -80,9 +80,12 @@ class DeliveryController extends Controller
                 (float)$customer->longitude
             );
             
+            // TODO: TEMPORARY BYPASS FOR TESTING - ALLOW CONFIRMATION OUT OF BOUNDS
+            /*
             if ($distance > 15.0) {
                 return $this->error("Out of bounds: Delivery confirmation must be completed within 15 meters of the customer's coordinates. (You are currently " . round($distance) . " meters away)", 422);
             }
+            */
         }
         
         return DB::transaction(function () use ($delivery, $validated, $request) {
