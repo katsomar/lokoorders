@@ -24,7 +24,14 @@ class OrderController extends Controller
                       $c->where('name', 'like', "%{$request->search}%");
                   });
             })
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->when($request->status, function($q) use ($request) {
+                if ($request->status === 'missed') {
+                    $q->where('status', '!=', 'delivered')
+                      ->where('required_delivery_date', '<', now()->toDateString());
+                } else {
+                    $q->where('status', $request->status);
+                }
+            })
             ->when($request->urgency, fn($q) => $q->where('urgency', $request->urgency))
             ->latest()
             ->paginate($request->per_page ?? 15);

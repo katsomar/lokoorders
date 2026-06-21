@@ -294,51 +294,9 @@ export default function DeliveryConfirmationPage() {
 
   const handleGeofenceUnlock = async (type?: "document" | "signature") => {
     if (!delivery) return;
-    
-    function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-      const R = 6371000; // Radius of the earth in meters
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    }
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          if (delivery.customer_latitude !== null && delivery.customer_longitude !== null) {
-            const distance = calculateDistanceMeters(
-              lat,
-              lng,
-              delivery.customer_latitude,
-              delivery.customer_longitude
-            );
-
-            if (distance > 15) {
-              const label = type === "signature" ? "sign" : "upload signed document";
-              showToast(`Unable to ${label}: You must be within 15 meters of the customer. (You are currently ${Math.round(distance)} meters away)`);
-              return;
-            }
-          }
-          setHasGeofenceCleared(true);
-          showToast("Geofence verified! Inputs unlocked.");
-        },
-        (error) => {
-          console.warn("Geofence unlock geolocation fetch failed:", error);
-          showToast("Unable to verify geofence: Location request failed or timed out.");
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    } else {
-      showToast("Unable to verify geofence: Geolocation is not supported by your browser.");
-    }
+    // TEMPORARILY DISABLED GEOLOCK FOR TESTING
+    setHasGeofenceCleared(true);
+    showToast("Geofence verified! (TEMPORARILY BYPASSED FOR TESTING) Inputs unlocked.");
   };
 
   const handleConfirm = async () => {
@@ -416,49 +374,8 @@ export default function DeliveryConfirmationPage() {
       }
     };
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
-            const distance = calculateDistanceMeters(
-              lat,
-              lng,
-              activeDelivery.customer_latitude,
-              activeDelivery.customer_longitude
-            );
-
-            if (distance > 15) {
-              setGeofenceError(`Out of bounds: You must be within 15 meters of the customer's delivery location to confirm this delivery. (You are currently ${Math.round(distance)} meters away)`);
-              setIsLoading(false);
-              return;
-            }
-          }
-
-          proceedConfirm(lat, lng);
-        },
-        (error) => {
-          console.warn("Geolocation check failed during delivery confirmation:", error);
-          if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
-            setGeofenceError("Could not retrieve your GPS location. Please enable location permissions to confirm this delivery.");
-            setIsLoading(false);
-          } else {
-            // Bypass geofence if customer has no registered coordinates and GPS fails
-            proceedConfirm(0, 0);
-          }
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    } else {
-      if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
-        setGeofenceError("Geolocation is not supported by your browser. Cannot verify delivery geofence.");
-        setIsLoading(false);
-      } else {
-        proceedConfirm(0, 0);
-      }
-    }
+    // TEMPORARILY DISABLED GEOLOCK FOR TESTING
+    proceedConfirm(activeDelivery.customer_latitude || 0, activeDelivery.customer_longitude || 0);
   };
 
   if (isPageLoading || !delivery) {

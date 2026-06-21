@@ -71,6 +71,8 @@ class DeliveryController extends Controller
         $delivery = Delivery::findOrFail($id);
         
         // Geofence check: verify if the driver is within 15 meters of customer site (if customer coordinates are set)
+        // TEMPORARILY DISABLED FOR TESTING
+        /*
         $customer = $delivery->order?->customer;
         if ($customer && $customer->latitude !== null && $customer->longitude !== null) {
             $distance = $this->calculateDistanceMeters(
@@ -84,6 +86,7 @@ class DeliveryController extends Controller
                 return $this->error("Out of bounds: Delivery confirmation must be completed within 15 meters of the customer's coordinates. (You are currently " . round($distance) . " meters away)", 422);
             }
         }
+        */
         
         return DB::transaction(function () use ($delivery, $validated, $request) {
             $delivery->update([

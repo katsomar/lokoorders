@@ -135,7 +135,12 @@ export default function OrdersPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, requiredDeliveryDate?: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isMissed = (status || "").toLowerCase() !== "delivered" && requiredDeliveryDate && requiredDeliveryDate.split(' ')[0] < todayStr;
+    if (isMissed) {
+      return <Badge className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Missed</Badge>;
+    }
     switch ((status || "").toLowerCase()) {
       case "pending":
         return <Badge className="bg-gray-100 text-gray-500 border border-gray-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Pending</Badge>;
@@ -293,7 +298,8 @@ export default function OrdersPage() {
                   { label: "Processing", value: "processing" },
                   { label: "Ready", value: "ready_for_dispatch" },
                   { label: "Dispatched", value: "dispatched" },
-                  { label: "Delivered", value: "delivered" }
+                  { label: "Delivered", value: "delivered" },
+                  { label: "Missed", value: "missed" }
                 ]}
               />
             </div>
@@ -420,7 +426,7 @@ export default function OrdersPage() {
                           {getUrgencyBadge(order.urgency)}
                         </TableCell>
                         <TableCell>
-                          {getStatusBadge(order.status)}
+                          {getStatusBadge(order.status, order.required_delivery_date)}
                         </TableCell>
                         <TableCell className="text-right text-xs font-extrabold text-brand-forest font-heading">
                           UGX {parseFloat(order.total_amount).toLocaleString()}

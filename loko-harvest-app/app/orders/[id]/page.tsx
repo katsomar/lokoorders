@@ -76,7 +76,12 @@ export default function OrderDetailPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, requiredDeliveryDate?: string) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isMissed = (status || "").toLowerCase() !== "delivered" && requiredDeliveryDate && requiredDeliveryDate.split(' ')[0] < todayStr;
+    if (isMissed) {
+      return <Badge className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Missed</Badge>;
+    }
     switch ((status || "").toLowerCase()) {
       case "pending":
         return <Badge className="bg-gray-100 text-gray-500 border border-gray-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Pending</Badge>;
@@ -239,7 +244,7 @@ export default function OrderDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-black text-brand-forest font-heading leading-none">{order.order_number}</h1>
-                {getStatusBadge(order.status)}
+                {getStatusBadge(order.status, order.required_delivery_date)}
                 {getUrgencyBadge(order.urgency)}
               </div>
               <p className="text-gray-500 font-body text-xs mt-1.5">
