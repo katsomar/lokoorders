@@ -88,6 +88,9 @@ class DriverController extends Controller
                 'crates' => $crates,
                 'latitude' => $delivery->order && $delivery->order->customer && $delivery->order->customer->latitude !== null ? (float)$delivery->order->customer->latitude : null,
                 'longitude' => $delivery->order && $delivery->order->customer && $delivery->order->customer->longitude !== null ? (float)$delivery->order->customer->longitude : null,
+                'required_delivery_date' => $delivery->order ? $delivery->order->required_delivery_date : null,
+                'assigned_date' => $delivery->dispatched_at ? \Illuminate\Support\Carbon::parse($delivery->dispatched_at)->format('d M Y') : 'N/A',
+                'assigned_time' => $delivery->dispatched_at ? \Illuminate\Support\Carbon::parse($delivery->dispatched_at)->format('g:i A') : 'N/A',
             ];
         });
 
@@ -207,6 +210,12 @@ class DriverController extends Controller
 
         // Composite Performance score & rank class
         $compositeScore = ($fulfillmentRate * 0.40) + ($qualityRate * 0.40) + ($fuelEfficiency * 0.20);
+        
+        // Apply delay penalties (deduct 5% per penalized delivery)
+        $penaltiesCount = \App\Models\Delivery::where('driver_id', $driver->id)
+            ->where('is_penalized', true)
+            ->count();
+        $compositeScore = max(0.0, $compositeScore - ($penaltiesCount * 5.0));
         
         // Calculate dynamic driver rating from the performance score (mapped 0-100% to 1.0-5.0 scale)
         $rating = 1.0 + ($compositeScore / 100.0) * 4.0;

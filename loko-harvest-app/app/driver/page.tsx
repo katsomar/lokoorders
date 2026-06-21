@@ -63,6 +63,7 @@ export default function DriverDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"home" | "history" | "alerts">("home");
+  const [routeTab, setRouteTab] = useState<"active" | "missed">("active");
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
 
@@ -76,6 +77,9 @@ export default function DriverDashboard() {
     crates: number;
     latitude: number | null;
     longitude: number | null;
+    required_delivery_date?: string | null;
+    assigned_date?: string;
+    assigned_time?: string;
   }
 
   interface DashboardStats {
@@ -344,49 +348,102 @@ export default function DriverDashboard() {
                   </Badge>
                 </div>
 
+                {/* Sub-tabs for Active and Missed routes */}
+                {stats && stats.assigned_route.length > 0 && (
+                  <div className="flex bg-brand-sage/10 p-1 rounded-xl mb-4 border border-brand-sage/20">
+                    <button 
+                      onClick={() => setRouteTab("active")}
+                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                        routeTab === "active" 
+                          ? "bg-brand-forest text-white shadow-sm" 
+                          : "text-brand-forest hover:bg-brand-sage/20"
+                      }`}
+                    >
+                      Active Routes ({stats.assigned_route.filter(r => !r.required_delivery_date || r.required_delivery_date >= new Date().toISOString().split('T')[0]).length})
+                    </button>
+                    <button 
+                      onClick={() => setRouteTab("missed")}
+                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                        routeTab === "missed" 
+                          ? "bg-red-700 text-white shadow-sm" 
+                          : "text-red-700 hover:bg-red-500/10"
+                      }`}
+                    >
+                      {stats.assigned_route.some(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]) && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                      )}
+                      Missed Routes ({stats.assigned_route.filter(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]).length})
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-3.5">
-                  {stats && stats.assigned_route.length > 0 ? (
-                    stats.assigned_route.map((delivery, index) => (
-                      <motion.div
-                        key={delivery.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <Link href={`/driver/deliveries/${delivery.id}`}>
-                          <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
-                            <div className="flex gap-3.5">
-                              <div className="h-11 w-11 rounded-xl bg-brand-sage/20 border border-brand-sage/30 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage/40 transition-colors">
-                                <Package size={22} />
-                              </div>
-                              <div>
-                                <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{delivery.customer}</h4>
-                                <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
-                                  <MapPin size={11} className="text-brand-mid" />
-                                  {delivery.zone}
-                                </div>
-                                <div className="flex items-center gap-2 mt-2">
-                                  <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-brand-yellow/20">{delivery.order}</span>
-                                  <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
-                                    <Clock size={10} /> {delivery.time}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-1 text-brand-forest">
-                              <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
-                              <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
-                            </div>
-                          </div>
-                        </Link>
-                      </motion.div>
-                    ))
-                  ) : loading ? (
+                  {loading ? (
                     <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400 animate-pulse">
                       <Truck size={32} className="mx-auto mb-2 text-gray-300" />
                       <p className="text-xs font-bold text-gray-500">Loading Active Route...</p>
                     </div>
+                  ) : stats && stats.assigned_route.length > 0 ? (
+                    (() => {
+                      const todayStr = new Date().toISOString().split('T')[0];
+                      const routesToShow = stats.assigned_route.filter(r => {
+                        const isMissed = r.required_delivery_date && r.required_delivery_date < todayStr;
+                        return routeTab === "missed" ? isMissed : !isMissed;
+                      });
+
+                      if (routesToShow.length === 0) {
+                        return (
+                          <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
+                            <Truck size={32} className="mx-auto mb-2 text-gray-300" />
+                            <p className="text-xs font-bold text-gray-500">
+                              No {routeTab} routes assigned
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return routesToShow.map((delivery, index) => (
+                        <motion.div
+                          key={delivery.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Link href={`/driver/deliveries/${delivery.id}`}>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
+                              <div className="flex gap-3.5">
+                                <div className="h-11 w-11 rounded-xl bg-brand-sage/20 border border-brand-sage/30 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage/40 transition-colors">
+                                  <Package size={22} />
+                                </div>
+                                <div>
+                                  <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{delivery.customer}</h4>
+                                  <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
+                                    <MapPin size={11} className="text-brand-mid" />
+                                    {delivery.zone}
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    <span className="bg-brand-yellow/15 text-[#C47B00] font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-brand-yellow/20">{delivery.order}</span>
+                                    <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1" title={`Assigned: ${delivery.assigned_date} ${delivery.assigned_time}`}>
+                                      <Clock size={10} /> {delivery.assigned_date || delivery.time} • {delivery.assigned_time || ""}
+                                    </span>
+                                    {delivery.required_delivery_date && delivery.required_delivery_date < todayStr && (
+                                      <span className="bg-red-50 text-red-600 border border-red-200/50 font-bold text-[9px] px-1.5 py-0.5 rounded">
+                                        Missed
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-1 text-brand-forest">
+                                <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
+                                <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
+                              </div>
+                            </div>
+                          </Link>
+                        </motion.div>
+                      ));
+                    })()
                   ) : (
                     <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
                       <Truck size={32} className="mx-auto mb-2 text-gray-300" />

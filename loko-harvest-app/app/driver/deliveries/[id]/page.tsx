@@ -57,10 +57,16 @@ export default function DeliveryConfirmationPage() {
     address: string;
     status: string;
     items: DeliveryItem[];
+    required_delivery_date: string;
+    assigned_date: string;
+    assigned_time: string;
   }
 
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
   const [isPageLoading, setIsPageLoading] = useState(true);
+  const [showDelayModal, setShowDelayModal] = useState(false);
+  const [delayReason, setDelayReason] = useState("");
+  const [customReason, setCustomReason] = useState("");
 
   useEffect(() => {
     let interval: any;
@@ -90,6 +96,9 @@ export default function DeliveryConfirmationPage() {
               name: item.product?.name || "Unknown Product",
               quantity: item.quantity,
             })),
+            required_delivery_date: d.order?.required_delivery_date || "",
+            assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
+            assigned_time: d.dispatched_at ? new Date(d.dispatched_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "N/A",
           });
           
           if (d.status === "in_transit") {
@@ -121,13 +130,14 @@ export default function DeliveryConfirmationPage() {
   };
 
   // Actions
-  const handleStartDispatch = async () => {
+  const handleStartDispatch = async (payload?: { delay_reason?: string; custom_delay_reason?: string }) => {
     setIsLoading(true);
     try {
-      const res = await api.post(`/deliveries/${params.id}/transit`);
+      const res = await api.post(`/deliveries/${params.id}/transit`, payload);
       if (res.data?.success) {
         setDeliveryStatus("Dispatched");
         setStep(2); // Go to Active Dispatch Screen
+        setShowDelayModal(false);
       }
     } catch (err) {
       console.error(err);
@@ -135,6 +145,32 @@ export default function DeliveryConfirmationPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const onStartDispatchClick = () => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
+    if (isMissed) {
+      setShowDelayModal(true);
+    } else {
+      handleStartDispatch();
+    }
+  };
+
+  const handleDelaySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!delayReason) {
+      alert("Please select a justification reason.");
+      return;
+    }
+    if (delayReason === "other" && !customReason.trim()) {
+      alert("Please enter a custom explanation for 'Other'.");
+      return;
+    }
+    handleStartDispatch({
+      delay_reason: delayReason,
+      custom_delay_reason: delayReason === "other" ? customReason : undefined
+    });
   };
 
   const handleCancelDispatch = async () => {
@@ -249,6 +285,27 @@ export default function DeliveryConfirmationPage() {
                     <MapPin className="text-brand-yellow shrink-0 mt-0.5" size={16} />
                     <p className="text-xs text-gray-300 font-semibold">{delivery.address}</p>
                   </div>
+
+                  <div className="flex gap-3 items-start pt-2 border-t border-brand-forest/20">
+                    <Clock className="text-brand-yellow shrink-0 mt-0.5" size={16} />
+                    <div>
+                      <p className="text-xs text-gray-300 font-semibold">
+                        Assigned: {delivery.assigned_date} at {delivery.assigned_time}
+                      </p>
+                      {delivery.required_delivery_date && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[11px] text-gray-400">
+                            Deliver by: {new Date(delivery.required_delivery_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                          {delivery.required_delivery_date < new Date().toISOString().split('T')[0] && (
+                            <span className="bg-red-500/20 text-red-400 border border-red-500/30 font-bold text-[9px] px-1.5 py-0.5 rounded">
+                              Missed
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -273,7 +330,7 @@ export default function DeliveryConfirmationPage() {
               {/* Big Start Delivery Button */}
               <Button 
                 className="w-full h-14 bg-brand-yellow text-brand-forest hover:bg-brand-yellow/90 font-black text-sm rounded-2xl tracking-widest gap-2.5 shadow-lg border border-brand-yellow/30"
-                onClick={handleStartDispatch}
+                onClick={onStartDispatchClick}
                 isLoading={isLoading}
               >
                 <Play size={16} className="fill-brand-forest" />
@@ -492,6 +549,90 @@ export default function DeliveryConfirmationPage() {
             <span className="text-[8px] bg-brand-yellow/10 px-2 py-0.5 rounded font-black">Sync Auto</span>
          </div>
       </div>
+
+      {/* DELAY JUSTIFICATION MODAL */}
+      {showDelayModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Header */}
+            <div className="bg-[#0B1510] text-white px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="text-brand-yellow" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Missed Delivery Justification</h3>
+              </div>
+              <button 
+                onClick={() => setShowDelayModal(false)} 
+                className="text-gray-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleDelaySubmit} className="p-5 space-y-4 text-xs">
+              <p className="text-gray-300 leading-normal">
+                This dispatch is past its expected delivery date. Please select a reason for the delay to start transit.
+              </p>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Delay Reason *</label>
+                <select
+                  required
+                  value={delayReason}
+                  onChange={(e) => setDelayReason(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                >
+                  <option value="">-- Choose Reason --</option>
+                  <option value="traffic">Severe Traffic / Gridlock</option>
+                  <option value="no_vehicle">Vehicle Unavailable</option>
+                  <option value="missing_docs">Missing Route Documents / Gatepass</option>
+                  <option value="sickness">Driver Sickness / Medical</option>
+                  <option value="weather">Extreme Weather Conditions</option>
+                  <option value="loading_delay">Warehouse Loading Delay</option>
+                  <option value="other">Other (Performance Penalty Applies)</option>
+                </select>
+              </div>
+
+              {delayReason === "other" && (
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Explain Reason *</label>
+                  <textarea
+                    required
+                    placeholder="Provide a detailed explanation for the delay..."
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    className="w-full h-20 p-2.5 text-xs font-semibold rounded-xl border border-brand-forest/50 focus:outline-none focus:ring-1 focus:ring-brand-yellow bg-[#0B1510] text-white"
+                  />
+                  <p className="text-[10px] text-red-400 mt-1 flex items-center gap-1">
+                    <AlertCircle size={10} />
+                    Note: Unapproved reasons will deduct 5.0 points from your performance rating.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-forest/20">
+                <Button 
+                  type="button" 
+                  onClick={() => setShowDelayModal(false)} 
+                  className="bg-transparent hover:bg-white/5 text-gray-400 hover:text-white border border-brand-forest/30 text-xs font-bold rounded-xl h-9 px-4"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isLoading}
+                  className="bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest text-xs font-black rounded-xl h-9 px-4 flex items-center gap-1.5"
+                >
+                  {isLoading ? "Starting..." : "Start Dispatch"}
+                </Button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

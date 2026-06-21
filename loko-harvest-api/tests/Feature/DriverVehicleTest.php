@@ -1194,4 +1194,191 @@ class DriverVehicleTest extends TestCase
             ->assertJsonPath('data.assigned_route.0.latitude', 0.3476)
             ->assertJsonPath('data.assigned_route.0.longitude', 32.5825);
     }
+
+    public function test_transit_with_approved_delay_reason()
+    {
+        $driverUser = User::create([
+            'name' => 'Sarah Driver',
+            'email' => 'driver-sarah@lokoharvest.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700 000 005',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-1052',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Kampala Central',
+            'description' => 'Kampala Central Business District',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Supermarket',
+            'email' => 'acme@example.com',
+            'contact_person' => 'John Doe',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 12 Kampala Rd',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Kampala Main Store',
+            'code' => 'KLA-MNS',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-8888',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 50000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        $delivery = \App\Models\Delivery::create([
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'assigned_by' => $this->user->id,
+            'status' => 'assigned',
+            'dispatched_at' => now(),
+        ]);
+
+        $response = $this->actingAs($driverUser, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$delivery->id}/transit", [
+                'delay_reason' => 'traffic',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_penalized', false)
+            ->assertJsonPath('data.delay_reason', 'traffic');
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $delivery->id,
+            'status' => 'in_transit',
+            'delay_reason' => 'traffic',
+            'is_penalized' => false,
+        ]);
+    }
+
+    public function test_transit_with_unapproved_delay_reason_applies_penalty()
+    {
+        $driverUser = User::create([
+            'name' => 'John Driver',
+            'email' => 'driver-john@lokoharvest.com',
+            'password' => bcrypt('password'),
+            'role' => 'driver',
+            'status' => 'active',
+            'phone' => '0700 000 006',
+        ]);
+
+        $driver = Driver::create([
+            'user_id' => $driverUser->id,
+            'full_name' => $driverUser->name,
+            'phone' => $driverUser->phone,
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-1053',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Kampala Central',
+            'description' => 'Kampala Central Business District',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Acme Supermarket',
+            'email' => 'acme@example.com',
+            'contact_person' => 'John Doe',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 12 Kampala Rd',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Kampala Main Store',
+            'code' => 'KLA-MNS',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-7777',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 50000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        $delivery = \App\Models\Delivery::create([
+            'order_id' => $order->id,
+            'driver_id' => $driver->id,
+            'assigned_by' => $this->user->id,
+            'status' => 'assigned',
+            'dispatched_at' => now(),
+        ]);
+
+        $response = $this->actingAs($driverUser, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$delivery->id}/transit", [
+                'delay_reason' => 'other',
+                'custom_delay_reason' => 'Woke up late',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.is_penalized', true)
+            ->assertJsonPath('data.delay_reason', 'other')
+            ->assertJsonPath('data.custom_delay_reason', 'Woke up late');
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $delivery->id,
+            'status' => 'in_transit',
+            'delay_reason' => 'other',
+            'custom_delay_reason' => 'Woke up late',
+            'is_penalized' => true,
+        ]);
+
+        // Get driver dashboard and verify performance composite_score penalty is applied
+        $dashboardRes = $this->actingAs($driverUser, 'sanctum')
+            ->getJson('/api/v1/driver/dashboard');
+
+        $dashboardRes->assertStatus(200);
+        $compositeScore = $dashboardRes->json('data.performance.composite_score');
+
+        // Let's assert that composite score reflects penalty.
+        // Base score before penalty is calculated on fulfillment (100% since no completed deliveries),
+        // quality (100% since no completed deliveries with damages), fuel_efficiency (80%).
+        // Composite score = (100 * 0.40) + (100 * 0.40) + (80 * 0.20) = 40 + 40 + 16 = 96.
+        // Minus 5 points for 1 penalty = 91.
+        $this->assertEquals(91.0, $compositeScore);
+    }
 }

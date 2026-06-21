@@ -105,8 +105,26 @@ class DeliveryController extends Controller
             return $this->error('Only assigned deliveries can be marked as in transit.', 422);
         }
 
+        $validated = $request->validate([
+            'delay_reason' => 'nullable|string',
+            'custom_delay_reason' => 'nullable|string',
+        ]);
+
+        $isPenalized = false;
+        $approvedReasons = ['traffic', 'no_vehicle', 'missing_docs', 'sickness', 'weather', 'loading_delay'];
+
+        if (!empty($validated['delay_reason'])) {
+            $reason = $validated['delay_reason'];
+            if ($reason === 'other' || !in_array($reason, $approvedReasons)) {
+                $isPenalized = true;
+            }
+        }
+
         $delivery->update([
-            'status' => 'in_transit'
+            'status' => 'in_transit',
+            'delay_reason' => $validated['delay_reason'] ?? null,
+            'custom_delay_reason' => $validated['custom_delay_reason'] ?? null,
+            'is_penalized' => $isPenalized,
         ]);
 
         return $this->success($delivery, 'Delivery is now in transit');
