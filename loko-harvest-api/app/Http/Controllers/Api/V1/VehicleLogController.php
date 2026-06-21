@@ -33,6 +33,7 @@ class VehicleLogController extends Controller
                 'added_fuel' => (float)$log->added_fuel,
                 'fuel_price_per_liter' => (float)$log->fuel_price_per_liter,
                 'total_spent' => (float)$log->total_spent,
+                'evidence_url' => $log->evidence_path ? (filter_var($log->evidence_path, FILTER_VALIDATE_URL) ? $log->evidence_path : url('storage/' . $log->evidence_path)) : null,
                 'notes' => $log->notes,
                 'logged_at' => $log->logged_at,
             ];
@@ -54,6 +55,7 @@ class VehicleLogController extends Controller
             'fuel_price_per_liter' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'logged_at' => 'nullable|date',
+            'evidence_file' => 'required_if:log_type,refuel|file|mimes:jpeg,png,jpg,pdf|max:2048',
         ]);
 
         $vehicle = Vehicle::findOrFail($validated['vehicle_id']);
@@ -62,6 +64,11 @@ class VehicleLogController extends Controller
         $addedFuel = $validated['added_fuel'] ?? 0.0;
         $price = $validated['fuel_price_per_liter'] ?? 0.0;
         $totalSpent = $addedFuel * $price;
+
+        $evidencePath = null;
+        if ($request->hasFile('evidence_file')) {
+            $evidencePath = $request->file('evidence_file')->store('vehicle_logs/evidence', 'public');
+        }
 
         $log = VehicleLog::create([
             'vehicle_id' => $validated['vehicle_id'],
@@ -73,6 +80,7 @@ class VehicleLogController extends Controller
             'added_fuel' => $addedFuel,
             'fuel_price_per_liter' => $price,
             'total_spent' => $totalSpent,
+            'evidence_path' => $evidencePath,
             'notes' => $validated['notes'] ?? null,
             'logged_at' => $validated['logged_at'] ?? now(),
         ]);

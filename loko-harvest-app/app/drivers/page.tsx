@@ -83,6 +83,7 @@ export default function DriversPage() {
   const [refuelPrice, setRefuelPrice] = useState("5500");
   const [refuelNotes, setRefuelNotes] = useState("");
   const [isSubmittingRefuel, setIsSubmittingRefuel] = useState(false);
+  const [refuelEvidenceFile, setRefuelEvidenceFile] = useState<File | null>(null);
 
   // Shift Logs Drawer State
   const [selectedDriverForLogs, setSelectedDriverForLogs] = useState<any | null>(null);
@@ -150,7 +151,7 @@ export default function DriversPage() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await api.get("/customers?per_page=100");
+      const res = await api.get("/customers?per_page=100&only_branches=true&has_active_orders=true");
       const customerData = res.data.data?.data || res.data.data || [];
       setCustomers(Array.isArray(customerData) ? customerData : []);
     } catch (err) {
@@ -187,6 +188,10 @@ export default function DriversPage() {
       alert("Vehicle, fuel quantity, and fuel price per liter are required.");
       return;
     }
+    if (!refuelEvidenceFile) {
+      alert("Refueling receipt evidence file is required.");
+      return;
+    }
 
     setIsSubmittingRefuel(true);
     try {
@@ -196,14 +201,20 @@ export default function DriversPage() {
       
       const destination = selectedCustomers.length > 0 ? selectedCustomers.join(", ") : "Fuel Depot Replenish";
 
-      await api.post("/vehicle-logs", {
-        vehicle_id: refuelVehicleId,
-        driver_id: refuelDriverId || null,
-        log_type: "refuel",
-        destination: destination,
-        added_fuel: parseFloat(refuelAddedFuel),
-        fuel_price_per_liter: parseFloat(refuelPrice),
-        notes: refuelNotes || null,
+      const formData = new FormData();
+      formData.append("vehicle_id", refuelVehicleId);
+      if (refuelDriverId) formData.append("driver_id", refuelDriverId);
+      formData.append("log_type", "refuel");
+      formData.append("destination", destination);
+      formData.append("added_fuel", refuelAddedFuel);
+      formData.append("fuel_price_per_liter", refuelPrice);
+      if (refuelNotes) formData.append("notes", refuelNotes);
+      formData.append("evidence_file", refuelEvidenceFile);
+
+      await api.post("/vehicle-logs", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
 
       alert("Refueling logged successfully!");
@@ -212,6 +223,7 @@ export default function DriversPage() {
       setRefuelCustomers([]);
       setRefuelAddedFuel("");
       setRefuelNotes("");
+      setRefuelEvidenceFile(null);
       setShowRefuelModal(false);
       await fetchData();
     } catch (err: any) {
@@ -904,6 +916,7 @@ export default function DriversPage() {
                         <th className="p-3.5 text-center">Duration</th>
                         <th className="p-3.5 text-center">Initial Fuel</th>
                         <th className="p-3.5 text-center">Added Fuel</th>
+                        <th className="p-3.5 text-right">Receipt</th>
                         <th className="p-3.5 text-right">Unit Price</th>
                         <th className="p-3.5 text-right pr-6">Total Spent</th>
                       </tr>
@@ -942,6 +955,20 @@ export default function DriversPage() {
                             </td>
                             <td className="p-3.5 text-center font-mono font-black text-brand-forest">
                               {log.added_fuel > 0 ? `+${log.added_fuel} L` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="p-3.5 text-right font-medium">
+                              {log.evidence_url ? (
+                                <a
+                                  href={log.evidence_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-brand-forest hover:text-brand-mid font-black underline inline-flex items-center gap-1"
+                                >
+                                  View Receipt
+                                </a>
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
                             </td>
                             <td className="p-3.5 text-right font-mono font-bold">
                               {log.fuel_price_per_liter > 0 ? `UGX ${Math.round(log.fuel_price_per_liter).toLocaleString()}` : <span className="text-gray-300">—</span>}
@@ -1938,6 +1965,19 @@ export default function DriversPage() {
                       onChange={(e) => setRefuelNotes(e.target.value)}
                       className="w-full h-14 p-2.5 text-xs font-semibold rounded-xl border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
                     />
+                  </div>
+
+                  {/* Receipt Evidence Upload */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Upload Receipt Evidence (Required) *</label>
+                    <Input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      required
+                      onChange={(e) => setRefuelEvidenceFile(e.target.files?.[0] || null)}
+                      className="h-9.5 text-xs rounded-xl border-brand-sage/50 cursor-pointer bg-white"
+                    />
+                    <p className="text-[9px] text-gray-400 mt-1">Upload receipt image or PDF file (max 2MB).</p>
                   </div>
 
                 </div>

@@ -19,6 +19,12 @@ class CustomerController extends Controller
                   ->orWhere('contact_person', 'like', "%{$request->search}%");
             })
             ->when($request->zone_id, fn($q) => $q->where('delivery_zone_id', $request->zone_id))
+            ->when($request->only_branches, fn($q) => $q->whereNotNull('parent_id'))
+            ->when($request->has_active_orders, function($q) {
+                $q->whereHas('orders', function($orderQ) {
+                    $orderQ->whereIn('status', ['pending', 'processing', 'ready_for_dispatch', 'dispatched']);
+                });
+            })
             ->paginate($request->per_page ?? 15);
 
         return $this->success($customers);

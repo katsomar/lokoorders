@@ -92,6 +92,9 @@ class VehicleLogTest extends TestCase
 
     public function test_storing_refuel_log_updates_vehicle_fuel_level()
     {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $file = \Illuminate\Http\UploadedFile::fake()->create('receipt.jpg', 100, 'image/jpeg');
+
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/vehicle-logs', [
                 'vehicle_id' => $this->vehicle->id,
@@ -101,6 +104,7 @@ class VehicleLogTest extends TestCase
                 'added_fuel' => 20, // 20 Liters added to 50% of 80L (40L). New total = 60L = 75% of tank capacity.
                 'fuel_price_per_liter' => 5500,
                 'notes' => 'Refueling test',
+                'evidence_file' => $file,
             ]);
 
         $response->assertStatus(201)

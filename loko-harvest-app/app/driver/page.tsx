@@ -30,6 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 
 const DriverRouteMap = dynamic(() => import("@/components/DriverRouteMap"), {
@@ -138,11 +139,94 @@ export default function DriverDashboard() {
   const [newFuelLevel, setNewFuelLevel] = useState<number>(85);
   const [isUpdatingFuel, setIsUpdatingFuel] = useState(false);
 
+  const [showRefuelModal, setShowRefuelModal] = useState(false);
+  const [refuelVehicleId, setRefuelVehicleId] = useState("");
+  const [refuelAddedFuel, setRefuelAddedFuel] = useState("");
+  const [refuelPrice, setRefuelPrice] = useState("5500");
+  const [refuelNotes, setRefuelNotes] = useState("");
+  const [refuelEvidenceFile, setRefuelEvidenceFile] = useState<File | null>(null);
+  const [isSubmittingRefuel, setIsSubmittingRefuel] = useState(false);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+
   useEffect(() => {
     if (stats?.vehicle) {
       setNewFuelLevel(stats.vehicle.fuel_level);
+      if (stats.vehicle.id) {
+        setRefuelVehicleId(stats.vehicle.id);
+      }
     }
   }, [stats]);
+
+  useEffect(() => {
+    if (showRefuelModal && (!stats?.vehicle || !stats.vehicle.id)) {
+      async function fetchVehicles() {
+        try {
+          const res = await api.get("/vehicles");
+          if (res.data?.success) {
+            setVehicles(res.data.data);
+          }
+        } catch (err) {
+          console.error("Failed to fetch vehicles list:", err);
+        }
+      }
+      fetchVehicles();
+    }
+  }, [showRefuelModal, stats]);
+
+  const handleSaveDriverRefuel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const selectedVehicleId = stats?.vehicle?.id || refuelVehicleId;
+    if (!selectedVehicleId) {
+      alert("Please select a vehicle to log refueling.");
+      return;
+    }
+    if (!refuelAddedFuel || !refuelPrice) {
+      alert("Fuel quantity and price per liter are required.");
+      return;
+    }
+    if (!refuelEvidenceFile) {
+      alert("Refueling receipt evidence file is required.");
+      return;
+    }
+
+    setIsSubmittingRefuel(true);
+    try {
+      const destination = stats?.assigned_route?.map(r => r.customer).join(", ") || "Fuel Depot Replenish";
+
+      const formData = new FormData();
+      formData.append("vehicle_id", selectedVehicleId);
+      if (stats?.driver_id) formData.append("driver_id", stats.driver_id);
+      formData.append("log_type", "refuel");
+      formData.append("destination", destination);
+      formData.append("added_fuel", refuelAddedFuel);
+      formData.append("fuel_price_per_liter", refuelPrice);
+      if (refuelNotes) formData.append("notes", refuelNotes);
+      formData.append("evidence_file", refuelEvidenceFile);
+
+      await api.post("/vehicle-logs", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      alert("Refueling logged successfully!");
+      setRefuelAddedFuel("");
+      setRefuelNotes("");
+      setRefuelEvidenceFile(null);
+      setShowRefuelModal(false);
+      
+      // Refresh dashboard stats
+      const statsRes = await api.get("/driver/dashboard");
+      if (statsRes.data?.success) {
+        setStats(statsRes.data.data);
+      }
+    } catch (error: any) {
+      console.error(error);
+      alert(error.response?.data?.message || "Failed to save refueling log.");
+    } finally {
+      setIsSubmittingRefuel(false);
+    }
+  };
 
   const handleUpdateFuelLevel = async () => {
     if (!stats?.vehicle?.id) {
@@ -344,33 +428,47 @@ export default function DriverDashboard() {
                   <Gauge size={16} className="text-brand-mid" />
                   Shift Tools & Fleet
                 </h3>
-                <div className="grid grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-3 gap-2">
                   
                   {/* Card A: Vehicle & Crates Info */}
                   <button 
                     onClick={() => setShowVehicleModal(true)}
-                    className="bg-white border border-brand-sage rounded-2xl p-4.5 flex flex-col items-start text-left gap-3.5 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group"
+                    className="bg-white border border-brand-sage rounded-2xl p-3 flex flex-col items-start text-left gap-3 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group shrink-0"
                   >
-                    <div className="h-10 w-10 rounded-xl bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
-                      <Truck size={22} />
+                    <div className="h-8 w-8 rounded-lg bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
+                      <Truck size={18} />
                     </div>
-                    <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Plate: {stats ? stats.vehicle.plate : "UBL 482Y"}</span>
-                      <h4 className="text-xs font-black text-brand-forest group-hover:text-brand-mid mt-0.5">Vehicle Loaded Specs</h4>
+                    <div className="min-w-0 w-full">
+                      <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block truncate">Plate: {stats ? stats.vehicle.plate : "UBL 482Y"}</span>
+                      <h4 className="text-[10px] font-black text-brand-forest group-hover:text-brand-mid mt-0.5 leading-snug">Specs</h4>
                     </div>
                   </button>
 
                   {/* Card B: Interactive Route Map */}
                   <button 
                     onClick={() => setShowMapModal(true)}
-                    className="bg-white border border-brand-sage rounded-2xl p-4.5 flex flex-col items-start text-left gap-3.5 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group"
+                    className="bg-white border border-brand-sage rounded-2xl p-3 flex flex-col items-start text-left gap-3 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group shrink-0"
                   >
-                    <div className="h-10 w-10 rounded-xl bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
-                      <Map size={22} />
+                    <div className="h-8 w-8 rounded-lg bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
+                      <Map size={18} />
                     </div>
-                    <div>
-                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Zone Grid</span>
-                      <h4 className="text-xs font-black text-brand-forest group-hover:text-brand-mid mt-0.5">Interactive Route Map</h4>
+                    <div className="min-w-0 w-full">
+                      <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block truncate">Zone Grid</span>
+                      <h4 className="text-[10px] font-black text-brand-forest group-hover:text-brand-mid mt-0.5 leading-snug">Map</h4>
+                    </div>
+                  </button>
+
+                  {/* Card C: Record Refueling */}
+                  <button 
+                    onClick={() => setShowRefuelModal(true)}
+                    className="bg-white border border-brand-sage rounded-2xl p-3 flex flex-col items-start text-left gap-3 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group shrink-0"
+                  >
+                    <div className="h-8 w-8 rounded-lg bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
+                      <Fuel size={18} />
+                    </div>
+                    <div className="min-w-0 w-full">
+                      <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block truncate">Fuel refills</span>
+                      <h4 className="text-[10px] font-black text-brand-forest group-hover:text-brand-mid mt-0.5 leading-snug">Refuel</h4>
                     </div>
                   </button>
 
@@ -668,6 +766,152 @@ export default function DriverDashboard() {
                 Close Map
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* C. RECORD REFUELING MODAL */}
+      {showRefuelModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden border border-brand-sage shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-8">
+            
+            {/* Modal Header */}
+            <div className="bg-brand-forest text-white px-5 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Fuel className="text-brand-yellow" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Record Refueling</h3>
+              </div>
+              <button onClick={() => setShowRefuelModal(false)} className="text-brand-sage hover:text-white cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleSaveDriverRefuel} className="p-5 space-y-4 text-xs">
+              
+              {/* Driver Name (Auto-collected) */}
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Driver (Who is refueling)</label>
+                <div className="bg-gray-50 border border-brand-sage/20 p-2.5 rounded-xl text-gray-700 font-bold">
+                  {stats ? stats.driver_name : (user?.name || "N/A")}
+                </div>
+              </div>
+
+              {/* Vehicle selection or display */}
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Vehicle Plate *</label>
+                {stats?.vehicle?.id ? (
+                  <div className="bg-gray-50 border border-brand-sage/20 p-2.5 rounded-xl text-gray-700 font-bold">
+                    {stats.vehicle.plate} • {stats.vehicle.make_model}
+                  </div>
+                ) : (
+                  <select
+                    required
+                    value={refuelVehicleId}
+                    onChange={(e) => setRefuelVehicleId(e.target.value)}
+                    className="w-full h-9 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none"
+                  >
+                    <option value="">-- Choose Truck --</option>
+                    {vehicles.map(v => (
+                      <option key={v.id} value={v.id}>{v.registration_number} • {v.make} {v.model}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Journey Destination customers */}
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Assigned Route Destinations (Auto-selected)</label>
+                <div className="bg-gray-50 border border-brand-sage/20 p-2.5 rounded-xl text-gray-600 font-bold leading-normal">
+                  {stats && stats.assigned_route.length > 0 
+                    ? stats.assigned_route.map(r => r.customer).join(", ") 
+                    : "Fuel Depot Replenish"}
+                </div>
+              </div>
+
+              {/* Liters and Price */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Liters Added *</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    placeholder="e.g. 30"
+                    required
+                    value={refuelAddedFuel}
+                    onChange={(e) => setRefuelAddedFuel(e.target.value)}
+                    className="h-9 text-xs rounded-xl border-brand-sage/50 bg-white px-3"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Price per Liter (UGX) *</label>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="1"
+                    placeholder="e.g. 5500"
+                    required
+                    value={refuelPrice}
+                    onChange={(e) => setRefuelPrice(e.target.value)}
+                    className="h-9 text-xs rounded-xl border-brand-sage/50 bg-white px-3"
+                  />
+                </div>
+              </div>
+
+              {/* Auto Total Cost calculation indicator */}
+              {refuelAddedFuel && refuelPrice && (
+                <div className="bg-brand-sage/10 p-3 rounded-xl border border-brand-sage/35 text-center">
+                  <p className="text-[9px] text-gray-400 font-bold uppercase">Estimated Refuel Cost</p>
+                  <p className="text-base font-black text-brand-forest font-heading mt-0.5">
+                    UGX {(parseFloat(refuelAddedFuel) * parseFloat(refuelPrice)).toLocaleString("en-US")}
+                  </p>
+                </div>
+              )}
+
+              {/* Refueling Notes */}
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Refueling Notes</label>
+                <textarea
+                  placeholder="e.g. Total Petrol Station receipt #1234"
+                  value={refuelNotes}
+                  onChange={(e) => setRefuelNotes(e.target.value)}
+                  className="w-full h-12 p-2 text-xs font-semibold rounded-xl border-brand-sage/50 focus:outline-none focus:ring-1 focus:ring-brand-forest bg-white text-gray-700"
+                />
+              </div>
+
+              {/* Upload Receipt */}
+              <div>
+                <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Upload Receipt Evidence (Required) *</label>
+                <Input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  required
+                  onChange={(e) => setRefuelEvidenceFile(e.target.files?.[0] || null)}
+                  className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer bg-white"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                <Button 
+                  type="button" 
+                  onClick={() => setShowRefuelModal(false)} 
+                  className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-8 px-4 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSubmittingRefuel}
+                  className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-8 px-4 cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSubmittingRefuel ? "Saving..." : "Record Refuel"}
+                </Button>
+              </div>
+
+            </form>
+
           </div>
         </div>
       )}
