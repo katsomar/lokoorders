@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { 
   ChevronLeft, 
   MapPin, 
@@ -27,6 +28,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import api from "@/lib/api";
 
+const DriverTransitMap = dynamic(() => import("@/components/DriverTransitMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-56 bg-brand-sage/10 rounded-2xl flex items-center justify-center animate-pulse text-xs text-gray-400">
+      Loading Transit Map...
+    </div>
+  ),
+});
+
 export default function DeliveryConfirmationPage() {
   const params = useParams();
   const router = useRouter();
@@ -44,6 +54,14 @@ export default function DeliveryConfirmationPage() {
   // Real-time transit timer simulation
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
+  interface VehicleDetails {
+    id: string | null;
+    plate: string;
+    make_model: string;
+    fuel_level: number;
+    fuel_tank_capacity: number;
+    consumption_per_km: number;
+  }
   interface DeliveryItem {
     name: string;
     quantity: number;
@@ -60,6 +78,9 @@ export default function DeliveryConfirmationPage() {
     required_delivery_date: string;
     assigned_date: string;
     assigned_time: string;
+    customer_latitude: number | null;
+    customer_longitude: number | null;
+    vehicle: VehicleDetails | null;
   }
 
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
@@ -67,6 +88,11 @@ export default function DeliveryConfirmationPage() {
   const [showDelayModal, setShowDelayModal] = useState(false);
   const [delayReason, setDelayReason] = useState("");
   const [customReason, setCustomReason] = useState("");
+
+  // Live Telemetry states
+  const [distanceRemaining, setDistanceRemaining] = useState<number | null>(null);
+  const [durationRemaining, setDurationRemaining] = useState<number | null>(null);
+  const [projectedFuelRemaining, setProjectedFuelRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     let interval: any;
@@ -99,6 +125,16 @@ export default function DeliveryConfirmationPage() {
             required_delivery_date: d.order?.required_delivery_date || "",
             assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
             assigned_time: d.dispatched_at ? new Date(d.dispatched_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "N/A",
+            customer_latitude: d.order?.customer?.latitude !== null ? Number(d.order?.customer?.latitude) : null,
+            customer_longitude: d.order?.customer?.longitude !== null ? Number(d.order?.customer?.longitude) : null,
+            vehicle: d.driver?.vehicle ? {
+              id: d.driver.vehicle.id,
+              plate: d.driver.vehicle.registration_number || "N/A",
+              make_model: `${d.driver.vehicle.make || ""} ${d.driver.vehicle.model || ""}`.trim() || "N/A",
+              fuel_level: Number(d.driver.vehicle.fuel_level ?? 0),
+              fuel_tank_capacity: Number(d.driver.vehicle.fuel_tank_capacity ?? 80.0),
+              consumption_per_km: Number(d.driver.vehicle.consumption_per_km ?? 0.12),
+            } : null,
           });
           
           if (d.status === "in_transit") {
@@ -228,7 +264,7 @@ export default function DeliveryConfirmationPage() {
     <div className="min-h-screen bg-[#0E1B15] text-white font-body pb-10">
       
       {/* Header */}
-      <header className="bg-[#132A1C] border-b border-brand-forest/30 p-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="bg-[#132A1C] border-b border-brand-forest/30 p-4 flex items-center justify-between sticky top-0 z-[1010]">
         <div className="flex items-center gap-4">
           {step === 1 && (
             <button onClick={() => router.back()} className="text-brand-yellow">
@@ -380,6 +416,78 @@ export default function DeliveryConfirmationPage() {
                   <Badge className="bg-blue-400/15 text-blue-400 text-[8px] font-extrabold border-none py-1 px-2.5">
                     Live GPS Sync
                   </Badge>
+                </CardContent>
+              </Card>
+
+              {/* Interactive Transit Map */}
+              {delivery.customer_latitude !== null && delivery.customer_longitude !== null && (
+                <DriverTransitMap
+                  customerLat={delivery.customer_latitude}
+                  customerLng={delivery.customer_longitude}
+                  customerName={delivery.customer}
+                  vehicleConsumption={delivery.vehicle?.consumption_per_km ?? 0.12}
+                  vehicleFuelLevel={delivery.vehicle?.fuel_level ?? 85}
+                  vehicleFuelTankCapacity={delivery.vehicle?.fuel_tank_capacity ?? 80}
+                  onRouteCalculated={(dist, duration, fuelLeft) => {
+                    setDistanceRemaining(dist);
+                    setDurationRemaining(duration);
+                    setProjectedFuelRemaining(fuelLeft);
+                  }}
+                />
+              )}
+
+              {/* Telemetry Stats Card */}
+              <Card className="border-brand-forest/20 bg-[#132A1C]/70 shadow-xl rounded-2xl overflow-hidden">
+                <CardContent className="p-4 space-y-3.5 text-white">
+                  <div className="flex items-center gap-2 pb-2 border-b border-brand-forest/20">
+                    <Truck className="text-brand-yellow" size={16} />
+                    <h4 className="text-[10px] text-brand-yellow font-black uppercase tracking-wider">Live Route Telemetry</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <p className="text-gray-400 text-[9px] font-bold uppercase tracking-wider">Distance Remaining</p>
+                      <p className="text-lg font-black font-mono text-white mt-0.5">
+                        {distanceRemaining !== null ? `${distanceRemaining.toFixed(1)} km` : "Calculating..."}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <p className="text-gray-400 text-[9px] font-bold uppercase tracking-wider">Estimated Duration</p>
+                      <p className="text-lg font-black font-mono text-white mt-0.5">
+                        {durationRemaining !== null ? `${durationRemaining} mins` : "Calculating..."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-brand-forest/20 space-y-2">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-300">
+                      <span>Projected Fuel Level</span>
+                      <span>
+                        {projectedFuelRemaining !== null && delivery.vehicle 
+                          ? `${Math.round((projectedFuelRemaining / delivery.vehicle.fuel_tank_capacity) * 100)}% (${projectedFuelRemaining.toFixed(1)} L)` 
+                          : "Calculating..."
+                        }
+                      </span>
+                    </div>
+
+                    {/* Progress Bar showing projected fuel */}
+                    <div className="w-full bg-[#0B1510] h-2 rounded-full overflow-hidden flex relative">
+                      <div 
+                        className="bg-brand-yellow h-full rounded-full transition-all duration-500" 
+                        style={{ 
+                          width: `${projectedFuelRemaining !== null && delivery.vehicle 
+                            ? Math.max(0, Math.min(100, (projectedFuelRemaining / delivery.vehicle.fuel_tank_capacity) * 100)) 
+                            : (delivery.vehicle?.fuel_level ?? 85)
+                          }%` 
+                        }} 
+                      />
+                    </div>
+                    <div className="flex justify-between text-[8px] text-gray-400 font-bold uppercase">
+                      <span>Current: {delivery.vehicle?.fuel_level ?? 85}%</span>
+                      <span>At Destination</span>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
