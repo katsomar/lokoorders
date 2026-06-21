@@ -147,6 +147,11 @@ export default function DriversPage() {
   const [editDriverLicenseFile, setEditDriverLicenseFile] = useState<File | null>(null);
   const [isSavingDriver, setIsSavingDriver] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxScale, setLightboxScale] = useState<number>(1);
+  const handleOpenLightbox = (url: string) => {
+    setLightboxImage(url);
+    setLightboxScale(1);
+  };
   const [editDriverAvatarPreview, setEditDriverAvatarPreview] = useState<string | null>(null);
   const [editDriverLicensePreview, setEditDriverLicensePreview] = useState<string | null>(null);
 
@@ -960,14 +965,13 @@ export default function DriversPage() {
                             </td>
                             <td className="p-3.5 text-right font-medium">
                               {log.evidence_url ? (
-                                <a
-                                  href={log.evidence_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-brand-forest hover:text-brand-mid font-black underline inline-flex items-center gap-1"
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenLightbox(log.evidence_url)}
+                                  className="text-brand-forest hover:text-brand-mid font-black underline inline-flex items-center gap-1 cursor-pointer"
                                 >
                                   View Receipt
-                                </a>
+                                </button>
                               ) : (
                                 <span className="text-gray-300">—</span>
                               )}
@@ -2222,32 +2226,75 @@ export default function DriversPage() {
 
         {/* LIGHTBOX / FULL-SIZE IMAGE PREVIEW OVERLAY */}
         {lightboxImage && (
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[60] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
             {/* Backdrop close trigger */}
             <div 
               className="absolute inset-0 cursor-zoom-out"
               onClick={() => setLightboxImage(null)}
             />
             
-            <div className="relative max-w-3xl w-full flex flex-col items-center justify-center animate-in zoom-in-95 duration-200">
-              {/* Close Button */}
+            {/* Top Toolbar */}
+            <div className="relative z-10 flex items-center gap-3 bg-black/50 backdrop-blur-md px-5 py-2 rounded-full border border-white/10 mb-4 text-white shadow-xl">
+              {!lightboxImage.toLowerCase().endsWith('.pdf') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxScale(prev => Math.max(0.5, prev - 0.25))}
+                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-base transition-colors cursor-pointer"
+                    title="Zoom Out"
+                  >
+                    -
+                  </button>
+                  <span className="text-xs font-mono font-bold w-12 text-center">
+                    {Math.round(lightboxScale * 100)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxScale(prev => Math.min(4, prev + 0.25))}
+                    className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-base transition-colors cursor-pointer"
+                    title="Zoom In"
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxScale(1)}
+                    className="h-8 px-3 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                    title="Reset Zoom"
+                  >
+                    Reset
+                  </button>
+                  <div className="h-4 w-px bg-white/20 mx-1" />
+                </>
+              )}
               <button 
                 type="button"
                 onClick={() => setLightboxImage(null)}
-                className="absolute -top-12 right-0 sm:right-4 h-10 w-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer z-10"
-                title="Close Full Preview"
+                className="h-8 w-8 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors cursor-pointer font-bold text-sm"
+                title="Close Preview"
               >
-                <X size={20} />
+                <X size={16} />
               </button>
-
-              {/* Image Container */}
-              <div className="bg-white/5 p-2 rounded-3xl border border-white/10 shadow-2xl overflow-hidden max-h-[80vh] flex items-center justify-center">
-                <img 
+            </div>
+            
+            {/* Image/PDF Container with Scroll/Overflow Support */}
+            <div className="relative max-w-4xl w-full h-[75vh] flex items-center justify-center z-10 border border-white/10 rounded-2xl bg-white shadow-2xl overflow-hidden">
+              {lightboxImage.toLowerCase().endsWith('.pdf') ? (
+                <iframe 
                   src={lightboxImage} 
-                  alt="Full preview" 
-                  className="rounded-2xl max-w-full max-h-[78vh] object-contain shadow-inner"
+                  className="w-full h-full rounded-2xl border-none"
+                  title="PDF Document Preview"
                 />
-              </div>
+              ) : (
+                <div className="w-full h-full overflow-auto flex items-center justify-center p-4 scrollbar-thin scrollbar-thumb-white/25">
+                  <img 
+                    src={lightboxImage} 
+                    alt="Full preview" 
+                    className="rounded-lg shadow-inner transition-transform duration-200 ease-out origin-center max-w-full max-h-[70vh] object-contain"
+                    style={{ transform: `scale(${lightboxScale})` }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
