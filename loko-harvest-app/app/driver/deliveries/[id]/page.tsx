@@ -100,6 +100,8 @@ export default function DeliveryConfirmationPage() {
   const [proofImageFile, setProofImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [geofenceError, setGeofenceError] = useState<string | null>(null);
+  const [hasGeofenceCleared, setHasGeofenceCleared] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let interval: any;
@@ -249,6 +251,75 @@ export default function DeliveryConfirmationPage() {
       }
     };
   }, [previewUrl]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    // Keep it unique using a closure timeout or clear
+    setTimeout(() => {
+      setToastMessage(current => current === msg ? null : current);
+    }, 4500);
+  };
+
+  const handleSignatureContainerClick = async () => {
+    if (!delivery) return;
+    
+    if (delivery.customer_latitude === null || delivery.customer_longitude === null) {
+      setHasGeofenceCleared(true);
+      return;
+    }
+
+    setIsLoading(true);
+    setGeofenceError(null);
+
+    function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const distance = calculateDistanceMeters(
+            lat,
+            lng,
+            delivery.customer_latitude!,
+            delivery.customer_longitude!
+          );
+
+          if (distance > 15) {
+            setGeofenceError(`Out of bounds: You must be within 15 meters of the customer's delivery location. (You are currently ${Math.round(distance)} meters away)`);
+            showToast("Unable to sign: You are not within the 15-meter customer delivery geofence.");
+            setHasGeofenceCleared(false);
+          } else {
+            setGeofenceError(null);
+            setHasGeofenceCleared(true);
+            showToast("Location verified: Access to signature pad unlocked.");
+          }
+          setIsLoading(false);
+        },
+        (error) => {
+          console.warn("GPS check failed:", error);
+          setGeofenceError("Could not retrieve your GPS location. Please enable location permissions to sign.");
+          showToast("Unable to sign: GPS location required.");
+          setIsLoading(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    } else {
+      setGeofenceError("Geolocation is not supported by your browser.");
+      showToast("Unable to sign: Geolocation not supported.");
+      setIsLoading(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!delivery) return;
@@ -715,8 +786,19 @@ export default function DeliveryConfirmationPage() {
                 <label className="text-[10px] text-brand-yellow font-black uppercase tracking-wider block">
                   2. Client Digital Signature *
                 </label>
-                <div className="bg-[#132A1C]/30 border border-brand-forest/20 rounded-2xl p-3 shadow-inner">
+                <div className="bg-[#132A1C]/30 border border-brand-forest/20 rounded-2xl p-3 shadow-inner relative overflow-hidden">
                   <SignatureCanvas onSave={(data) => setSignatureData(data)} />
+
+                  {!hasGeofenceCleared && (
+                    <div 
+                      onClick={handleSignatureContainerClick}
+                      className="absolute inset-0 z-20 bg-[#060D0A]/95 flex flex-col items-center justify-center text-center p-4 cursor-pointer hover:bg-[#060D0A]/90 transition-all gap-1.5 backdrop-blur-sm"
+                    >
+                      <span className="text-xl">🔒</span>
+                      <p className="text-[11px] text-brand-yellow font-extrabold uppercase tracking-wider">Tap to Unlock Signature Pad</p>
+                      <p className="text-[9px] text-gray-400 font-medium">Verifies if you are within 15 meters of the client</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -867,6 +949,21 @@ export default function DeliveryConfirmationPage() {
           </div>
         </div>
       )}
+      {/* Framer Motion Toast Notifications */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            className="fixed bottom-24 left-4 right-4 z-[1050] max-w-sm mx-auto bg-red-950/95 border border-red-500/50 text-red-200 px-4 py-3 rounded-2xl flex items-center gap-2.5 shadow-xl backdrop-blur-md"
+          >
+            <span className="text-base text-red-500">🚫</span>
+            <div className="flex-1 text-xs font-bold leading-normal">{toastMessage}</div>
+            <button onClick={() => setToastMessage(null)} className="text-red-400 font-extrabold hover:text-white px-1">✕</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
