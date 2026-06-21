@@ -260,7 +260,7 @@ export default function DeliveryConfirmationPage() {
     }, 4500);
   };
 
-  const handleSignatureContainerClick = async () => {
+  const handleGeofenceUnlock = async (type?: "document" | "signature") => {
     if (!delivery) return;
     
     if (delivery.customer_latitude === null || delivery.customer_longitude === null) {
@@ -297,26 +297,30 @@ export default function DeliveryConfirmationPage() {
 
           if (distance > 15) {
             setGeofenceError(`Out of bounds: You must be within 15 meters of the customer's delivery location. (You are currently ${Math.round(distance)} meters away)`);
-            showToast("Unable to sign: You are not within the 15-meter customer delivery geofence.");
+            
+            const targetAction = type === "document" ? "upload document" : type === "signature" ? "sign" : "upload or sign";
+            showToast(`Unable to ${targetAction}: You are not within the 15-meter customer delivery geofence.`);
             setHasGeofenceCleared(false);
           } else {
             setGeofenceError(null);
             setHasGeofenceCleared(true);
-            showToast("Location verified: Access to signature pad unlocked.");
+            showToast("Location verified: Access to proof inputs unlocked.");
           }
           setIsLoading(false);
         },
         (error) => {
           console.warn("GPS check failed:", error);
-          setGeofenceError("Could not retrieve your GPS location. Please enable location permissions to sign.");
-          showToast("Unable to sign: GPS location required.");
+          setGeofenceError("Could not retrieve your GPS location. Please enable location permissions to unlock.");
+          
+          const targetAction = type === "document" ? "document upload" : type === "signature" ? "signature pad" : "proof inputs";
+          showToast(`Unable to unlock ${targetAction}: GPS location required.`);
           setIsLoading(false);
         },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       );
     } else {
       setGeofenceError("Geolocation is not supported by your browser.");
-      showToast("Unable to sign: Geolocation not supported.");
+      showToast("Unable to unlock: Geolocation not supported.");
       setIsLoading(false);
     }
   };
@@ -759,12 +763,13 @@ export default function DeliveryConfirmationPage() {
                 <label className="text-[10px] text-brand-yellow font-black uppercase tracking-wider block">
                   1. Signed Document Photo *
                 </label>
-                <div className="relative border-2 border-dashed border-brand-forest/40 rounded-2xl bg-[#132A1C]/30 p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:border-brand-yellow/50 transition-colors">
+                <div className="relative border-2 border-dashed border-brand-forest/40 rounded-2xl bg-[#132A1C]/30 p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:border-brand-yellow/50 transition-colors overflow-hidden">
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                    disabled={!hasGeofenceCleared}
                   />
                   {previewUrl ? (
                     <div className="space-y-2">
@@ -776,6 +781,17 @@ export default function DeliveryConfirmationPage() {
                       <Camera className="mx-auto text-brand-yellow/80 animate-pulse" size={32} />
                       <p className="text-xs font-bold text-gray-300">Tap to snap or upload signed document photo</p>
                       <p className="text-[9px] text-gray-500 font-semibold">Supports JPEG, PNG, JPG (Max 4MB)</p>
+                    </div>
+                  )}
+
+                  {!hasGeofenceCleared && (
+                    <div 
+                      onClick={() => handleGeofenceUnlock("document")}
+                      className="absolute inset-0 z-20 bg-[#060D0A]/95 flex flex-col items-center justify-center text-center p-4 cursor-pointer hover:bg-[#060D0A]/90 transition-all gap-1.5 backdrop-blur-sm"
+                    >
+                      <span className="text-xl">🔒</span>
+                      <p className="text-[11px] text-brand-yellow font-extrabold uppercase tracking-wider">Tap to Unlock Document Upload</p>
+                      <p className="text-[9px] text-gray-400 font-medium">Verifies if you are within 15 meters of the client</p>
                     </div>
                   )}
                 </div>
@@ -791,7 +807,7 @@ export default function DeliveryConfirmationPage() {
 
                   {!hasGeofenceCleared && (
                     <div 
-                      onClick={handleSignatureContainerClick}
+                      onClick={() => handleGeofenceUnlock("signature")}
                       className="absolute inset-0 z-20 bg-[#060D0A]/95 flex flex-col items-center justify-center text-center p-4 cursor-pointer hover:bg-[#060D0A]/90 transition-all gap-1.5 backdrop-blur-sm"
                     >
                       <span className="text-xl">🔒</span>
