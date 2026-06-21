@@ -92,7 +92,8 @@ export default function DeliveryConfirmationPage() {
   // Live Telemetry states
   const [distanceRemaining, setDistanceRemaining] = useState<number | null>(null);
   const [durationRemaining, setDurationRemaining] = useState<number | null>(null);
-  const [projectedFuelRemaining, setProjectedFuelRemaining] = useState<number | null>(null);
+  const [liveFuelLiters, setLiveFuelLiters] = useState<number | null>(null);
+  const [fuelConsumedLiters, setFuelConsumedLiters] = useState<number>(0);
 
   useEffect(() => {
     let interval: any;
@@ -422,16 +423,20 @@ export default function DeliveryConfirmationPage() {
               {/* Interactive Transit Map */}
               {delivery.customer_latitude !== null && delivery.customer_longitude !== null && (
                 <DriverTransitMap
+                  deliveryId={delivery.id}
                   customerLat={delivery.customer_latitude}
                   customerLng={delivery.customer_longitude}
                   customerName={delivery.customer}
                   vehicleConsumption={delivery.vehicle?.consumption_per_km ?? 0.12}
                   vehicleFuelLevel={delivery.vehicle?.fuel_level ?? 85}
                   vehicleFuelTankCapacity={delivery.vehicle?.fuel_tank_capacity ?? 80}
-                  onRouteCalculated={(dist, duration, fuelLeft) => {
+                  onRouteCalculated={(dist, duration) => {
                     setDistanceRemaining(dist);
                     setDurationRemaining(duration);
-                    setProjectedFuelRemaining(fuelLeft);
+                  }}
+                  onLiveFuelCalculated={(liveFuel, fuelConsumed) => {
+                    setLiveFuelLiters(liveFuel);
+                    setFuelConsumedLiters(fuelConsumed);
                   }}
                 />
               )}
@@ -462,30 +467,30 @@ export default function DeliveryConfirmationPage() {
 
                   <div className="pt-2 border-t border-brand-forest/20 space-y-2">
                     <div className="flex justify-between items-center text-[10px] font-bold text-gray-300">
-                      <span>Projected Fuel Level</span>
+                      <span>Live Fuel Level</span>
                       <span>
-                        {projectedFuelRemaining !== null && delivery.vehicle 
-                          ? `${Math.round((projectedFuelRemaining / delivery.vehicle.fuel_tank_capacity) * 100)}% (${projectedFuelRemaining.toFixed(1)} L)` 
-                          : "Calculating..."
+                        {liveFuelLiters !== null && delivery.vehicle 
+                          ? `${Math.round((liveFuelLiters / delivery.vehicle.fuel_tank_capacity) * 100)}% (${liveFuelLiters.toFixed(1)} L)` 
+                          : `${delivery.vehicle?.fuel_level ?? 85}% (${((delivery.vehicle?.fuel_level ?? 85) / 100 * (delivery.vehicle?.fuel_tank_capacity ?? 80)).toFixed(1)} L)`
                         }
                       </span>
                     </div>
 
-                    {/* Progress Bar showing projected fuel */}
+                    {/* Progress Bar showing live fuel */}
                     <div className="w-full bg-[#0B1510] h-2 rounded-full overflow-hidden flex relative">
                       <div 
                         className="bg-brand-yellow h-full rounded-full transition-all duration-500" 
                         style={{ 
-                          width: `${projectedFuelRemaining !== null && delivery.vehicle 
-                            ? Math.max(0, Math.min(100, (projectedFuelRemaining / delivery.vehicle.fuel_tank_capacity) * 100)) 
+                          width: `${liveFuelLiters !== null && delivery.vehicle 
+                            ? Math.max(0, Math.min(100, (liveFuelLiters / delivery.vehicle.fuel_tank_capacity) * 100)) 
                             : (delivery.vehicle?.fuel_level ?? 85)
                           }%` 
                         }} 
                       />
                     </div>
                     <div className="flex justify-between text-[8px] text-gray-400 font-bold uppercase">
-                      <span>Current: {delivery.vehicle?.fuel_level ?? 85}%</span>
-                      <span>At Destination</span>
+                      <span>Starting: {delivery.vehicle?.fuel_level ?? 85}%</span>
+                      <span>Consumed: {fuelConsumedLiters.toFixed(1)} L</span>
                     </div>
                   </div>
                 </CardContent>

@@ -5,16 +5,35 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 interface DriverTransitMapProps {
+  deliveryId: string;
   customerLat: number;
   customerLng: number;
   customerName: string;
   vehicleConsumption: number;
   vehicleFuelLevel: number;
   vehicleFuelTankCapacity: number;
-  onRouteCalculated?: (distanceKm: number, durationMins: number, estFuelRemainingLiters: number) => void;
+  onRouteCalculated?: (distanceKm: number, durationMins: number) => void;
+  onLiveFuelCalculated?: (liveFuelLiters: number, fuelConsumedLiters: number) => void;
+}
+
+function deg2rad(deg: number) {
+  return deg * (Math.PI / 180);
+}
+
+function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
 }
 
 export default function DriverTransitMap({
+  deliveryId,
   customerLat,
   customerLng,
   customerName,
@@ -22,6 +41,7 @@ export default function DriverTransitMap({
   vehicleFuelLevel,
   vehicleFuelTankCapacity,
   onRouteCalculated,
+  onLiveFuelCalculated,
 }: DriverTransitMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -35,8 +55,9 @@ export default function DriverTransitMap({
 
   const [isTracking, setIsTracking] = useState(true);
   const driverLocRef = useRef<[number, number] | null>(null);
+  const lastLocationRef = useRef<[number, number] | null>(null);
 
-  // Sync driver location reference for event listeners
+  // Sync driver location reference for event listeners and track live distance/fuel
   useEffect(() => {
     driverLocRef.current = driverLocation;
     if (mapRef.current && driverLocation) {
@@ -50,8 +71,38 @@ export default function DriverTransitMap({
       const diffLng = Math.abs(center.lng - driverLocation[1]);
       const isCentered = diffLat < 0.00015 && diffLng < 0.00015 && mapRef.current.getZoom() === 16;
       setIsTracking(isCentered);
+
+      // Track distance traveled dynamically (actual live movements, even off-route)
+      if (lastLocationRef.current) {
+        const delta = getDistanceKm(
+          lastLocationRef.current[0],
+          lastLocationRef.current[1],
+          driverLocation[0],
+          driverLocation[1]
+        );
+        // Exclude minor jitter (e.g. less than 10 meters) to avoid false distance accumulation
+        if (delta > 0.01) {
+          const currentDistance = parseFloat(localStorage.getItem(`delivery_distance_${deliveryId}`) || "0");
+          const newDistance = currentDistance + delta;
+          localStorage.setItem(`delivery_distance_${deliveryId}`, newDistance.toString());
+          lastLocationRef.current = driverLocation;
+        }
+      } else {
+        // First location read, initialize lastLocationRef
+        lastLocationRef.current = driverLocation;
+      }
+
+      // Calculate live fuel status based on actual distance traveled
+      const startingFuelLiters = (vehicleFuelLevel / 100) * vehicleFuelTankCapacity;
+      const totalDistance = parseFloat(localStorage.getItem(`delivery_distance_${deliveryId}`) || "0");
+      const consumedLiters = totalDistance * vehicleConsumption;
+      const liveLiters = Math.max(0, startingFuelLiters - consumedLiters);
+
+      if (onLiveFuelCalculated) {
+        onLiveFuelCalculated(liveLiters, consumedLiters);
+      }
     }
-  }, [driverLocation]);
+  }, [driverLocation, deliveryId, vehicleFuelLevel, vehicleFuelTankCapacity, vehicleConsumption]);
 
   // Helper to check if map is centered on driver
   const checkCentering = () => {
@@ -217,12 +268,8 @@ export default function DriverTransitMap({
           const distKmNum = route.distance / 1000;
           const durationMins = Math.round(route.duration / 60);
 
-          const fuelNeededLiters = distKmNum * vehicleConsumption;
-          const currentLiters = (vehicleFuelLevel / 100) * vehicleFuelTankCapacity;
-          const estFuelRemainingLiters = Math.max(0, currentLiters - fuelNeededLiters);
-
           if (onRouteCalculated) {
-            onRouteCalculated(distKmNum, durationMins, estFuelRemainingLiters);
+            onRouteCalculated(distKmNum, durationMins);
           }
         }
       } catch (err) {
