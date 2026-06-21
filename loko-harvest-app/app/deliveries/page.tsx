@@ -602,8 +602,8 @@ export default function DeliveriesPage() {
                               </div>
                               <div className="text-[10px] text-gray-400 font-semibold mt-0.5 flex items-center gap-1">
                                 <Truck size={11} />
-                                {delivery.driver?.vehicle_registration !== 'N/A' 
-                                  ? `${delivery.driver?.vehicle_registration} (${delivery.driver?.vehicle_make})` 
+                                {delivery.driver?.vehicle
+                                  ? `${delivery.driver.vehicle.registration_number} (${delivery.driver.vehicle.make} ${delivery.driver.vehicle.model || ''})`
                                   : "No vehicle allocated"}
                               </div>
                             </div>
@@ -921,8 +921,8 @@ export default function DeliveriesPage() {
                     <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fleet Vehicle</p>
                     <p className="font-bold text-gray-800 mt-0.5 flex items-center gap-1">
                       <Truck size={12} className="text-brand-mid shrink-0" />
-                      {selectedDelivery.driver?.vehicle_registration !== 'N/A'
-                        ? `${selectedDelivery.driver?.vehicle_registration} (${selectedDelivery.driver?.vehicle_make})`
+                      {selectedDelivery.driver?.vehicle
+                        ? `${selectedDelivery.driver.vehicle.registration_number} (${selectedDelivery.driver.vehicle.make} ${selectedDelivery.driver.vehicle.model || ''})`
                         : "No vehicle assigned"}
                     </p>
                   </div>
