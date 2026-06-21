@@ -40,9 +40,11 @@ Route::prefix('v1')->group(function () {
         
         // Deliveries
         Route::get('/deliveries', [App\Http\Controllers\Api\V1\DeliveryController::class, 'index']);
+        Route::get('/deliveries/{id}', [App\Http\Controllers\Api\V1\DeliveryController::class, 'show']);
         Route::post('/deliveries/assign', [App\Http\Controllers\Api\V1\DeliveryController::class, 'assign']);
         Route::post('/deliveries/{id}/confirm', [App\Http\Controllers\Api\V1\DeliveryController::class, 'confirm']);
         Route::post('/deliveries/{id}/transit', [App\Http\Controllers\Api\V1\DeliveryController::class, 'transit']);
+        Route::post('/deliveries/{id}/cancel', [App\Http\Controllers\Api\V1\DeliveryController::class, 'cancel']);
         
         // Payments
         Route::get('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'index']);

@@ -17,13 +17,15 @@ import {
   Compass,
   Clock,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
+import api from "@/lib/api";
 
 export default function DeliveryConfirmationPage() {
   const params = useParams();
@@ -42,6 +44,24 @@ export default function DeliveryConfirmationPage() {
   // Real-time transit timer simulation
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
+  interface DeliveryItem {
+    name: string;
+    quantity: number;
+  }
+  interface DeliveryDetails {
+    id: string;
+    order: string;
+    customer: string;
+    contact: string;
+    phone: string;
+    address: string;
+    status: string;
+    items: DeliveryItem[];
+  }
+
+  const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
+  const [isPageLoading, setIsPageLoading] = useState(true);
+
   useEffect(() => {
     let interval: any;
     if (step === 2) { // Active dispatch
@@ -52,54 +72,121 @@ export default function DeliveryConfirmationPage() {
     return () => clearInterval(interval);
   }, [step]);
 
+  useEffect(() => {
+    async function fetchDelivery() {
+      try {
+        const response = await api.get(`/deliveries/${params.id}`);
+        if (response.data?.success) {
+          const d = response.data.data;
+          setDelivery({
+            id: d.id,
+            order: d.order?.order_number || "N/A",
+            customer: d.order?.customer?.name || "N/A",
+            contact: d.order?.customer?.contact_person || "N/A",
+            phone: d.order?.customer?.phone_primary || "",
+            address: d.order?.customer?.address || "N/A",
+            status: d.status,
+            items: (d.order?.items || []).map((item: any) => ({
+              name: item.product?.name || "Unknown Product",
+              quantity: item.quantity,
+            })),
+          });
+          
+          if (d.status === "in_transit") {
+            setStep(2);
+            setDeliveryStatus("Dispatched");
+          } else if (d.status === "delivered") {
+            setStep(4);
+            setDeliveryStatus("Delivered");
+          } else {
+            setStep(1);
+            setDeliveryStatus("Assigned");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch delivery details:", err);
+      } finally {
+        setIsPageLoading(false);
+      }
+    }
+    if (params.id) {
+      fetchDelivery();
+    }
+  }, [params.id]);
+
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `00h : ${m}m : ${s}s`;
   };
 
-  const mockDelivery = {
-    id: params.id || "1",
-    order: "LHO-0042",
-    customer: "Shoprite Lugogo",
-    contact: "John Okello",
-    phone: "0772 123 456",
-    address: "Lugogo Bypass, Kampala (Store Entrance 4)",
-    items: [
-      { name: "White Eggs (Trays)", quantity: 150 },
-      { name: "Brown Eggs (Trays)", quantity: 100 },
-    ]
-  };
-
   // Actions
-  const handleStartDispatch = () => {
+  const handleStartDispatch = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await api.post(`/deliveries/${params.id}/transit`);
+      if (res.data?.success) {
+        setDeliveryStatus("Dispatched");
+        setStep(2); // Go to Active Dispatch Screen
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to start dispatch. Please try again.");
+    } finally {
       setIsLoading(false);
-      setDeliveryStatus("Dispatched");
-      setStep(2); // Go to Active Dispatch Screen
-    }, 800);
+    }
   };
 
-  const handleCancelDispatch = () => {
+  const handleCancelDispatch = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const res = await api.post(`/deliveries/${params.id}/cancel`);
+      if (res.data?.success) {
+        setDeliveryStatus("Assigned");
+        setSecondsElapsed(0);
+        setStep(1); // Go back to details
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to cancel dispatch. Please try again.");
+    } finally {
       setIsLoading(false);
-      setDeliveryStatus("Assigned");
-      setSecondsElapsed(0);
-      setStep(1); // Go back to details
-    }, 600);
+    }
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const res = await api.post(`/deliveries/${params.id}/confirm`, {
+        recipient_name: delivery?.contact || "John Okello",
+        recipient_phone: delivery?.phone || "0772 123 456",
+        delivered_at: now,
+        notes: "Delivered via Driver Portal Mobile Confirmation",
+        proof_image: proofType === "photo" ? "data:image/png;base64,fake-photo-evidence" : null,
+        signature: proofType === "signature" ? "data:image/png;base64,fake-signature-data" : null,
+      });
+      if (res.data?.success) {
+        setDeliveryStatus("Delivered");
+        setStep(4); // Success Splash
+        setTimeout(() => router.push("/driver"), 2500);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to confirm delivery. Please try again.");
+    } finally {
       setIsLoading(false);
-      setDeliveryStatus("Delivered");
-      setStep(4); // Success Splash
-      setTimeout(() => router.push("/driver"), 2500);
-    }, 1500);
+    }
   };
+
+  if (isPageLoading || !delivery) {
+    return (
+      <div className="min-h-screen bg-[#0E1B15] text-white flex flex-col items-center justify-center p-6 gap-2">
+        <Loader2 className="animate-spin text-brand-yellow" size={36} />
+        <p className="text-xs font-bold text-gray-400">Loading delivery details...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0E1B15] text-white font-body pb-10">
@@ -116,7 +203,7 @@ export default function DeliveryConfirmationPage() {
             <h1 className="font-heading font-black text-brand-yellow text-base tracking-tight">
               {step === 2 ? "ACTIVE DISPATCH" : "Delivery Details"}
             </h1>
-            <p className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">{mockDelivery.order}</p>
+            <p className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">{delivery.order}</p>
           </div>
         </div>
         
@@ -148,17 +235,19 @@ export default function DeliveryConfirmationPage() {
                 <CardContent className="pt-6 space-y-4 text-white">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h2 className="text-xl font-heading font-black text-brand-yellow leading-tight">{mockDelivery.customer}</h2>
-                      <p className="text-xs text-gray-400 font-semibold mt-1">Recipient: {mockDelivery.contact}</p>
+                      <h2 className="text-xl font-heading font-black text-brand-yellow leading-tight">{delivery.customer}</h2>
+                      <p className="text-xs text-gray-400 font-semibold mt-1">Recipient: {delivery.contact}</p>
                     </div>
-                    <a href={`tel:${mockDelivery.phone}`} className="h-11 w-11 rounded-full bg-brand-forest flex items-center justify-center text-brand-yellow hover:scale-105 active:scale-95 transition-transform shrink-0 border border-brand-yellow/20">
-                      <Phone size={18} />
-                    </a>
+                    {delivery.phone ? (
+                      <a href={`tel:${delivery.phone}`} className="h-11 w-11 rounded-full bg-brand-forest flex items-center justify-center text-brand-yellow hover:scale-105 active:scale-95 transition-transform shrink-0 border border-brand-yellow/20">
+                        <Phone size={18} />
+                      </a>
+                    ) : null}
                   </div>
                   
                   <div className="flex gap-3 items-start pt-2 border-t border-brand-forest/20">
                     <MapPin className="text-brand-yellow shrink-0 mt-0.5" size={16} />
-                    <p className="text-xs text-gray-300 font-semibold">{mockDelivery.address}</p>
+                    <p className="text-xs text-gray-300 font-semibold">{delivery.address}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -171,7 +260,7 @@ export default function DeliveryConfirmationPage() {
                     Cargo Load Log
                   </h3>
                   <div className="space-y-3">
-                    {mockDelivery.items.map((item, i) => (
+                    {delivery.items.map((item, i) => (
                       <div key={i} className="flex justify-between items-center p-3 bg-[#0B1510] rounded-xl border border-brand-forest/20">
                         <span className="text-xs font-bold text-gray-300">{item.name}</span>
                         <span className="text-base font-black text-brand-yellow">{item.quantity} Trays</span>
@@ -266,7 +355,7 @@ export default function DeliveryConfirmationPage() {
                     <div className="relative">
                       <span className="absolute -left-[27px] top-0 h-3.5 w-3.5 rounded-full bg-gray-600 border-2 border-[#0E1B15] flex items-center justify-center text-[7px] font-bold" />
                       <div>
-                        <p className="font-bold text-gray-500">{mockDelivery.customer}</p>
+                        <p className="font-bold text-gray-500">{delivery.customer}</p>
                         <p className="text-[9px] text-gray-500">Store Entrance 4 gate clearance scheduled</p>
                       </div>
                     </div>

@@ -532,6 +532,13 @@ class DriverVehicleTest extends TestCase
         $order->refresh();
         $this->assertEquals('dispatched', $order->status);
 
+        // 1b. Test Fetch single delivery by ID
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson("/api/v1/deliveries/{$deliveryId}");
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'assigned');
+
         // 2. Test Transit transition
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson("/api/v1/deliveries/{$deliveryId}/transit");
@@ -543,6 +550,21 @@ class DriverVehicleTest extends TestCase
             'id' => $deliveryId,
             'status' => 'in_transit',
         ]);
+
+        // 2b. Test Cancel transition (revert in_transit to assigned)
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/cancel");
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $deliveryId,
+            'status' => 'assigned',
+        ]);
+
+        // Re-transit before testing Confirm Delivery
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/transit")
+            ->assertStatus(200);
 
         // 3. Test Confirm Delivery
         $response = $this->actingAs($this->user, 'sanctum')

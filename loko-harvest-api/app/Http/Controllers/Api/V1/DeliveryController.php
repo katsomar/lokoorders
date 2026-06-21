@@ -111,4 +111,27 @@ class DeliveryController extends Controller
 
         return $this->success($delivery, 'Delivery is now in transit');
     }
+
+    public function show($id)
+    {
+        $delivery = Delivery::with(['order.customer.zone', 'order.items.product', 'driver.user', 'driver.vehicle', 'proofs'])
+            ->findOrFail($id);
+
+        return $this->success($delivery);
+    }
+
+    public function cancel(Request $request, $id)
+    {
+        $delivery = Delivery::findOrFail($id);
+
+        if ($delivery->status !== 'in_transit') {
+            return $this->error('Only in transit deliveries can be cancelled.', 422);
+        }
+
+        $delivery->update([
+            'status' => 'assigned'
+        ]);
+
+        return $this->success($delivery, 'Delivery status reverted to assigned');
+    }
 }
