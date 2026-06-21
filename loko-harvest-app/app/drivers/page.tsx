@@ -104,6 +104,7 @@ export default function DriversPage() {
   const [logisticsConsumptionPerKm, setLogisticsConsumptionPerKm] = useState("");
   const [logisticsAddedFuelPerShift, setLogisticsAddedFuelPerShift] = useState("");
   const [logisticsTankCapacity, setLogisticsTankCapacity] = useState("");
+  const [logisticsInitialFuel, setLogisticsInitialFuel] = useState<string>("100");
 
   // Register Driver Modal State
   const [showRegisterDriverModal, setShowRegisterDriverModal] = useState(false);
@@ -149,8 +150,9 @@ export default function DriversPage() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await api.get("/customers");
-      setCustomers(res.data.data || []);
+      const res = await api.get("/customers?per_page=100");
+      const customerData = res.data.data?.data || res.data.data || [];
+      setCustomers(Array.isArray(customerData) ? customerData : []);
     } catch (err) {
       console.error("Failed to fetch customer list:", err);
     }
@@ -277,6 +279,7 @@ export default function DriversPage() {
     setLogisticsConsumptionPerKm((selectedVehicleForLogistics.consumption_per_km ?? "").toString());
     setLogisticsAddedFuelPerShift((selectedVehicleForLogistics.added_fuel_per_shift ?? "0").toString());
     setLogisticsTankCapacity((selectedVehicleForLogistics.fuel_tank_capacity ?? "").toString());
+    setLogisticsInitialFuel((selectedVehicleForLogistics.initial_fuel ?? selectedVehicleForLogistics.fuel_level ?? 100).toString());
     
     // Find the IDs of the drivers who have this vehicle registration number
     const assignedIds = drivers
@@ -315,6 +318,7 @@ export default function DriversPage() {
       formData.append("max_crates_capacity", logisticsCapacity);
       formData.append("status", logisticsStatus);
       formData.append("fuel_level", logisticsFuelLevel.toString());
+      formData.append("initial_fuel", logisticsInitialFuel);
       if (logisticsConsumptionPerKm) {
         formData.append("consumption_per_km", logisticsConsumptionPerKm);
       }
@@ -437,6 +441,7 @@ export default function DriversPage() {
       formData.append("model", newVehicleModel);
       formData.append("max_crates_capacity", (parseInt(newVehicleCapacity) || 300).toString());
       formData.append("fuel_level", (parseInt(newVehicleFuel) || 100).toString());
+      formData.append("initial_fuel", (parseInt(newVehicleFuel) || 100).toString());
       formData.append("status", newVehicleStatus);
       formData.append("vehicle_photo", newVehiclePhotoFile);
 
@@ -780,24 +785,42 @@ export default function DriversPage() {
 
                       <div className="p-6 space-y-5 text-xs">
                         
-                        {/* Fuel & Load capacity sliders */}
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Fuel & Load capacity details */}
+                        <div className="space-y-3.5">
+                          {/* Crate Capacity progress bar */}
                           <div>
                             <div className="flex justify-between items-center mb-1">
                               <span className="text-[9px] text-gray-400 font-bold tracking-wider uppercase">Crate Capacity</span>
-                              <span className="font-mono font-bold text-gray-700">{vehicle.max_crates_capacity}</span>
+                              <span className="font-mono font-bold text-gray-700">{vehicle.max_crates_capacity} Trays</span>
                             </div>
                             <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
                               <div className="bg-brand-mid h-full rounded-full" style={{ width: '70%' }} />
                             </div>
                           </div>
-                          <div>
-                            <div className="flex justify-between items-center mb-1">
-                              <span className="text-[9px] text-gray-400 font-bold tracking-wider uppercase">Fuel Level</span>
-                              <span className={`font-mono font-bold ${vehicle.fuel_level > 50 ? 'text-green-600' : 'text-amber-500'}`}>{vehicle.fuel_level}%</span>
+
+                          {/* Fuel Status Columns */}
+                          <div className="grid grid-cols-2 gap-4 pt-1.5 border-t border-brand-sage/20">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Initial Fuel</span>
+                              </div>
+                              <div className="font-mono font-bold text-xs text-brand-forest">
+                                {vehicle.initial_fuel ?? vehicle.fuel_level ?? 100}% ({(((vehicle.initial_fuel ?? vehicle.fuel_level ?? 100) / 100) * parseFloat(vehicle.fuel_tank_capacity || "80")).toFixed(1)} L)
+                              </div>
+                              <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden mt-1.5">
+                                <div className="bg-brand-forest h-full rounded-full" style={{ width: `${vehicle.initial_fuel ?? vehicle.fuel_level ?? 100}%` }} />
+                              </div>
                             </div>
-                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${vehicle.fuel_level > 50 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${vehicle.fuel_level}%` }} />
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Current Fuel</span>
+                              </div>
+                              <div className="font-mono font-bold text-xs" style={{ color: vehicle.fuel_level > 50 ? '#2E7D32' : '#D84315' }}>
+                                {vehicle.fuel_level}% ({((vehicle.fuel_level / 100) * parseFloat(vehicle.fuel_tank_capacity || "80")).toFixed(1)} L)
+                              </div>
+                              <div className="w-full bg-gray-100 h-1 rounded-full overflow-hidden mt-1.5">
+                                <div className={`h-full rounded-full ${vehicle.fuel_level > 50 ? 'bg-green-600' : 'bg-amber-500'}`} style={{ width: `${vehicle.fuel_level}%` }} />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1183,19 +1206,31 @@ export default function DriversPage() {
                     </div>
                   </div>
 
-                  {/* Fuel level slider */}
+                  {/* Current Fuel Level (Automated & Read-only) */}
                   <div className="space-y-1.5">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Fuel Level Indicator</label>
-                    <div className="flex items-center gap-4 bg-gray-50 border border-brand-sage/25 p-3 rounded-xl">
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={logisticsFuelLevel} 
-                        onChange={(e) => setLogisticsFuelLevel(parseInt(e.target.value))}
-                        className="w-full accent-brand-forest h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Current Fuel Level (Automated)</label>
+                    <div className="flex justify-between items-center bg-gray-50 border border-brand-sage/25 p-3.5 rounded-xl">
+                      <span className="text-xs font-semibold text-gray-500">Calculated Current Level</span>
+                      <span className="font-mono font-bold text-xs text-brand-forest">
+                        {logisticsFuelLevel}% ({((logisticsFuelLevel / 100) * parseFloat(logisticsTankCapacity || "80")).toFixed(1)} L)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Initial Fuel Level Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Initial Fuel Level (%)</label>
+                    <div className="relative">
+                      <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={14} />
+                      <Input 
+                        type="number"
+                        min="0"
+                        max="100"
+                        placeholder="e.g. 100" 
+                        value={logisticsInitialFuel} 
+                        onChange={(e) => setLogisticsInitialFuel(e.target.value)}
+                        className="pl-9 h-9.5 text-xs rounded-xl border-brand-sage/50"
                       />
-                      <span className="font-mono font-bold text-xs text-gray-700 w-12 text-right">{logisticsFuelLevel}%</span>
                     </div>
                   </div>
 
