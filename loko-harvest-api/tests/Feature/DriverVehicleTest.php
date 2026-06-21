@@ -573,7 +573,10 @@ class DriverVehicleTest extends TestCase
                 'recipient_phone' => '0777123456',
                 'delivered_at' => now()->toDateTimeString(),
                 'notes' => 'Delivered to back dock',
-                'signature' => 'data:image/png;base64,fake-signature-data',
+                'latitude' => 0.3476,
+                'longitude' => 32.5825,
+                'proof_image_file' => \Illuminate\Http\UploadedFile::fake()->create('signed_doc.jpg', 100, 'image/jpeg'),
+                'signature_data' => 'data:image/png;base64,fake-signature-data',
             ]);
 
         $response->assertStatus(200)
@@ -591,6 +594,109 @@ class DriverVehicleTest extends TestCase
 
         $order->refresh();
         $this->assertEquals('delivered', $order->status);
+    }
+
+    public function test_delivery_confirmation_geofence_lock()
+    {
+        // Setup customer with registered coordinates (Kampala Depot area)
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => 'Kampala Central',
+            'description' => 'Central Kampala',
+            'is_active' => true,
+        ]);
+
+        $customer = \App\Models\Customer::create([
+            'name' => 'Kampala Branch Supermarket',
+            'email' => 'kla-branch@example.com',
+            'contact_person' => 'Geofence Manager',
+            'phone_primary' => '0788111222',
+            'delivery_zone_id' => $zone->id,
+            'address' => 'Plot 10 Kampala Road',
+            'customer_type' => 'supermarket',
+            'credit_terms' => 'cash',
+            'credit_limit' => 0.00,
+            'latitude' => 0.347600,
+            'longitude' => 32.582500,
+            'date_registered' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $salesStore = \App\Models\SalesStore::create([
+            'name' => 'Main Store',
+            'code' => 'MAIN-STORE-XYZ',
+            'location' => 'HQ',
+        ]);
+
+        $order = \App\Models\Order::create([
+            'order_number' => 'LHO-2026-GEO1',
+            'customer_id' => $customer->id,
+            'sales_store_id' => $salesStore->id,
+            'order_date' => '2026-06-18',
+            'required_delivery_date' => '2026-06-19',
+            'urgency' => 'normal',
+            'total_amount' => 12000,
+            'status' => 'pending',
+            'created_by' => $this->user->id,
+        ]);
+
+        $driver = \App\Models\Driver::create([
+            'user_id' => $this->user->id,
+            'full_name' => 'Geofence Driver',
+            'phone' => '0777555666',
+            'vehicle_id' => $this->vehicle->id,
+            'license_number' => 'UG-GEO',
+            'employment_status' => 'active',
+            'date_joined' => '2025-01-15',
+        ]);
+
+        // Assign and Transit
+        $assignRes = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/deliveries/assign', [
+                'order_id' => $order->id,
+                'driver_id' => $driver->id,
+            ]);
+        $deliveryId = $assignRes->json('data.id');
+
+        $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/transit")
+            ->assertStatus(200);
+
+        // 1. Try to confirm with coordinates > 15m away (e.g. lat = 0.349000, lng = 32.585000 is ~315m away)
+        $failRes = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/confirm", [
+                'recipient_name' => 'Geofence Manager',
+                'recipient_phone' => '0788111222',
+                'delivered_at' => now()->toDateTimeString(),
+                'notes' => 'Attempting out of bounds confirm',
+                'latitude' => 0.349000,
+                'longitude' => 32.585000,
+                'proof_image_file' => \Illuminate\Http\UploadedFile::fake()->create('doc.jpg', 100, 'image/jpeg'),
+                'signature_data' => 'data:image/png;base64,fake-sig',
+            ]);
+
+        $failRes->assertStatus(422);
+        $this->assertStringContainsString('Out of bounds', $failRes->json('message'));
+
+        // 2. Confirm within 15m (e.g. lat = 0.347602, lng = 32.582502 is ~0.3 meters away)
+        $successRes = $this->actingAs($this->user, 'sanctum')
+            ->postJson("/api/v1/deliveries/{$deliveryId}/confirm", [
+                'recipient_name' => 'Geofence Manager',
+                'recipient_phone' => '0788111222',
+                'delivered_at' => now()->toDateTimeString(),
+                'notes' => 'Confirming within bounds',
+                'latitude' => 0.347602,
+                'longitude' => 32.582502,
+                'proof_image_file' => \Illuminate\Http\UploadedFile::fake()->create('doc.jpg', 100, 'image/jpeg'),
+                'signature_data' => 'data:image/png;base64,fake-sig',
+            ]);
+
+        $successRes->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertDatabaseHas('deliveries', [
+            'id' => $deliveryId,
+            'status' => 'delivered',
+        ]);
     }
 
     public function test_can_manage_product_batches_across_stores_and_orders()

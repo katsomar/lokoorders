@@ -95,6 +95,12 @@ export default function DeliveryConfirmationPage() {
   const [liveFuelLiters, setLiveFuelLiters] = useState<number | null>(null);
   const [fuelConsumedLiters, setFuelConsumedLiters] = useState<number>(0);
 
+  // Proof of delivery states
+  const [signatureData, setSignatureData] = useState<string>("");
+  const [proofImageFile, setProofImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [geofenceError, setGeofenceError] = useState<string | null>(null);
+
   useEffect(() => {
     let interval: any;
     if (step === 2) { // Active dispatch
@@ -227,28 +233,127 @@ export default function DeliveryConfirmationPage() {
     }
   };
 
-  const handleConfirm = async () => {
-    setIsLoading(true);
-    try {
-      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
-      const res = await api.post(`/deliveries/${params.id}/confirm`, {
-        recipient_name: delivery?.contact || "John Okello",
-        recipient_phone: delivery?.phone || "0772 123 456",
-        delivered_at: now,
-        notes: "Delivered via Driver Portal Mobile Confirmation",
-        proof_image: proofType === "photo" ? "data:image/png;base64,fake-photo-evidence" : null,
-        signature: proofType === "signature" ? "data:image/png;base64,fake-signature-data" : null,
-      });
-      if (res.data?.success) {
-        setDeliveryStatus("Delivered");
-        setStep(4); // Success Splash
-        setTimeout(() => router.push("/driver"), 2500);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setProofImageFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
-    } catch (err) {
-      console.error(err);
-      alert("Failed to confirm delivery. Please try again.");
-    } finally {
-      setIsLoading(false);
+    };
+  }, [previewUrl]);
+
+  const handleConfirm = async () => {
+    if (!delivery) return;
+    const activeDelivery = delivery;
+
+    if (!proofImageFile) {
+      alert("Please upload a photo of the signed document.");
+      return;
+    }
+    if (!signatureData) {
+      alert("Please capture the client's signature.");
+      return;
+    }
+
+    setIsLoading(true);
+    setGeofenceError(null);
+
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    function calculateDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371000; // Radius of the earth in meters
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    const proceedConfirm = async (lat: number, lng: number) => {
+      try {
+        const formData = new FormData();
+        formData.append("recipient_name", activeDelivery.contact || "John Okello");
+        formData.append("recipient_phone", activeDelivery.phone || "");
+        formData.append("delivered_at", now);
+        formData.append("notes", "Delivered via Driver Portal Mobile Confirmation");
+        formData.append("latitude", lat.toString());
+        formData.append("longitude", lng.toString());
+        formData.append("proof_image_file", proofImageFile);
+        formData.append("signature_data", signatureData);
+
+        const res = await api.post(`/deliveries/${params.id}/confirm`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        if (res.data?.success) {
+          setDeliveryStatus("Delivered");
+          setStep(4); // Success Splash
+          setTimeout(() => router.push("/driver"), 2500);
+        }
+      } catch (err: any) {
+        console.error(err);
+        const serverMsg = err.response?.data?.message || "Failed to confirm delivery. Please try again.";
+        alert(serverMsg);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
+            const distance = calculateDistanceMeters(
+              lat,
+              lng,
+              activeDelivery.customer_latitude,
+              activeDelivery.customer_longitude
+            );
+
+            if (distance > 15) {
+              setGeofenceError(`Out of bounds: You must be within 15 meters of the customer's delivery location to confirm this delivery. (You are currently ${Math.round(distance)} meters away)`);
+              setIsLoading(false);
+              return;
+            }
+          }
+
+          proceedConfirm(lat, lng);
+        },
+        (error) => {
+          console.warn("Geolocation check failed during delivery confirmation:", error);
+          if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
+            setGeofenceError("Could not retrieve your GPS location. Please enable location permissions to confirm this delivery.");
+            setIsLoading(false);
+          } else {
+            // Bypass geofence if customer has no registered coordinates and GPS fails
+            proceedConfirm(0, 0);
+          }
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    } else {
+      if (activeDelivery.customer_latitude !== null && activeDelivery.customer_longitude !== null) {
+        setGeofenceError("Geolocation is not supported by your browser. Cannot verify delivery geofence.");
+        setIsLoading(false);
+      } else {
+        proceedConfirm(0, 0);
+      }
     }
   };
 
@@ -567,54 +672,70 @@ export default function DeliveryConfirmationPage() {
             >
               <div className="space-y-1">
                 <h3 className="text-base font-heading font-black text-brand-yellow px-1">Fulfillment Verification</h3>
-                <p className="text-xs text-gray-400 font-medium px-1">Please log valid gatepass credentials to clear delivery status.</p>
+                <p className="text-xs text-gray-400 font-medium px-1">Complete both proof captures to close delivery status.</p>
               </div>
+
+              {/* Geofence Validation Error Alert */}
+              {geofenceError && (
+                <div className="bg-red-500/10 border-2 border-red-500/20 text-red-400 text-[11px] p-4.5 rounded-2xl flex items-start gap-2.5 shadow-inner">
+                  <AlertCircle className="shrink-0 mt-0.5 text-red-500" size={16} />
+                  <div className="font-bold leading-normal">{geofenceError}</div>
+                </div>
+              )}
               
-              <div className="grid grid-cols-2 gap-4">
-                <button 
-                  onClick={() => setProofType("photo")}
-                  className={`p-5 rounded-2xl border-2 flex flex-col items-center gap-2.5 transition-all ${
-                    proofType === "photo" 
-                      ? "bg-[#132A1C]/70 border-brand-yellow text-white" 
-                      : "bg-[#132A1C]/30 border-brand-forest/20 text-gray-400"
-                  }`}
-                >
-                  <Camera size={26} className={proofType === "photo" ? "text-brand-yellow" : "text-gray-400"} />
-                  <span className="text-xs font-bold">Log HD Photo</span>
-                </button>
-                <button 
-                  onClick={() => setProofType("signature")}
-                  className={`p-5 rounded-2xl border-2 flex flex-col items-center gap-2.5 transition-all ${
-                    proofType === "signature" 
-                      ? "bg-[#132A1C]/70 border-brand-yellow text-white" 
-                      : "bg-[#132A1C]/30 border-brand-forest/20 text-gray-400"
-                  }`}
-                >
-                  <Edit3 size={26} className={proofType === "signature" ? "text-brand-yellow" : "text-gray-400"} />
-                  <span className="text-xs font-bold">Client Signature</span>
-                </button>
+              {/* 1. Document Photo Upload Card */}
+              <div className="space-y-2">
+                <label className="text-[10px] text-brand-yellow font-black uppercase tracking-wider block">
+                  1. Signed Document Photo *
+                </label>
+                <div className="relative border-2 border-dashed border-brand-forest/40 rounded-2xl bg-[#132A1C]/30 p-4 flex flex-col items-center justify-center text-center cursor-pointer hover:border-brand-yellow/50 transition-colors">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  />
+                  {previewUrl ? (
+                    <div className="space-y-2">
+                      <img src={previewUrl} alt="Document Preview" className="h-28 mx-auto rounded-lg object-contain border border-brand-forest/20" />
+                      <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">✓ File Selected: {proofImageFile?.name}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 py-4">
+                      <Camera className="mx-auto text-brand-yellow/80 animate-pulse" size={32} />
+                      <p className="text-xs font-bold text-gray-300">Tap to snap or upload signed document photo</p>
+                      <p className="text-[9px] text-gray-500 font-semibold">Supports JPEG, PNG, JPG (Max 4MB)</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {proofType === "photo" && (
-                <div className="aspect-video bg-[#0B1510] rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-brand-forest/40 p-4">
-                  <Camera size={38} className="text-brand-yellow mb-2 animate-pulse" />
-                  <p className="text-xs font-bold text-gray-300">Camera Interface Ready</p>
-                  <p className="text-[10px] text-gray-500 font-semibold mt-0.5">Capturing egg delivery crates check receipt</p>
+              {/* 2. Client Signature Pad Card */}
+              <div className="space-y-2">
+                <label className="text-[10px] text-brand-yellow font-black uppercase tracking-wider block">
+                  2. Client Digital Signature *
+                </label>
+                <div className="bg-[#132A1C]/30 border border-brand-forest/20 rounded-2xl p-3 shadow-inner">
+                  <SignatureCanvas onSave={(data) => setSignatureData(data)} />
                 </div>
-              )}
+              </div>
 
-              {proofType === "signature" && (
-                <div className="bg-[#0B1510] border border-brand-forest/20 rounded-2xl overflow-hidden p-1">
-                  <SignatureCanvas onSave={(data) => console.log("Signature captured:", data)} />
-                </div>
-              )}
+              {/* Mandatory Checklist Indicators */}
+              <div className="flex justify-between items-center text-[10px] px-1 font-bold">
+                <span className={proofImageFile ? "text-green-400" : "text-gray-500"}>
+                  {proofImageFile ? "✓ Document Photo Uploaded" : "✗ Signed Document Photo Required"}
+                </span>
+                <span className={signatureData ? "text-green-400" : "text-gray-500"}>
+                  {signatureData ? "✓ Signature Drawing Captured" : "✗ Client Signature Required"}
+                </span>
+              </div>
 
-              <div className="pt-4 space-y-3">
+              <div className="pt-2 space-y-3">
                 <Button 
-                  className="w-full h-14 bg-brand-yellow text-brand-forest hover:bg-brand-yellow/90 font-black text-sm rounded-2xl tracking-widest" 
+                  className="w-full h-14 bg-brand-yellow text-brand-forest hover:bg-brand-yellow/90 font-black text-sm rounded-2xl tracking-widest disabled:opacity-50" 
                   onClick={handleConfirm}
                   isLoading={isLoading}
-                  disabled={!proofType}
+                  disabled={!proofImageFile || !signatureData}
                 >
                   SUBMIT GATEPASS & CLOSE
                 </Button>
