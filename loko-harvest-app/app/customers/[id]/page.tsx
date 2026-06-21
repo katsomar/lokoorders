@@ -17,7 +17,8 @@ import {
   Building2, 
   DollarSign, 
   FileText,
-  Loader2
+  Loader2,
+  PenTool
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -118,6 +119,7 @@ export default function CustomerDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [selectedProofTx, setSelectedProofTx] = useState<any | null>(null);
+  const [selectedSignatureTx, setSelectedSignatureTx] = useState<any | null>(null);
 
   // Logo uploading real logic
   const [logoUploading, setLogoUploading] = useState(false);
@@ -239,6 +241,10 @@ export default function CustomerDetailPage() {
               unitPrice: parseFloat(item.unit_price || 0)
             }));
 
+            const deliveries = tx.invoice?.order?.deliveries || [];
+            const completedDelivery = deliveries.find((d: any) => d.status === "delivered");
+            const firstProof = completedDelivery?.proofs?.[0];
+
             consolidatedLedger.push({
               id: tx.id,
               date: tx.transaction_date,
@@ -252,9 +258,10 @@ export default function CustomerDetailPage() {
               balance: parseFloat(tx.running_balance || 0),
               efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
               paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-              deliveredBy: "-",
+              deliveredBy: completedDelivery?.driver?.full_name || "-",
               receivedBy: tx.user?.name || "System",
-              proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+              proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
+              signatureUrl: firstProof?.signature_proof_url || null,
               items: mappedItems
             });
           });
@@ -278,6 +285,10 @@ export default function CustomerDetailPage() {
             unitPrice: parseFloat(item.unit_price || 0)
           }));
 
+          const deliveries = tx.invoice?.order?.deliveries || [];
+          const completedDelivery = deliveries.find((d: any) => d.status === "delivered");
+          const firstProof = completedDelivery?.proofs?.[0];
+
           return {
             id: tx.id,
             date: tx.transaction_date,
@@ -289,9 +300,10 @@ export default function CustomerDetailPage() {
             balance: parseFloat(tx.running_balance || 0),
             efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
             paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-            deliveredBy: "-",
+            deliveredBy: completedDelivery?.driver?.full_name || "-",
             receivedBy: tx.user?.name || "System",
-            proofDoc: tx.type === "invoice_raised" ? "/proof_inv.jpg" : "/proof_rcpt.jpg",
+            proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
+            signatureUrl: firstProof?.signature_proof_url || null,
             items: mappedItems
           };
         });
@@ -983,14 +995,15 @@ export default function CustomerDetailPage() {
                           <TableHead className="text-xs font-bold text-brand-forest">Handled By</TableHead>
                           <TableHead className="text-right text-xs font-bold text-brand-forest">Debit (Invoice)</TableHead>
                           <TableHead className="text-right text-xs font-bold text-brand-forest">Credit (Payment)</TableHead>
-                          <TableHead className="text-center text-xs font-bold text-brand-forest">Verify</TableHead>
+                          <TableHead className="text-center text-xs font-bold text-brand-forest">Proof Document</TableHead>
+                          <TableHead className="text-center text-xs font-bold text-brand-forest">Signature</TableHead>
                           <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Running Balance</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {isLedgerLoading ? (
                           <TableRow>
-                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-12">
+                            <TableCell colSpan={customer.isParent ? 11 : 10} className="text-center py-12">
                               <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 font-bold">
                                 <Loader2 className="animate-spin text-brand-forest" size={16} />
                                 Loading transaction ledger history...
@@ -999,7 +1012,7 @@ export default function CustomerDetailPage() {
                           </TableRow>
                         ) : displayLedger.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={customer.isParent ? 10 : 9} className="text-center py-12 text-gray-500 font-body text-xs">
+                            <TableCell colSpan={customer.isParent ? 11 : 10} className="text-center py-12 text-gray-500 font-body text-xs">
                               No transaction logs found.
                             </TableCell>
                           </TableRow>
@@ -1062,6 +1075,20 @@ export default function CustomerDetailPage() {
                                   <FileText size={12} />
                                   Proof
                                 </Button>
+                              </TableCell>
+                              <TableCell className="text-center text-xs">
+                                {tx.signatureUrl ? (
+                                  <Button 
+                                    variant="ghost" 
+                                    onClick={() => setSelectedSignatureTx(tx)}
+                                    className="h-7 px-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-[10px] gap-1 rounded-lg border border-blue-200 cursor-pointer"
+                                  >
+                                    <PenTool size={12} />
+                                    Signature
+                                  </Button>
+                                ) : (
+                                  <span className="text-gray-400 italic text-[10px] font-medium">—</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-right text-xs font-extrabold pr-6 text-brand-forest font-heading">
                                 UGX {tx.balance.toLocaleString()}
@@ -1818,85 +1845,102 @@ export default function CustomerDetailPage() {
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Paper Receipt Mockup Graphic */}
-              <div className="bg-amber-50/15 border-2 border-dashed border-gray-300 rounded-2xl p-5 font-mono text-xs text-gray-800 space-y-4 max-w-sm mx-auto shadow-inner relative overflow-hidden">
-                {/* Receipt Header */}
-                <div className="text-center border-b border-dashed border-gray-300 pb-3">
-                  <p className="font-extrabold uppercase text-[12px] tracking-wider text-brand-forest">LOKO HARVEST FARM LTD</p>
-                  <p className="text-[9px] text-gray-400">P.O. Box 7244, Mukono, Uganda</p>
-                  <p className="text-[9px] text-gray-400">Tel: +256 700 100 200</p>
-                  <div className={`mt-2 text-[9px] font-extrabold py-0.5 px-2 rounded uppercase inline-block ${
-                    selectedProofTx.type === "invoice" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
-                  }`}>
-                    {selectedProofTx.type === "invoice" ? "EFRIS Fiscal Invoice" : "Payment Receipt Voucher"}
-                  </div>
-                </div>
-
-                {/* Receipt Metadata */}
-                <div className="space-y-1.5 text-[9px]">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">DATE:</span>
-                    <span className="font-bold">{format(new Date(selectedProofTx.date), "dd/MM/yyyy")}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">REF NO:</span>
-                    <span className="font-bold">{selectedProofTx.ref}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">CUSTOMER:</span>
-                    <span className="font-bold">{customer.name}</span>
-                  </div>
-                </div>
-
-                {/* Amount Table */}
-                <div className="border-t border-b border-dashed border-gray-300 py-3 text-[10px]">
-                  <div className="flex justify-between font-bold text-gray-500 uppercase text-[8px] mb-1">
-                    <span>Description</span>
-                    <span>Amount</span>
-                  </div>
-                  <div className="flex justify-between text-gray-700 font-semibold mb-2 text-[10px]">
-                    <span className="max-w-[200px] truncate">{selectedProofTx.description}</span>
-                    <span>
-                      UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}
-                    </span>
-                  </div>
-
-                  {/* Mapped products breakdown (items taken) */}
-                  {selectedProofTx.items && selectedProofTx.items.length > 0 && (
-                    <div className="mt-2.5 pt-2 border-t border-dotted border-gray-200 text-[9px] text-gray-600 space-y-1">
-                      <div className="font-bold text-[8px] text-gray-400 uppercase tracking-wide">Items Mapped / Taken:</div>
-                      {selectedProofTx.items.map((item: any, idx: number) => (
-                        <div key={idx} className="flex justify-between font-mono pl-1">
-                          <span>• {item.productName} (x{item.quantity} {item.unit}) @ UGX {item.unitPrice.toLocaleString()}</span>
-                          <span className="font-bold text-gray-700">UGX {(item.quantity * item.unitPrice).toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex justify-between font-extrabold text-brand-forest border-t border-dashed border-gray-200 pt-1.5 text-xs">
-                    <span>TOTAL VALUE</span>
-                    <span>UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Handled By */}
-                <div className="text-[9px] text-gray-500 space-y-1">
-                  {selectedProofTx.receivedBy && selectedProofTx.receivedBy !== "—" && (
-                    <div>
-                      <span className="text-gray-400">RECORDED BY:</span> <strong className="text-gray-700">{selectedProofTx.receivedBy}</strong>
-                    </div>
+              {/* Actual Uploaded Document Image if available */}
+              {selectedProofTx.proofDoc && !selectedProofTx.proofDoc.startsWith("/proof_") ? (
+                <div className="border border-brand-sage/60 rounded-2xl overflow-hidden bg-gray-50 flex flex-col items-center justify-center max-w-sm mx-auto shadow-md p-4 space-y-3">
+                  <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Driver Uploaded Delivery Proof</p>
+                  <img 
+                    src={selectedProofTx.proofDoc} 
+                    alt="Delivery Proof Document" 
+                    className="max-h-[300px] w-auto object-contain rounded-xl select-none"
+                  />
+                  {selectedProofTx.deliveredBy && selectedProofTx.deliveredBy !== "-" && (
+                    <p className="text-[10px] text-gray-500 font-bold">
+                      Delivered By: <strong className="text-brand-forest">{selectedProofTx.deliveredBy}</strong>
+                    </p>
                   )}
                 </div>
-
-                {/* Footer barcode mockup */}
-                <div className="text-center pt-2 border-t border-dashed border-gray-200">
-                  <div className="inline-block bg-gray-900 text-white font-mono tracking-widest text-[8px] py-1.5 px-3 rounded uppercase font-bold">
-                    ||||| | |||| ||| || ||| | {selectedProofTx.ref}
+              ) : (
+                /* Paper Receipt Mockup Graphic */
+                <div className="bg-amber-50/15 border-2 border-dashed border-gray-300 rounded-2xl p-5 font-mono text-xs text-gray-800 space-y-4 max-w-sm mx-auto shadow-inner relative overflow-hidden">
+                  {/* Receipt Header */}
+                  <div className="text-center border-b border-dashed border-gray-300 pb-3">
+                    <p className="font-extrabold uppercase text-[12px] tracking-wider text-brand-forest">LOKO HARVEST FARM LTD</p>
+                    <p className="text-[9px] text-gray-400">P.O. Box 7244, Mukono, Uganda</p>
+                    <p className="text-[9px] text-gray-400">Tel: +256 700 100 200</p>
+                    <div className={`mt-2 text-[9px] font-extrabold py-0.5 px-2 rounded uppercase inline-block ${
+                      selectedProofTx.type === "invoice" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800"
+                    }`}>
+                      {selectedProofTx.type === "invoice" ? "EFRIS Fiscal Invoice" : "Payment Receipt Voucher"}
+                    </div>
                   </div>
-                  <p className="text-[8px] text-gray-400 mt-1 uppercase font-semibold text-center w-full">Thank you for doing business with Loko Harvest!</p>
+
+                  {/* Receipt Metadata */}
+                  <div className="space-y-1.5 text-[9px]">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">DATE:</span>
+                      <span className="font-bold">{format(new Date(selectedProofTx.date), "dd/MM/yyyy")}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">REF NO:</span>
+                      <span className="font-bold">{selectedProofTx.ref}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">CUSTOMER:</span>
+                      <span className="font-bold">{customer.name}</span>
+                    </div>
+                  </div>
+
+                  {/* Amount Table */}
+                  <div className="border-t border-b border-dashed border-gray-300 py-3 text-[10px]">
+                    <div className="flex justify-between font-bold text-gray-500 uppercase text-[8px] mb-1">
+                      <span>Description</span>
+                      <span>Amount</span>
+                    </div>
+                    <div className="flex justify-between text-gray-700 font-semibold mb-2 text-[10px]">
+                      <span className="max-w-[200px] truncate">{selectedProofTx.description}</span>
+                      <span>
+                        UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {/* Mapped products breakdown (items taken) */}
+                    {selectedProofTx.items && selectedProofTx.items.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-dotted border-gray-200 text-[9px] text-gray-600 space-y-1">
+                        <div className="font-bold text-[8px] text-gray-400 uppercase tracking-wide">Items Mapped / Taken:</div>
+                        {selectedProofTx.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between font-mono pl-1">
+                            <span>• {item.productName} (x{item.quantity} {item.unit}) @ UGX {item.unitPrice.toLocaleString()}</span>
+                            <span className="font-bold text-gray-700">UGX {(item.quantity * item.unitPrice).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex justify-between font-extrabold text-brand-forest border-t border-dashed border-gray-200 pt-1.5 text-xs">
+                      <span>TOTAL VALUE</span>
+                      <span>UGX {(selectedProofTx.debit > 0 ? selectedProofTx.debit : selectedProofTx.credit).toLocaleString()}</span>
+                    </div>
+                  </div>
+
+                  {/* Handled By */}
+                  <div className="text-[9px] text-gray-500 space-y-1">
+                    {selectedProofTx.receivedBy && selectedProofTx.receivedBy !== "—" && (
+                      <div>
+                        <span className="text-gray-400">RECORDED BY:</span> <strong className="text-gray-700">{selectedProofTx.receivedBy}</strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer barcode mockup */}
+                  <div className="text-center pt-2 border-t border-dashed border-gray-200">
+                    <div className="inline-block bg-gray-900 text-white font-mono tracking-widest text-[8px] py-1.5 px-3 rounded uppercase font-bold">
+                      ||||| | |||| ||| || ||| | {selectedProofTx.ref}
+                    </div>
+                    <p className="text-[8px] text-gray-400 mt-1 uppercase font-semibold text-center w-full">Thank you for doing business with Loko Harvest!</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-2.5">
@@ -1905,6 +1949,62 @@ export default function CustomerDetailPage() {
                   className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 w-full cursor-pointer"
                 >
                   Verify & Close Audit
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* VERIFY SIGNATURE MODAL */}
+      {selectedSignatureTx && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center justify-between border-b border-brand-sage/20">
+              <div className="flex items-center gap-2">
+                <PenTool size={20} className="text-brand-yellow" />
+                <div>
+                  <h3 className="font-heading font-bold text-base">Recipient Signature Verification</h3>
+                  <p className="text-[10px] text-white/70">Secure, read-only system audit signature verification</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedSignatureTx(null)}
+                className="text-white/60 hover:text-white text-xs font-bold bg-white/10 hover:bg-white/20 h-6 px-2 rounded-lg transition-colors border-none cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {selectedSignatureTx.signatureUrl ? (
+                <div className="border border-brand-sage/60 rounded-2xl p-4 bg-gray-50 flex flex-col items-center justify-center max-w-sm mx-auto shadow-md w-full">
+                  <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider mb-2">Customer Signature File</p>
+                  <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-inner w-full flex items-center justify-center h-40">
+                    <img 
+                      src={selectedSignatureTx.signatureUrl} 
+                      alt="Customer Signature" 
+                      className="max-h-[140px] w-auto object-contain select-none"
+                    />
+                  </div>
+                  {selectedSignatureTx.deliveredBy && selectedSignatureTx.deliveredBy !== "-" && (
+                    <p className="text-[10px] text-gray-500 font-bold mt-2">
+                      Delivered By: <strong className="text-brand-forest">{selectedSignatureTx.deliveredBy}</strong>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-center text-xs text-gray-500 font-medium">No digital signature recorded for this transaction.</p>
+              )}
+
+              <div className="flex justify-end gap-2.5">
+                <Button 
+                  onClick={() => setSelectedSignatureTx(null)}
+                  className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 w-full cursor-pointer"
+                >
+                  Close Verification
                 </Button>
               </div>
             </div>
