@@ -106,6 +106,7 @@ export default function DriversPage() {
   const [logisticsAddedFuelPerShift, setLogisticsAddedFuelPerShift] = useState("");
   const [logisticsTankCapacity, setLogisticsTankCapacity] = useState("");
   const [logisticsInitialFuel, setLogisticsInitialFuel] = useState<string>("100");
+  const [overrideFuelLevel, setOverrideFuelLevel] = useState(false);
 
   // Register Driver Modal State
   const [showRegisterDriverModal, setShowRegisterDriverModal] = useState(false);
@@ -283,6 +284,7 @@ export default function DriversPage() {
     }
     setLogisticsStatus(selectedVehicleForLogistics.status || "active");
     setLogisticsFuelLevel(selectedVehicleForLogistics.fuel_level ?? 100);
+    setOverrideFuelLevel(false);
     setLogisticsRegistration(selectedVehicleForLogistics.registration_number || "");
     setLogisticsMake(selectedVehicleForLogistics.make || "");
     setLogisticsModel(selectedVehicleForLogistics.model || "");
@@ -1233,15 +1235,46 @@ export default function DriversPage() {
                     </div>
                   </div>
 
-                  {/* Current Fuel Level (Automated & Read-only) */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Current Fuel Level (Automated)</label>
-                    <div className="flex justify-between items-center bg-gray-50 border border-brand-sage/25 p-3.5 rounded-xl">
-                      <span className="text-xs font-semibold text-gray-500">Calculated Current Level</span>
-                      <span className="font-mono font-bold text-xs text-brand-forest">
-                        {logisticsFuelLevel}% ({((logisticsFuelLevel / 100) * parseFloat(logisticsTankCapacity || "80")).toFixed(1)} L)
-                      </span>
+                  {/* Current Fuel Level (Automated & Read-only or Editable) */}
+                  <div className="space-y-1.5 bg-brand-sage/5 p-3.5 rounded-xl border border-brand-sage/35">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Current Fuel Level</label>
+                      <label className="inline-flex items-center gap-1.5 text-[10px] text-brand-forest font-bold cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          checked={overrideFuelLevel} 
+                          onChange={(e) => setOverrideFuelLevel(e.target.checked)}
+                          className="rounded border-brand-sage/50 text-brand-forest focus:ring-brand-forest h-3 w-3 cursor-pointer"
+                        />
+                        Manual Override
+                      </label>
                     </div>
+
+                    {overrideFuelLevel ? (
+                      <div className="space-y-2 mt-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-semibold text-gray-600">Adjust Fuel Level (%)</span>
+                          <span className="font-mono font-black text-xs text-brand-forest">
+                            {logisticsFuelLevel}% ({((logisticsFuelLevel / 100) * parseFloat(logisticsTankCapacity || "80")).toFixed(1)} L)
+                          </span>
+                        </div>
+                        <input 
+                          type="range" 
+                          min="0" 
+                          max="100" 
+                          value={logisticsFuelLevel} 
+                          onChange={(e) => setLogisticsFuelLevel(parseInt(e.target.value))}
+                          className="w-full accent-brand-forest h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-lg mt-2">
+                        <span className="text-xs font-semibold text-gray-500">Calculated Current Level</span>
+                        <span className="font-mono font-bold text-xs text-brand-forest">
+                          {logisticsFuelLevel}% ({((logisticsFuelLevel / 100) * parseFloat(logisticsTankCapacity || "80")).toFixed(1)} L)
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Initial Fuel Level Input */}
