@@ -476,4 +476,118 @@ class DriverController extends Controller
 
         return $this->success($data);
     }
+
+    public function activities($driverId)
+    {
+        $shifts = \App\Models\DriverShift::with(['vehicle'])
+            ->where('driver_id', $driverId)
+            ->get();
+
+        $deliveries = \App\Models\Delivery::with(['order.customer', 'order.items.product', 'assignedBy'])
+            ->where('driver_id', $driverId)
+            ->get();
+
+        $activities = collect();
+        $today = now()->toDateString();
+
+        foreach ($shifts as $shift) {
+            $formattedDate = \Illuminate\Support\Carbon::parse($shift->shift_date)->format('Y-m-d');
+            
+            if ($shift->start_time) {
+                $activities->push([
+                    'id' => $shift->id . '-start',
+                    'type' => 'shift_start',
+                    'timestamp' => $shift->start_time,
+                    'date' => $formattedDate,
+                    'reference' => 'Shift #' . substr($shift->id, 0, 8),
+                    'details' => "Clocked in with vehicle " . ($shift->vehicle ? $shift->vehicle->registration_number : 'N/A') . " (" . ($shift->vehicle ? ($shift->vehicle->make . ' ' . $shift->vehicle->model) : 'N/A') . ")",
+                    'notes' => $shift->notes,
+                    'status' => $shift->status === 'active' ? 'active' : 'completed',
+                    'crates' => null,
+                    'customer' => null,
+                    'assigned_by' => 'Self',
+                    'is_redo' => false,
+                ]);
+            }
+
+            if ($shift->end_time) {
+                $activities->push([
+                    'id' => $shift->id . '-end',
+                    'type' => 'shift_end',
+                    'timestamp' => $shift->end_time,
+                    'date' => $formattedDate,
+                    'reference' => 'Shift #' . substr($shift->id, 0, 8),
+                    'details' => "Clocked out. Completed " . $shift->deliveries_count . " deliveries (" . $shift->crates_delivered . " crates delivered)",
+                    'notes' => $shift->notes,
+                    'status' => 'completed',
+                    'crates' => null,
+                    'customer' => null,
+                    'assigned_by' => 'Self',
+                    'is_redo' => false,
+                ]);
+            }
+        }
+
+        foreach ($deliveries as $delivery) {
+            $order = $delivery->order;
+            $customerName = $order && $order->customer ? $order->customer->name : 'N/A';
+            $orderNumber = $order ? $order->order_number : 'N/A';
+            $crates = $order && $order->items ? (int)$order->items->sum('quantity') : 0;
+            $requiredDate = $order ? $order->required_delivery_date : null;
+
+            $isMissed = false;
+            if ($delivery->status !== 'delivered') {
+                if ($requiredDate && $requiredDate < $today) {
+                    $isMissed = true;
+                }
+            } else {
+                $deliveredDate = \Illuminate\Support\Carbon::parse($delivery->delivered_at)->toDateString();
+                if ($requiredDate && $deliveredDate > $requiredDate) {
+                    $isMissed = true;
+                }
+            }
+
+            $isRedo = $isMissed;
+
+            $timestamp = $delivery->delivered_at 
+                ?? $delivery->dispatched_at 
+                ?? $delivery->created_at;
+
+            if ($delivery->status === 'delivered') {
+                $type = $isRedo ? 'delivery_redone' : 'delivery_completed';
+                $details = "Completed delivery to " . $customerName . " (" . $crates . " crates)." . ($isRedo ? " (Re-delivered missed order)" : "");
+            } elseif ($delivery->status === 'in_transit') {
+                $type = $isRedo ? 'delivery_redoing' : 'delivery_transit';
+                $details = "In transit to " . $customerName . " (" . $crates . " crates)." . ($isRedo ? " (Re-doing missed order)" : "");
+            } else {
+                $type = $isRedo ? 'delivery_redoing' : 'delivery_assigned';
+                $details = "Assigned for delivery to " . $customerName . " (" . $crates . " crates)." . ($isRedo ? " (Re-attempting missed order)" : "");
+            }
+
+            $notes = null;
+            if ($delivery->delivery_notes) {
+                $decoded = json_decode($delivery->delivery_notes, true);
+                $notes = $decoded['notes'] ?? $delivery->delivery_notes;
+            }
+
+            $activities->push([
+                'id' => $delivery->id,
+                'type' => $type,
+                'timestamp' => $timestamp,
+                'date' => \Illuminate\Support\Carbon::parse($timestamp)->format('Y-m-d'),
+                'reference' => $orderNumber,
+                'details' => $details,
+                'notes' => $notes,
+                'status' => $isMissed ? 'missed' : $delivery->status,
+                'crates' => $crates,
+                'customer' => $customerName,
+                'assigned_by' => $delivery->assignedBy ? $delivery->assignedBy->name : 'HQ Supervisor',
+                'is_redo' => $isRedo,
+            ]);
+        }
+
+        $sortedActivities = $activities->sortByDesc('timestamp')->values();
+
+        return $this->success($sortedActivities);
+    }
 }

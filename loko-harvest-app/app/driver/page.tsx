@@ -427,14 +427,13 @@ export default function DriverDashboard() {
                                       <Clock size={10} /> {delivery.assigned_date || delivery.time} • {delivery.assigned_time || ""}
                                     </span>
                                     {delivery.required_delivery_date && delivery.required_delivery_date < todayStr && (
-                                      <span className="bg-red-50 text-red-600 border border-red-200/50 font-bold text-[9px] px-1.5 py-0.5 rounded">
-                                        Missed
+                                      <span className="bg-[#FFF3E0] text-[#E65100] border border-[#FFE0B2] font-black text-[9px] px-1.5 py-0.5 rounded animate-pulse">
+                                        Re-doing Order
                                       </span>
                                     )}
                                   </div>
                                 </div>
                               </div>
-                              
                               <div className="flex items-center gap-1 text-brand-forest">
                                 <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
                                 <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />

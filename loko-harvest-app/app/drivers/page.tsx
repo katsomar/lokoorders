@@ -85,10 +85,12 @@ export default function DriversPage() {
   const [isSubmittingRefuel, setIsSubmittingRefuel] = useState(false);
   const [refuelEvidenceFile, setRefuelEvidenceFile] = useState<File | null>(null);
 
-  // Shift Logs Drawer State
+  // Shift Logs / Activities Drawer State
   const [selectedDriverForLogs, setSelectedDriverForLogs] = useState<any | null>(null);
-  const [driverShifts, setDriverShifts] = useState<any[]>([]);
-  const [isLoadingShifts, setIsLoadingShifts] = useState(false);
+  const [driverActivities, setDriverActivities] = useState<any[]>([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [activityTypeFilter, setActivityTypeFilter] = useState<"all" | "shifts" | "deliveries">("all");
+  const [activityStatusFilter, setActivityStatusFilter] = useState<string>("all");
 
   // Vehicle Logistics Drawer State
   const [selectedVehicleForLogistics, setSelectedVehicleForLogistics] = useState<any | null>(null);
@@ -260,26 +262,30 @@ export default function DriversPage() {
     }
   }, [editDriverLicenseFile]);
 
-  // Fetch shift logs when a driver is selected
+  // Fetch activity & shift logs when a driver is selected
   useEffect(() => {
     if (!selectedDriverForLogs) {
-      setDriverShifts([]);
+      setDriverActivities([]);
       return;
     }
 
-    const fetchShifts = async () => {
-      setIsLoadingShifts(true);
+    // Reset filters for new driver selection
+    setActivityTypeFilter("all");
+    setActivityStatusFilter("all");
+
+    const fetchActivities = async () => {
+      setIsLoadingActivities(true);
       try {
-        const res = await api.get(`/drivers/${selectedDriverForLogs.id}/shifts`);
-        setDriverShifts(res.data.data || []);
+        const res = await api.get(`/drivers/${selectedDriverForLogs.id}/activities`);
+        setDriverActivities(res.data.data || []);
       } catch (err) {
-        console.error("Failed to fetch driver shift logs:", err);
+        console.error("Failed to fetch driver activities:", err);
       } finally {
-        setIsLoadingShifts(false);
+        setIsLoadingActivities(false);
       }
     };
 
-    fetchShifts();
+    fetchActivities();
   }, [selectedDriverForLogs]);
 
   // Synchronize Vehicle Logistics Form State
@@ -994,141 +1000,254 @@ export default function DriversPage() {
           </div>
         )}
 
-        {/* Slide-over Side Drawer Overlay for Driver Shift Logs */}
-        {selectedDriverForLogs && (
-          <div className="fixed inset-0 z-50 overflow-hidden">
-            {/* Backdrop layer */}
-            <div 
-              className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
-              onClick={() => setSelectedDriverForLogs(null)}
-            />
+        {/* Slide-over Side Drawer Overlay for Driver Activities and Shift Logs */}
+        {selectedDriverForLogs && (() => {
+          const filteredActivities = driverActivities.filter((act) => {
+            // 1. Filter by Activity Type
+            if (activityTypeFilter === "shifts") {
+              if (act.type !== "shift_start" && act.type !== "shift_end") return false;
+            } else if (activityTypeFilter === "deliveries") {
+              if (!act.type.startsWith("delivery_")) return false;
+            }
 
-            <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-              {/* Drawer panel */}
-              <div className="w-screen max-w-md bg-white shadow-2xl flex flex-col border-l border-brand-sage transform transition-transform duration-300">
-                
-                {/* Header */}
-                <div className="px-6 py-5 bg-brand-forest text-white flex justify-between items-center">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 rounded-lg bg-white/25 flex items-center justify-center">
-                      <User size={18} />
+            // 2. Filter by Status
+            if (activityStatusFilter !== "all") {
+              if (activityStatusFilter === "active") {
+                if (act.status !== "active" && act.status !== "assigned" && act.status !== "in_transit") return false;
+              } else if (activityStatusFilter === "completed") {
+                if (act.status !== "completed" && act.status !== "delivered") return false;
+              } else if (activityStatusFilter === "missed") {
+                if (act.status !== "missed") return false;
+              }
+            }
+
+            return true;
+          });
+
+          return (
+            <div className="fixed inset-0 z-50 overflow-hidden">
+              {/* Backdrop layer */}
+              <div 
+                className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
+                onClick={() => setSelectedDriverForLogs(null)}
+              />
+
+              <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+                {/* Drawer panel */}
+                <div className="w-screen max-w-4xl bg-white shadow-2xl flex flex-col border-l border-brand-sage transform transition-transform duration-300">
+                  
+                  {/* Header */}
+                  <div className="px-6 py-5 bg-brand-forest text-white flex justify-between items-center">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-9 w-9 rounded-lg bg-white/25 flex items-center justify-center">
+                        <User size={18} />
+                      </div>
+                      <div>
+                        <h2 className="font-heading font-black text-sm leading-tight">Driver Shift & Work Logs</h2>
+                        <p className="text-[10px] text-brand-sage font-bold uppercase mt-0.5">{selectedDriverForLogs.name}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="font-heading font-black text-sm leading-tight">Driver Shift Logs</h2>
-                      <p className="text-[10px] text-brand-sage font-bold uppercase mt-0.5">{selectedDriverForLogs.name}</p>
-                    </div>
+                    <button 
+                      onClick={() => setSelectedDriverForLogs(null)}
+                      className="h-8 w-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => setSelectedDriverForLogs(null)}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
 
-                {/* Body Content */}
-                <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6 bg-gray-50/50">
-                  {isLoadingShifts ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-xs font-bold gap-2">
-                      <Loader2 className="animate-spin text-brand-forest" size={28} />
-                      Retrieving driver shift history...
-                    </div>
-                  ) : driverShifts.length === 0 ? (
-                    <div className="bg-white rounded-xl border border-brand-sage/50 p-8 text-center text-gray-500 text-xs font-medium">
-                      No shift records logged for this driver.
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {driverShifts.map((shift) => {
-                        const formattedDate = new Date(shift.shift_date).toLocaleDateString("en-US", {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        });
-
-                        const formatTime = (timeStr: string | null) => {
-                          if (!timeStr) return "N/A";
-                          return new Date(timeStr).toLocaleTimeString("en-US", {
-                            hour: 'numeric',
-                            minute: '2-digit',
-                            hour12: true
-                          });
-                        };
-
-                        return (
-                          <div 
-                            key={shift.id} 
-                            className="bg-white rounded-xl shadow-sm border border-brand-sage/40 p-4.5 space-y-3 hover:shadow-md transition-shadow relative overflow-hidden"
-                          >
-                            {/* Color bar indicator */}
-                            <div className={`absolute top-0 left-0 bottom-0 w-1 ${
-                              shift.status === 'active' ? 'bg-green-500' : 'bg-brand-mid'
-                            }`} />
-
-                            <div className="flex justify-between items-start pl-2">
-                              <div>
-                                <h4 className="font-heading font-black text-brand-forest text-xs leading-snug">
-                                  {formattedDate}
-                                </h4>
-                                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                                  Vehicle: <span className="text-gray-700 font-bold">{shift.vehicle_registration}</span> • {shift.vehicle_make}
-                                </p>
-                              </div>
-                              <Badge 
-                                className={`font-bold text-[8px] uppercase tracking-wider px-2 py-0.5 border-none flex items-center gap-1 ${
-                                  shift.status === 'active' 
-                                    ? 'bg-green-100 text-green-700 animate-pulse' 
-                                    : 'bg-brand-sage/20 text-brand-forest'
-                                }`}
-                              >
-                                {shift.status === 'active' && <span className="h-1.5 w-1.5 rounded-full bg-green-500" />}
-                                {shift.status}
-                              </Badge>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 bg-brand-sage/5 p-3 rounded-lg border border-brand-sage/25 text-xs pl-5">
-                              <div className="space-y-0.5">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Shift Hours</p>
-                                <p className="font-bold text-gray-700 leading-snug">
-                                  {formatTime(shift.start_time)} - {shift.end_time ? formatTime(shift.end_time) : 'Active'}
-                                </p>
-                              </div>
-                              <div className="space-y-0.5">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Volume & Crates</p>
-                                <p className="font-bold text-gray-700 leading-snug">
-                                  {shift.deliveries_count} dropoffs • {shift.crates_delivered} trays
-                                </p>
-                              </div>
-                            </div>
-
-                            {shift.notes && (
-                              <div className="bg-gray-50 border border-gray-150/50 rounded-lg p-2.5 text-[10px] text-gray-500 leading-relaxed pl-4">
-                                <strong className="text-gray-700 font-bold block mb-0.5">Shift Notes:</strong>
-                                {shift.notes}
-                              </div>
-                            )}
+                  {/* Body Content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-6 bg-gray-50/50 space-y-4">
+                    {isLoadingActivities ? (
+                      <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-xs font-bold gap-2">
+                        <Loader2 className="animate-spin text-brand-forest" size={28} />
+                        Retrieving driver activity history...
+                      </div>
+                    ) : driverActivities.length === 0 ? (
+                      <div className="bg-white rounded-xl border border-brand-sage/50 p-8 text-center text-gray-500 text-xs font-medium">
+                        No shift or delivery activities logged for this driver.
+                      </div>
+                    ) : (
+                      <>
+                        {/* Activity Filter Bar */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-brand-sage/40 shadow-xs">
+                          <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">
+                            <span>Filter Activities</span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          <div className="flex flex-wrap items-center gap-4">
+                            {/* Type selector */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-500">Activity Type:</span>
+                              <select 
+                                value={activityTypeFilter} 
+                                onChange={(e) => setActivityTypeFilter(e.target.value as any)}
+                                className="h-8 text-[11px] font-bold rounded-lg border border-brand-sage/50 bg-[#F4F6F5] text-brand-forest px-2.5 focus:outline-none focus:ring-1 focus:ring-brand-mid cursor-pointer"
+                              >
+                                <option value="all">All Activities</option>
+                                <option value="shifts">Shifts / Clock-ins Only</option>
+                                <option value="deliveries">Deliveries / Fulfillment Only</option>
+                              </select>
+                            </div>
 
-                {/* Footer */}
-                <div className="px-6 py-4 bg-gray-50 border-t border-brand-sage/30 flex justify-end">
-                  <Button 
-                    onClick={() => setSelectedDriverForLogs(null)}
-                    className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-9 cursor-pointer"
-                  >
-                    Close Log View
-                  </Button>
-                </div>
+                            {/* Status selector */}
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-gray-500">Status:</span>
+                              <select 
+                                value={activityStatusFilter} 
+                                onChange={(e) => setActivityStatusFilter(e.target.value)}
+                                className="h-8 text-[11px] font-bold rounded-lg border border-brand-sage/50 bg-[#F4F6F5] text-brand-forest px-2.5 focus:outline-none focus:ring-1 focus:ring-brand-mid cursor-pointer"
+                              >
+                                <option value="all">All Statuses</option>
+                                <option value="active">Active / In Progress</option>
+                                <option value="completed">Completed / Delivered</option>
+                                <option value="missed">Missed Deliveries</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
 
+                        {filteredActivities.length === 0 ? (
+                          <div className="bg-white rounded-xl border border-brand-sage/55 p-12 text-center text-gray-400 text-xs font-bold">
+                            No activities match the selected filter criteria.
+                          </div>
+                        ) : (
+                          <div className="bg-white rounded-xl shadow-sm border border-brand-sage/40 overflow-hidden">
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                  <tr className="bg-brand-forest text-white">
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Date & Time</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Activity</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Reference</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Details & Route</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Supervisor</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px]">Notes</th>
+                                    <th className="p-3.5 font-heading font-black uppercase tracking-wider text-[10px] text-right">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-brand-sage/20">
+                                  {filteredActivities.map((act) => {
+                                    const formattedTime = new Date(act.timestamp).toLocaleTimeString("en-US", {
+                                      hour: 'numeric',
+                                      minute: '2-digit',
+                                      hour12: true
+                                    });
+                                    const formattedDate = new Date(act.timestamp).toLocaleDateString("en-US", {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    });
+
+                                    return (
+                                      <tr key={act.id} className="hover:bg-brand-sage/5 transition-colors">
+                                        <td className="p-3.5 font-semibold text-gray-500 whitespace-nowrap">
+                                          <div className="font-bold text-gray-800">{formattedDate}</div>
+                                          <div className="text-[10px] mt-0.5">{formattedTime}</div>
+                                        </td>
+                                        <td className="p-3.5 font-bold">
+                                          {act.type === 'shift_start' && (
+                                            <span className="text-green-700 flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                              Shift Start
+                                            </span>
+                                          )}
+                                          {act.type === 'shift_end' && (
+                                            <span className="text-gray-600 flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-gray-500" />
+                                              Shift End
+                                            </span>
+                                          )}
+                                          {act.type === 'delivery_assigned' && (
+                                            <span className="text-[#C47B00] flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-[#C47B00]" />
+                                              Delivery Assigned
+                                            </span>
+                                          )}
+                                          {act.type === 'delivery_transit' && (
+                                            <span className="text-[#1565C0] flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-[#1565C0] animate-pulse" />
+                                              In Transit
+                                            </span>
+                                          )}
+                                          {act.type === 'delivery_completed' && (
+                                            <span className="text-green-600 flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-green-600" />
+                                              Delivery Complete
+                                            </span>
+                                          )}
+                                          {act.type === 'delivery_redoing' && (
+                                            <span className="text-orange-600 flex items-center gap-1.5 animate-pulse">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-orange-500" />
+                                              Re-doing Order
+                                            </span>
+                                          )}
+                                          {act.type === 'delivery_redone' && (
+                                            <span className="text-[#8D6E63] flex items-center gap-1.5">
+                                              <span className="h-1.5 w-1.5 rounded-full bg-[#8D6E63]" />
+                                              Re-done Order
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="p-3.5 whitespace-nowrap">
+                                          <span className="bg-brand-sage/20 text-brand-forest font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-md border border-brand-sage/30">
+                                            {act.reference}
+                                          </span>
+                                        </td>
+                                        <td className="p-3.5">
+                                          <div className="font-semibold text-gray-700 max-w-xs">{act.details}</div>
+                                          {act.is_redo && (
+                                            <div className="text-[9px] text-[#C47B00] font-black uppercase mt-1 flex items-center gap-1">
+                                              <span>⚠️ Re-attempt of missed order</span>
+                                            </div>
+                                          )}
+                                        </td>
+                                        <td className="p-3.5 font-bold text-gray-600 whitespace-nowrap">
+                                          {act.assigned_by}
+                                        </td>
+                                        <td className="p-3.5 text-gray-500 italic max-w-xs truncate" title={act.notes || ""}>
+                                          {act.notes || "-"}
+                                        </td>
+                                        <td className="p-3.5 text-right whitespace-nowrap">
+                                          <Badge 
+                                            className={`font-bold text-[8px] uppercase tracking-wider px-2 py-0.5 border-none ${
+                                              act.status === 'active' ? 'bg-green-100 text-green-700 animate-pulse' :
+                                              act.status === 'completed' ? 'bg-brand-sage/20 text-brand-forest' :
+                                              act.status === 'assigned' ? 'bg-amber-100 text-amber-800' :
+                                              act.status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                                              act.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                                              act.status === 'missed' ? 'bg-red-100 text-red-700 border border-red-200' :
+                                              'bg-gray-100 text-gray-600'
+                                            }`}
+                                          >
+                                            {act.status}
+                                          </Badge>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-6 py-4 bg-gray-50 border-t border-brand-sage/30 flex justify-end">
+                    <Button 
+                      onClick={() => setSelectedDriverForLogs(null)}
+                      className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-9 cursor-pointer"
+                    >
+                      Close Log View
+                    </Button>
+                  </div>
+
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Slide-over Side Drawer Overlay for Vehicle Logistics Management */}
         {selectedVehicleForLogistics && (

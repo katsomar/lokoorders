@@ -84,6 +84,8 @@ export default function DeliveryConfirmationPage() {
   }
 
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showDelayModal, setShowDelayModal] = useState(false);
   const [delayReason, setDelayReason] = useState("");
@@ -389,7 +391,6 @@ export default function DeliveryConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-[#0E1B15] text-white font-body pb-10">
-      
       {/* Header */}
       <header className="bg-[#132A1C] border-b border-brand-forest/30 p-4 flex items-center justify-between sticky top-0 z-[1010]">
         <div className="flex items-center gap-4">
@@ -405,7 +406,7 @@ export default function DeliveryConfirmationPage() {
             <p className="text-[10px] text-gray-300 font-bold uppercase tracking-widest">{delivery.order}</p>
           </div>
         </div>
-        
+
         {/* Dynamic Premium Status Indicator */}
         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
           deliveryStatus === "Assigned" ? "bg-amber-500/10 text-brand-yellow border-brand-yellow/30 animate-pulse" :
@@ -417,19 +418,27 @@ export default function DeliveryConfirmationPage() {
       </header>
 
       <main className="p-4 space-y-6 max-w-md mx-auto">
+        {isMissed && (
+          <div className="bg-red-500/20 border border-red-500/30 text-red-400 rounded-2xl p-4 flex gap-3 items-start animate-pulse">
+            <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={16} />
+            <div>
+              <p className="text-xs font-black text-red-400 uppercase tracking-wider">Re-attempting Delivery</p>
+              <p className="text-[11px] text-gray-300 font-semibold mt-1">
+                This order has exceeded its expected delivery date. You are re-doing this delivery.
+              </p>
+            </div>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
-          
-          {/* STEP 1: PRE-DISPATCH DETAILS SCREEN */}
           {step === 1 && (
-            <motion.div 
+            <motion.div
               key="step1"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
               className="space-y-6"
             >
-              
-              {/* Customer Primary Card */}
               <Card className="border-brand-forest/20 bg-[#132A1C]/70 shadow-xl overflow-hidden rounded-2xl">
                 <CardContent className="pt-6 space-y-4 text-white">
                   <div className="flex justify-between items-start">
@@ -443,7 +452,7 @@ export default function DeliveryConfirmationPage() {
                       </a>
                     ) : null}
                   </div>
-                  
+
                   <div className="flex gap-3 items-start pt-2 border-t border-brand-forest/20">
                     <MapPin className="text-brand-yellow shrink-0 mt-0.5" size={16} />
                     <p className="text-xs text-gray-300 font-semibold">{delivery.address}</p>
