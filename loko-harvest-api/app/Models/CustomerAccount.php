@@ -8,4 +8,9 @@ class CustomerAccount extends Model
 {
     use \App\Traits\HasUuid;
     protected $guarded = [];
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
 }

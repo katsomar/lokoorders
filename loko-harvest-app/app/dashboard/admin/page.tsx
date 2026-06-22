@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShoppingBag, 
   Truck, 
@@ -12,7 +12,9 @@ import {
   History,
   Users,
   User,
-  Activity
+  Activity,
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -32,87 +34,160 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-const revenueData = [
-  { name: "01 May", collected: 4000000, invoiced: 4500000 },
-  { name: "05 May", collected: 3000000, invoiced: 5200000 },
-  { name: "10 May", collected: 2000000, invoiced: 4800000 },
-  { name: "15 May", collected: 2780000, invoiced: 3908000 },
-  { name: "20 May", collected: 1890000, invoiced: 4800000 },
-  { name: "25 May", collected: 2390000, invoiced: 3800000 },
-  { name: "30 May", collected: 3490000, invoiced: 4300000 },
-];
-
-const statusData = [
-  { name: "Delivered", value: 50, color: "#16A34A" }, // Fresh Green
-  { name: "Pending", value: 40, color: "#F5A800" },    // Soft Amber
-  { name: "Dispatched", value: 20, color: "#2563EB" }, // Vivid Blue
-  { name: "Processing", value: 30, color: "#8B5CF6" }, // Purple
-  { name: "Returned", value: 10, color: "#E11D48" },   // Rose
-];
-
-const topCustomers = [
-  { name: "Shoprite Lugogo", balance: 12500000 },
-  { name: "KFC Bukoto", balance: 8400000 },
-  { name: "Café Javas", balance: 6200000 },
-  { name: "Carrefour Oasis", balance: 4500000 },
-  { name: "Quality Supermarket", balance: 3800000 },
-];
-
-const activityFeed = [
-  { id: 1, type: "order", text: "New order LHO-2026-0042 placed by Shoprite Lugogo", time: "2 mins ago" },
-  { id: 2, type: "delivery", text: "Driver Musa confirmed delivery for LHO-2026-0038", time: "15 mins ago" },
-  { id: 3, type: "payment", text: "Payment of UGX 2,450,000 received from KFC Bukoto", time: "45 mins ago" },
-  { id: 4, type: "stock", text: "Transfer of 500 trays (Brown Eggs) to Sales Store", time: "1 hour ago" },
-  { id: 5, type: "return", text: "Return voucher LHR-2026-0008 raised for Café Javas", time: "2 hours ago" },
-];
+import { Button } from "@/components/ui/button";
+import api from "@/lib/api";
 
 export default function AdminDashboard() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>({
+    fulfillment: {
+      active_orders: 0,
+      today_new_orders: 0,
+      active_drivers: 0,
+      completed_today: 0,
+      pending_dispatch: 0,
+      returned_vouchers: 0,
+      trend: { value: 0, isUp: true }
+    },
+    financials: {
+      total_collections: 0,
+      pending_credits: 0,
+      top_claims: [],
+      trend: { value: 0, isUp: true }
+    },
+    status_distribution: [],
+    revenue_trend: [],
+    warehouse: {
+      total_value: 0,
+      production_value: 0,
+      sales_value: 0,
+      reserve_value: 0
+    },
+    top_customers: [],
+    activity_feed: []
+  });
+
+  const fetchDashboardData = async () => {
+    setIsLoading(true);
+    try {
+      const res = await api.get("/dashboard/admin");
+      if (res.data.data) {
+        setDashboardData(res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to load admin dashboard statistics:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const formatCurrency = (amount: any) => {
+    const val = parseFloat(amount || 0);
+    return `UGX ${val.toLocaleString()}`;
+  };
+
+  const formatCompactCurrency = (amount: any) => {
+    const val = parseFloat(amount || 0);
+    if (val >= 1_000_000) {
+      return `UGX ${(val / 1_000_000).toFixed(1)}M`;
+    }
+    if (val >= 1_000) {
+      return `UGX ${(val / 1_000).toFixed(0)}K`;
+    }
+    return `UGX ${val.toLocaleString()}`;
+  };
+
+  const formatTimeAgo = (timestamp: string) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-xs text-gray-500 font-bold">
+          <Loader2 className="animate-spin text-brand-forest" size={36} />
+          Assembling real-time admin metrics...
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8">
         
+        {/* Header Block */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-black text-brand-forest font-heading">HQ Control Center</h1>
+            <p className="text-gray-500 font-body text-xs mt-1">Real-time operational overview and performance statistics</p>
+          </div>
+          <Button 
+            onClick={fetchDashboardData}
+            variant="outline"
+            className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white"
+          >
+            <RefreshCw size={14} className="animate-spin-slow" />
+            Refresh Control Panel
+          </Button>
+        </div>
+
         {/* ROW 1: Upgraded Operations Cards & Donut Chart (Grid of 3 columns) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Card 1: Fulfillment Operations */}
           <KPICard 
             label="Fulfillment Operations" 
-            value={36} 
-            subtitle="Active orders handled in the last 24 hours"
+            value={dashboardData.fulfillment.active_orders} 
+            subtitle="Active orders currently in pipeline"
             icon={ShoppingBag} 
             rightIcon={Truck}
-            trend={{ value: 12, isUp: true }}
+            trend={dashboardData.fulfillment.trend}
             subMetrics={[
-              { label: "Today's New Orders", value: "24", icon: ShoppingBag },
-              { label: "Active Fleet Drivers", value: "6 drivers", icon: Users }
+              { label: "Today's New Orders", value: dashboardData.fulfillment.today_new_orders.toString(), icon: ShoppingBag },
+              { label: "Active Fleet Drivers", value: `${dashboardData.fulfillment.active_drivers} driver${dashboardData.fulfillment.active_drivers !== 1 ? 's' : ''}`, icon: Users }
             ]}
             breakdownTitle="Delivery Fulfillment Status"
             breakdown={[
-              { name: "Completed / Delivered", value: "12 orders", color: "#16A34A" },
-              { name: "Pending Dispatch", value: "18 orders", color: "#F5A800" },
-              { name: "Returned Vouchers", value: "6 items", color: "#E11D48" }
+              { name: "Completed (Last 24h)", value: `${dashboardData.fulfillment.completed_today} order${dashboardData.fulfillment.completed_today !== 1 ? 's' : ''}`, color: "#16A34A" },
+              { name: "Pending Dispatch", value: `${dashboardData.fulfillment.pending_dispatch} order${dashboardData.fulfillment.pending_dispatch !== 1 ? 's' : ''}`, color: "#F5A800" },
+              { name: "Returned Vouchers", value: `${dashboardData.fulfillment.returned_vouchers} item${dashboardData.fulfillment.returned_vouchers !== 1 ? 's' : ''}`, color: "#E11D48" }
             ]}
           />
 
           {/* Card 2: Financial Status & Claims */}
           <KPICard 
             label="Revenue & Collections MTD" 
-            value={4250000} 
+            value={dashboardData.financials.total_collections} 
             prefix="UGX "
             subtitle="Total collections posted this month"
             icon={Wallet} 
             rightIcon={TrendingUp}
-            trend={{ value: 8, isUp: true }}
+            trend={dashboardData.financials.trend}
             subMetrics={[
-              { label: "Pending Account Credits", value: "UGX 1.2M MTD", icon: CheckCircle2 }
+              { label: "Total Receivables Ledger", value: formatCompactCurrency(dashboardData.financials.pending_credits), icon: CheckCircle2 }
             ]}
             breakdownTitle="Top Outstanding Claims"
-            breakdown={[
-              { name: "Shoprite Lugogo Ledger", value: "UGX 12.5M", color: "#16A34A" },
-              { name: "KFC Bukoto Ledger", value: "UGX 8.4M", color: "#F5A800" },
-              { name: "Café Javas Ledger", value: "UGX 6.2M", color: "#2563EB" }
-            ]}
+            breakdown={dashboardData.financials.top_claims.map((claim: any) => ({
+              name: claim.name,
+              value: claim.value,
+              color: "#16A34A"
+            }))}
             iconBg="bg-green-50"
             iconColor="text-green-600"
           />
@@ -126,30 +201,35 @@ export default function AdminDashboard() {
             
             <CardContent className="p-5 flex flex-col justify-between flex-1">
               <div className="h-[210px] w-full flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={52}
-                      outerRadius={72}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+                {dashboardData.status_distribution.every((d: any) => d.value === 0) ? (
+                  <div className="text-gray-400 text-xs italic">No active order records this month</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={dashboardData.status_distribution}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={52}
+                        outerRadius={72}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {dashboardData.status_distribution.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
+                        formatter={(val) => [`${val}%`, "Share"]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-4 border-t border-brand-sage/50 pt-3.5">
-                {statusData.map((status) => (
+                {dashboardData.status_distribution.map((status: any) => (
                   <div key={status.name} className="flex items-center gap-1.5">
                     <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: status.color }} />
                     <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">{status.name}</span>
@@ -172,7 +252,7 @@ export default function AdminDashboard() {
             <CardContent className="p-6">
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={revenueData}>
+                  <AreaChart data={dashboardData.revenue_trend}>
                     <defs>
                       <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#1A5C2A" stopOpacity={0.15}/>
@@ -185,9 +265,10 @@ export default function AdminDashboard() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${(val/1_000_000).toFixed(0)}M`} />
                     <Tooltip 
                       contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
+                      formatter={(val) => [formatCurrency(val), ""]}
                     />
                     <Area type="monotone" dataKey="collected" stroke="#1A5C2A" strokeWidth={3} fillOpacity={1} fill="url(#colorCollected)" name="Collected" />
                     <Area type="monotone" dataKey="invoiced" stroke="#F5A800" strokeWidth={3} fillOpacity={1} fill="url(#colorInvoiced)" name="Invoiced" />
@@ -200,20 +281,20 @@ export default function AdminDashboard() {
           {/* Warehouse Stock detailed card */}
           <KPICard 
             label="Warehouse Inventory Valuation" 
-            value={103680000} 
+            value={dashboardData.warehouse.total_value} 
             prefix="UGX "
-            subtitle="Combined financial worth of Production and Sales stores"
+            subtitle="Combined financial worth of production & sales stores"
             icon={Warehouse} 
             rightIcon={Warehouse}
             subMetrics={[
-              { label: "Production Store Value", value: "UGX 58.2M", icon: Warehouse },
-              { label: "Sales Store Value", value: "UGX 45.4M", icon: Warehouse }
+              { label: "Production Store Value", value: formatCompactCurrency(dashboardData.warehouse.production_value), icon: Warehouse },
+              { label: "Sales Store Value", value: formatCompactCurrency(dashboardData.warehouse.sales_value), icon: Warehouse }
             ]}
             breakdownTitle="Inventory Worth Allocation"
             breakdown={[
-              { name: "Production Store (Bulk Trays)", value: "UGX 58,225,000", color: "#1A5C2A" },
-              { name: "Sales Store (Packaged Eggs)", value: "UGX 45,455,000", color: "#F5A800" },
-              { name: "Reserve Poultry & Feed Value", value: "UGX 10,950,000", color: "#2563EB" }
+              { name: "Production Store (Bulk)", value: formatCurrency(dashboardData.warehouse.production_value), color: "#1A5C2A" },
+              { name: "Sales Store (Packaged)", value: formatCurrency(dashboardData.warehouse.sales_value), color: "#F5A800" },
+              { name: "Reserve Poultry & Feed", value: formatCurrency(dashboardData.warehouse.reserve_value), color: "#2563EB" }
             ]}
             iconBg="bg-indigo-50"
             iconColor="text-indigo-600"
@@ -222,7 +303,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* ROW 3: Top Customers Bar Chart (2/3) & Live Activity Feed (1/3) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
           
           <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
             <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6">
@@ -230,51 +311,59 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topCustomers} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8F0E9" />
-                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${val/1000000}M`} />
-                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#1A5C2A', fontWeight: 600 }} width={120} />
-                    <Tooltip 
-                      cursor={{ fill: '#F8FBF8' }}
-                      contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
-                    />
-                    <Bar dataKey="balance" fill="#1A5C2A" radius={[0, 6, 6, 0]} barSize={20} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {dashboardData.top_customers.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-400 text-xs italic">
+                    No customers with outstanding credit balance.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dashboardData.top_customers} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8F0E9" />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${(val/1_000_000).toFixed(1)}M`} />
+                      <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#1A5C2A', fontWeight: 600 }} width={120} />
+                      <Tooltip 
+                        cursor={{ fill: '#F8FBF8' }}
+                        contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '12px' }}
+                        formatter={(val) => [formatCurrency(val), "Outstanding"]}
+                      />
+                      <Bar dataKey="balance" fill="#1A5C2A" radius={[0, 6, 6, 0]} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </CardContent>
           </Card>
 
           <Card className="border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
             <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-bold text-brand-forest font-heading">Live System Feed</CardTitle>
+              <CardTitle className="text-base font-bold text-brand-forest font-heading font-heading">Live System Feed</CardTitle>
               <History size={18} className="text-brand-mid" />
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-6 flex-1 flex flex-col justify-between">
               <div className="space-y-6">
-                {activityFeed.map((item) => (
-                  <div key={item.id} className="flex gap-4 group">
-                    <div className="mt-1">
-                      <div className={`h-2.5 w-2.5 rounded-full mt-1 ${
-                        item.type === 'order' ? 'bg-blue-500' :
-                        item.type === 'delivery' ? 'bg-green-500' :
-                        item.type === 'payment' ? 'bg-amber-500' :
-                        'bg-rose-500'
-                      }`} />
+                {dashboardData.activity_feed.length === 0 ? (
+                  <div className="text-center py-12 text-xs italic text-gray-400">No recent transactions or log activities recorded.</div>
+                ) : (
+                  dashboardData.activity_feed.map((item: any) => (
+                    <div key={item.id} className="flex gap-4 group">
+                      <div className="mt-1">
+                        <div className={`h-2.5 w-2.5 rounded-full mt-1 ${
+                          item.type === 'order' ? 'bg-blue-500 animate-pulse' :
+                          item.type === 'delivery' ? 'bg-green-500 animate-pulse' :
+                          item.type === 'payment' ? 'bg-amber-500 animate-pulse' :
+                          'bg-rose-500 animate-pulse'
+                        }`} />
+                      </div>
+                      <div className="flex-1 space-y-0.5">
+                        <p className="text-xs text-gray-700 leading-relaxed group-hover:text-brand-forest transition-colors font-semibold">
+                          {item.text}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">{formatTimeAgo(item.created_at)}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 space-y-0.5">
-                      <p className="text-xs text-gray-700 leading-relaxed group-hover:text-brand-forest transition-colors font-medium">
-                        {item.text}
-                      </p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{item.time}</p>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
-              <button className="w-full mt-6 py-2.5 text-xs font-bold text-brand-forest hover:bg-brand-sage/30 rounded-xl transition-all border border-brand-sage border-dashed">
-                View All Audits
-              </button>
             </CardContent>
           </Card>
 
