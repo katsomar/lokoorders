@@ -18,12 +18,28 @@ class ReportController extends Controller
 
     public function salesSummary(Request $request)
     {
-        $startDate = $request->start_date ?? now()->startOfMonth();
-        $endDate = $request->end_date ?? now()->endOfMonth();
+        $startDate = $request->start_date ?? now()->startOfMonth()->toDateString();
+        $endDate = $request->end_date ?? now()->endOfMonth()->toDateString();
+
+        // 5-month category trend
+        $salesTrend = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.id')
+            ->join('products', 'order_items.product_id', '=', 'products.id')
+            ->select(
+                DB::raw("DATE_FORMAT(orders.order_date, '%b') as month"),
+                DB::raw("SUM(CASE WHEN products.category = 'eggs' THEN order_items.line_total ELSE 0 END) as eggs"),
+                DB::raw("SUM(CASE WHEN products.category = 'poultry' THEN order_items.line_total ELSE 0 END) as poultry"),
+                DB::raw("SUM(CASE WHEN products.category = 'manure' THEN order_items.line_total ELSE 0 END) as manure"),
+                DB::raw("SUM(CASE WHEN products.category NOT IN ('eggs', 'poultry', 'manure') THEN order_items.line_total ELSE 0 END) as other")
+            )
+            ->where('orders.order_date', '>=', now()->subMonths(4)->startOfMonth()->toDateString())
+            ->groupBy(DB::raw("DATE_FORMAT(orders.order_date, '%b'), MONTH(orders.order_date)"))
+            ->orderBy(DB::raw("MONTH(orders.order_date)"))
+            ->get();
 
         $summary = [
-            'total_sales' => Order::whereBetween('order_date', [$startDate, $endDate])->sum('total_amount'),
-            'total_collections' => Payment::whereBetween('payment_date', [$startDate, $endDate])->sum('amount'),
+            'total_sales' => (float)Order::whereBetween('order_date', [$startDate, $endDate])->sum('total_amount'),
+            'total_collections' => (float)Payment::whereBetween('payment_date', [$startDate, $endDate])->sum('amount'),
             'order_count' => Order::whereBetween('order_date', [$startDate, $endDate])->count(),
             'sales_by_category' => DB::table('order_items')
                 ->join('orders', 'order_items.order_id', '=', 'orders.id')
@@ -31,7 +47,18 @@ class ReportController extends Controller
                 ->whereBetween('orders.order_date', [$startDate, $endDate])
                 ->select('products.category', DB::raw('SUM(order_items.line_total) as total'))
                 ->groupBy('products.category')
-                ->get(),
+                ->get()
+                ->map(function($item) {
+                    $item->total = (float)$item->total;
+                    return $item;
+                }),
+            'sales_trend' => $salesTrend->map(function($trend) {
+                $trend->eggs = (float)$trend->eggs;
+                $trend->poultry = (float)$trend->poultry;
+                $trend->manure = (float)$trend->manure;
+                $trend->other = (float)$trend->other;
+                return $trend;
+            }),
         ];
 
         return $this->success($summary);
