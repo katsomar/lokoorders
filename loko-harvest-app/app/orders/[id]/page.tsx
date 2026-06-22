@@ -15,7 +15,14 @@ import {
   Loader2,
   AlertCircle,
   Pencil,
-  Trash2
+  Trash2,
+  X,
+  Camera,
+  FileCheck2,
+  Smartphone,
+  UserCheck,
+  Map,
+  ExternalLink
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -44,6 +51,8 @@ export default function OrderDetailPage() {
   const [overrideReason, setOverrideReason] = useState("");
   const [overrideErrorMessage, setOverrideErrorMessage] = useState("");
   const [pendingStatusToRetry, setPendingStatusToRetry] = useState("");
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [lightboxScale, setLightboxScale] = useState<number>(1);
 
   const fetchOrderDetails = async () => {
     setIsLoading(true);
@@ -227,6 +236,35 @@ export default function OrderDetailPage() {
     ...timelineHistory
   ];
 
+  const deliveryWithProof = order.deliveries?.find((d: any) => d.proofs && d.proofs.length > 0) || order.deliveries?.[0];
+  const proof = deliveryWithProof?.proofs?.[0];
+
+  const parsedNotes = (() => {
+    try {
+      return deliveryWithProof?.delivery_notes ? JSON.parse(deliveryWithProof.delivery_notes) : null;
+    } catch (e) {
+      return { notes: deliveryWithProof?.delivery_notes };
+    }
+  })();
+
+  const formatDeliveredAt = (dateStr: string) => {
+    if (!dateStr) return "N/A";
+    try {
+      return format(new Date(dateStr), "EEEE, dd MMMM yyyy, hh:mm a");
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const formatConfirmedAt = (dateStr: string) => {
+    if (!dateStr) return "";
+    try {
+      return format(new Date(dateStr), "dd MMM yyyy, hh:mm a");
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
@@ -408,6 +446,178 @@ export default function OrderDetailPage() {
               </CardContent>
             </Card>
 
+            {/* Proof of Delivery Details Card */}
+            {order.status === 'delivered' && (
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+                <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-brand-forest font-heading flex items-center gap-2">
+                    <FileCheck2 size={16} className="text-brand-forest" />
+                    Proof of Delivery Details
+                  </CardTitle>
+                  {deliveryWithProof?.delivered_at && (
+                    <Badge className="bg-green-100 text-green-700 border-none text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg">
+                      Delivered
+                    </Badge>
+                  )}
+                </CardHeader>
+                <CardContent className="p-5">
+                  {proof ? (
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Left side: Metadata */}
+                        <div className="space-y-5">
+                          <div className="flex gap-3">
+                            <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <UserCheck size={16} />
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Recipient Name & Contact</p>
+                              <p className="text-xs font-bold text-gray-800 mt-0.5">
+                                {parsedNotes?.recipient_name || "N/A"}
+                              </p>
+                              {parsedNotes?.recipient_phone && (
+                                <p className="text-xs text-gray-500 font-medium mt-0.5 flex items-center gap-1">
+                                  <Smartphone size={12} className="text-gray-400" />
+                                  {parsedNotes.recipient_phone}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                            <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <User size={16} />
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Delivered By (Driver)</p>
+                              <p className="text-xs font-bold text-gray-800 mt-0.5">
+                                {deliveryWithProof?.driver?.name || "N/A"}
+                              </p>
+                              {deliveryWithProof?.delivered_at && (
+                                <p className="text-[10px] text-gray-400 font-bold mt-0.5 uppercase tracking-wide">
+                                  Time: {formatDeliveredAt(deliveryWithProof.delivered_at)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                            <div className="h-9 w-9 rounded-full bg-brand-sage/20 text-brand-forest flex items-center justify-center flex-shrink-0 shadow-sm">
+                              <MapPin size={16} />
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">GPS Delivery Location</p>
+                              {proof.gps_latitude && proof.gps_longitude ? (
+                                <>
+                                  <p className="text-xs font-bold text-gray-800 mt-0.5">
+                                    {parseFloat(proof.gps_latitude).toFixed(6)}, {parseFloat(proof.gps_longitude).toFixed(6)}
+                                  </p>
+                                  <a 
+                                    href={`https://www.google.com/maps/search/?api=1&query=${proof.gps_latitude},${proof.gps_longitude}`} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-[10px] text-brand-forest font-extrabold hover:underline mt-1 inline-flex items-center gap-1.5 bg-brand-sage/20 px-2 py-0.5 rounded-md"
+                                  >
+                                    <Map size={10} />
+                                    View on Google Maps
+                                    <ExternalLink size={8} />
+                                  </a>
+                                </>
+                              ) : (
+                                <p className="text-xs font-bold text-gray-800 mt-0.5">N/A</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right side: Delivery notes */}
+                        <div className="space-y-5">
+                          <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-200 h-full flex flex-col justify-between">
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Driver Delivery Notes</p>
+                              <p className="text-xs text-gray-700 italic mt-2 leading-relaxed">
+                                {parsedNotes?.notes ? `"${parsedNotes.notes}"` : "No notes provided by driver."}
+                              </p>
+                            </div>
+                            {proof.confirmed_at && (
+                              <div className="text-[9px] text-gray-400 font-bold uppercase mt-4 pt-4 border-t border-gray-150">
+                                Confirmed: {formatConfirmedAt(proof.confirmed_at)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Proof Images Section */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-gray-100">
+                        {/* Signed Document Photo */}
+                        <div className="space-y-2">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Camera size={12} /> Signed Document Proof
+                          </p>
+                          {proof.document_proof_url ? (
+                            <div 
+                              className="relative group overflow-hidden rounded-xl border border-brand-sage/40 bg-gray-50 h-48 w-full cursor-pointer shadow-sm hover:shadow-md transition-all duration-200"
+                              onClick={() => { setLightboxImage(proof.document_proof_url); setLightboxScale(1); }}
+                            >
+                              <img 
+                                src={proof.document_proof_url} 
+                                alt="Signed Document Proof" 
+                                className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-300"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center text-white text-xs font-bold gap-1.5 backdrop-blur-[1px]">
+                                <ExternalLink size={14} /> Click to Enlarge
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="h-48 w-full rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-4">
+                              <AlertTriangle size={24} className="text-amber-500 mb-2" />
+                              <p className="text-xs font-semibold">No document photo uploaded</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Recipient Signature */}
+                        <div className="space-y-2">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                            <Pencil size={12} /> Recipient Signature
+                          </p>
+                          {proof.signature_proof_url ? (
+                            <div 
+                              className="relative group overflow-hidden rounded-xl border border-brand-sage/40 bg-gray-50 h-48 w-full cursor-pointer shadow-sm hover:shadow-md transition-all duration-200"
+                              onClick={() => { setLightboxImage(proof.signature_proof_url); setLightboxScale(1); }}
+                            >
+                              <img 
+                                src={proof.signature_proof_url} 
+                                alt="Recipient Signature" 
+                                className="w-full h-full object-contain p-4 group-hover:scale-102 transition-transform duration-300 bg-white"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center text-white text-xs font-bold gap-1.5 backdrop-blur-[1px]">
+                                <ExternalLink size={14} /> Click to Enlarge
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="h-48 w-full rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 p-4">
+                              <AlertTriangle size={24} className="text-amber-500 mb-2" />
+                              <p className="text-xs font-semibold">No signature recorded</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-8 text-center bg-amber-50/50 rounded-xl border border-amber-100 p-5">
+                      <AlertTriangle className="text-amber-500 mb-2" size={28} />
+                      <h4 className="text-xs font-bold text-gray-800">Electronic Proof of Delivery Missing</h4>
+                      <p className="text-[11px] text-gray-500 max-w-md mt-1">
+                        This order is marked as delivered, but no electronic proof (document image, signature, coordinates) was uploaded or recorded for this delivery.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Items Table Card */}
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
@@ -586,6 +796,81 @@ export default function OrderDetailPage() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX / FULL-SIZE IMAGE PREVIEW OVERLAY */}
+      {lightboxImage && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[60] flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+          {/* Backdrop close trigger */}
+          <div 
+            className="absolute inset-0 cursor-zoom-out"
+            onClick={() => setLightboxImage(null)}
+          />
+          
+          {/* Top Toolbar */}
+          <div className="relative z-10 flex items-center gap-3 bg-black/50 backdrop-blur-md px-5 py-2 rounded-full border border-white/10 mb-4 text-white shadow-xl">
+            {!lightboxImage.toLowerCase().endsWith('.pdf') && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLightboxScale(prev => Math.max(0.5, prev - 0.25))}
+                  className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-base transition-colors cursor-pointer"
+                  title="Zoom Out"
+                >
+                  -
+                </button>
+                <span className="text-xs font-mono font-bold w-12 text-center">
+                  {Math.round(lightboxScale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLightboxScale(prev => Math.min(4, prev + 0.25))}
+                  className="h-8 w-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center font-bold text-base transition-colors cursor-pointer"
+                  title="Zoom In"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLightboxScale(1)}
+                  className="h-8 px-3 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-[10px] font-bold uppercase transition-colors cursor-pointer"
+                  title="Reset Zoom"
+                >
+                  Reset
+                </button>
+                <div className="h-4 w-px bg-white/20 mx-1" />
+              </>
+            )}
+            <button 
+              type="button"
+              onClick={() => setLightboxImage(null)}
+              className="h-8 w-8 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-colors cursor-pointer font-bold text-sm"
+              title="Close Preview"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          
+          {/* Image/PDF Container with Scroll/Overflow Support */}
+          <div className="relative max-w-4xl w-full h-[75vh] flex items-center justify-center z-10 border border-white/10 rounded-2xl bg-white shadow-2xl overflow-hidden">
+            {lightboxImage.toLowerCase().endsWith('.pdf') ? (
+              <iframe 
+                src={lightboxImage} 
+                className="w-full h-full rounded-2xl border-none"
+                title="PDF Document Preview"
+              />
+            ) : (
+              <div className="w-full h-full overflow-auto flex items-center justify-center p-4 scrollbar-thin scrollbar-thumb-white/25">
+                <img 
+                  src={lightboxImage} 
+                  alt="Full preview" 
+                  className="rounded-lg shadow-inner transition-transform duration-200 ease-out origin-center max-w-full max-h-[70vh] object-contain"
+                  style={{ transform: `scale(${lightboxScale})` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
