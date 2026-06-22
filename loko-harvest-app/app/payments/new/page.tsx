@@ -81,9 +81,18 @@ export default function NewPaymentPage() {
       try {
         const res = await api.get("/customers", { params: { per_page: 200 } });
         const list = res.data.data?.data || res.data.data || [];
-        setDbCustomers(list);
-        if (list.length > 0) {
-          setValue("customer_id", list[0].id);
+        
+        // Filter out customers with 0 balance
+        const filteredList = list.filter((c: any) => {
+          const bal = c.account?.current_balance ? parseFloat(c.account.current_balance) : 0;
+          return bal > 0;
+        });
+
+        setDbCustomers(filteredList);
+        if (filteredList.length > 0) {
+          setValue("customer_id", filteredList[0].id);
+        } else {
+          setValue("customer_id", "");
         }
       } catch (err) {
         console.error("Failed to load customers for payment:", err);
@@ -300,6 +309,12 @@ export default function NewPaymentPage() {
                   </div>
                 )}
               </div>
+
+              {dbCustomers.length === 0 && (
+                <div className="p-3.5 bg-green-50 text-green-700 text-xs font-bold rounded-xl border border-green-200 shadow-sm leading-relaxed">
+                  ✅ All customer accounts are fully settled. There are currently no customers with outstanding balances.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Input
