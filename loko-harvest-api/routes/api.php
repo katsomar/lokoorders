@@ -48,6 +48,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/deliveries/{id}/track', [App\Http\Controllers\Api\V1\DeliveryController::class, 'track']);
         
         // Payments
+        Route::get('/payments/metrics', [App\Http\Controllers\Api\V1\PaymentController::class, 'metrics']);
         Route::get('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'index']);
         Route::post('/payments', [App\Http\Controllers\Api\V1\PaymentController::class, 'store']);
 

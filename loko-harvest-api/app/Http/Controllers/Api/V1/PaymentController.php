@@ -19,12 +19,54 @@ class PaymentController extends Controller
 
     public function index(Request $request)
     {
-        $payments = Payment::with(['customer', 'allocations.invoice'])
+        $payments = Payment::with(['customer', 'allocations.invoice', 'user'])
             ->when($request->customer_id, fn($q) => $q->where('customer_id', $request->customer_id))
+            ->when($request->payment_method, fn($q) => $q->where('payment_method', $request->payment_method))
+            ->when($request->search, function($q) use ($request) {
+                $term = '%' . $request->search . '%';
+                $q->where(function($query) use ($term) {
+                    $query->where('payment_number', 'like', $term)
+                          ->orWhere('reference_number', 'like', $term)
+                          ->orWhereHas('customer', function($cQ) use ($term) {
+                              $cQ->where('name', 'like', $term);
+                          });
+                });
+            })
             ->latest()
             ->paginate($request->per_page ?? 15);
 
         return $this->success($payments);
+    }
+
+    public function metrics()
+    {
+        $startOfMonth = now()->startOfMonth()->toDateString();
+        $endOfMonth = now()->endOfMonth()->toDateString();
+
+        $totalMtd = Payment::whereBetween('payment_date', [$startOfMonth, $endOfMonth])->sum('amount');
+
+        // Top payment method by total amount collected
+        $methodStats = Payment::select('payment_method', DB::raw('SUM(amount) as total'))
+            ->groupBy('payment_method')
+            ->orderByDesc('total')
+            ->first();
+        
+        $topMethod = $methodStats ? $methodStats->payment_method : 'N/A';
+        $topMethodShare = 0;
+        $totalAllTime = Payment::sum('amount');
+        if ($totalAllTime > 0 && $methodStats) {
+            $topMethodShare = round(($methodStats->total / $totalAllTime) * 100);
+        }
+
+        // Total Outstanding Receivables (sum of customer balances)
+        $totalOutstanding = CustomerAccount::sum('current_balance');
+
+        return $this->success([
+            'total_mtd_collections' => (float)$totalMtd,
+            'top_method' => $topMethod,
+            'top_method_share' => $topMethodShare,
+            'total_outstanding' => (float)$totalOutstanding,
+        ]);
     }
 
     public function store(Request $request)
@@ -37,9 +79,12 @@ class PaymentController extends Controller
             'reference_number' => 'nullable|string',
             'notes' => 'nullable|string',
             'auto_allocate' => 'boolean',
+            'allocations' => 'nullable|array',
+            'allocations.*.invoice_id' => 'required_with:allocations|exists:invoices,id',
+            'allocations.*.amount_allocated' => 'required_with:allocations|numeric|min:0.01',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        return DB::transaction(function () use ($validated, $request) {
             $payment = Payment::create([
                 'payment_number' => 'LHP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -4)),
                 'customer_id' => $validated['customer_id'],
@@ -104,6 +149,23 @@ class PaymentController extends Controller
                         } else {
                             $invoice->update(['status' => 'partially_paid']);
                         }
+                    }
+                }
+            } else if (!empty($validated['allocations'])) {
+                foreach ($validated['allocations'] as $alloc) {
+                    PaymentInvoiceAllocation::create([
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $alloc['invoice_id'],
+                        'amount_allocated' => $alloc['amount_allocated'],
+                    ]);
+
+                    // Update invoice status
+                    $invoice = Invoice::findOrFail($alloc['invoice_id']);
+                    $totalAllocated = $invoice->allocations()->sum('amount_allocated');
+                    if ($totalAllocated >= $invoice->total_amount) {
+                        $invoice->update(['status' => 'paid']);
+                    } else {
+                        $invoice->update(['status' => 'partially_paid']);
                     }
                 }
             }

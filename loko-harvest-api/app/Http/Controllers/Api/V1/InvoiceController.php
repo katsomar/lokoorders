@@ -13,14 +13,23 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
-        $invoices = Invoice::with(['customer', 'order'])
+        $invoices = Invoice::with(['customer', 'order', 'allocations'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('invoice_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {
                       $c->where('name', 'like', "%{$request->search}%");
                   });
             })
-            ->when($request->status, fn($q) => $q->where('status', $request->status))
+            ->when($request->customer_id, fn($q) => $q->where('customer_id', $request->customer_id))
+            ->when($request->status, function($q) use ($request) {
+                if (is_array($request->status)) {
+                    $q->whereIn('status', $request->status);
+                } elseif (str_contains($request->status, ',')) {
+                    $q->whereIn('status', explode(',', $request->status));
+                } else {
+                    $q->where('status', $request->status);
+                }
+            })
             ->latest()
             ->paginate($request->per_page ?? 15);
 
