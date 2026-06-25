@@ -143,7 +143,7 @@ export default function SignupPage() {
           </button>
         </div>
 
-        <div className="my-auto mx-auto w-full max-w-md">
+        <div className="my-auto mx-auto w-full max-w-lg">
           <AnimatePresence mode="wait">
             {!isSuccess ? (
               <motion.div
@@ -155,15 +155,15 @@ export default function SignupPage() {
                 className="space-y-6"
               >
                 <div className="space-y-1">
-                  <h2 className="text-2xl font-black font-heading text-brand-forest tracking-tight">Create Admin Request</h2>
-                  <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                  <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Admin Request</h2>
+                  <p className="text-sm text-gray-500 font-medium leading-relaxed">
                     Submit your registration details below. All signup requests require manual authorization from an existing admin before login.
                   </p>
                 </div>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   {error && (
-                    <div className="rounded-xl bg-red-50 p-3 text-xs text-red-600 border border-red-100 font-bold animate-pulse-gentle">
+                    <div className="rounded-xl bg-red-50 p-3.5 text-xs text-red-600 border border-red-100 font-bold animate-pulse-gentle">
                       {error}
                     </div>
                   )}
@@ -175,7 +175,7 @@ export default function SignupPage() {
                       {...register("name")}
                       error={errors.name?.message}
                       required
-                      className="h-10 text-xs rounded-xl"
+                      className="h-11 text-sm rounded-xl"
                     />
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -186,7 +186,7 @@ export default function SignupPage() {
                         {...register("email")}
                         error={errors.email?.message}
                         required
-                        className="h-10 text-xs rounded-xl"
+                        className="h-11 text-sm rounded-xl"
                       />
 
                       <Input
@@ -196,7 +196,7 @@ export default function SignupPage() {
                         {...register("phone")}
                         error={errors.phone?.message}
                         required
-                        className="h-10 text-xs rounded-xl"
+                        className="h-11 text-sm rounded-xl"
                       />
                     </div>
 
@@ -208,7 +208,7 @@ export default function SignupPage() {
                         {...register("password")}
                         error={errors.password?.message}
                         required
-                        className="h-10 text-xs rounded-xl"
+                        className="h-11 text-sm rounded-xl"
                       />
 
                       <Input
@@ -218,14 +218,14 @@ export default function SignupPage() {
                         {...register("password_confirmation")}
                         error={errors.password_confirmation?.message}
                         required
-                        className="h-10 text-xs rounded-xl"
+                        className="h-11 text-sm rounded-xl"
                       />
                     </div>
                   </div>
 
                   <Button 
                     type="submit" 
-                    className="w-full font-bold text-xs rounded-xl h-10.5 cursor-pointer mt-2" 
+                    className="w-full font-bold text-sm rounded-xl h-11.5 cursor-pointer mt-2" 
                     isLoading={isLoading}
                   >
                     Submit Request
