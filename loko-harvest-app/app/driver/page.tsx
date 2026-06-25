@@ -24,7 +24,8 @@ import {
   ShieldCheck,
   AlertTriangle,
   User,
-  Coffee
+  Coffee,
+  Lock
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -66,6 +67,12 @@ export default function DriverDashboard() {
   const [routeTab, setRouteTab] = useState<"active" | "missed">("active");
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   interface AssignedDelivery {
     id: string;
@@ -138,6 +145,40 @@ export default function DriverDashboard() {
   const handleLogout = () => {
     clearAuth();
     router.push("/login");
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters.");
+      return;
+    }
+    
+    setIsSubmittingPassword(true);
+    setPasswordError(null);
+    try {
+      const response = await api.post("/auth/change-password", {
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirmation: confirmNewPassword,
+      });
+      if (response.data.success) {
+        alert("Password changed successfully!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setShowPasswordModal(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPasswordError(err.response?.data?.message || "Failed to change password. Please check your current password.");
+    } finally {
+      setIsSubmittingPassword(false);
+    }
   };
 
 
@@ -280,6 +321,16 @@ export default function DriverDashboard() {
               <Star size={11} className="fill-brand-yellow text-brand-yellow" />
               {stats ? stats.rating.toFixed(2) : "4.95"} Rating
             </div>
+            <button 
+              onClick={() => {
+                setPasswordError(null);
+                setShowPasswordModal(true);
+              }} 
+              className="h-9 w-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-brand-yellow hover:text-brand-yellow/80 hover:bg-white/20 transition-all active:scale-95 shadow-sm"
+              title="Change Password"
+            >
+              <Lock size={16} />
+            </button>
             <button 
               onClick={handleLogout} 
               className="h-9 w-9 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-red-300 hover:text-red-400 hover:bg-white/20 transition-all active:scale-95 shadow-sm"
@@ -916,6 +967,90 @@ export default function DriverDashboard() {
                   className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-8 px-4 cursor-pointer flex items-center gap-1.5"
                 >
                   {isSubmittingRefuel ? "Saving..." : "Record Refuel"}
+                </Button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden border border-brand-sage shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-8">
+            
+            {/* Modal Header */}
+            <div className="bg-brand-forest text-white px-5 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Lock className="text-brand-yellow" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Change Password</h3>
+              </div>
+              <button type="button" onClick={() => setShowPasswordModal(false)} className="text-brand-sage hover:text-white cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleChangePassword} className="p-5 space-y-4 text-xs">
+              
+              {passwordError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 font-bold rounded-xl">
+                  {passwordError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-gray-500 font-bold uppercase mb-1.5">Current Password</label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  className="h-9 text-xs rounded-xl border-brand-sage/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-500 font-bold uppercase mb-1.5">New Password</label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  className="h-9 text-xs rounded-xl border-brand-sage/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-500 font-bold uppercase mb-1.5">Confirm New Password</label>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  required
+                  className="h-9 text-xs rounded-xl border-brand-sage/50"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/30">
+                <Button 
+                  type="button" 
+                  onClick={() => setShowPasswordModal(false)} 
+                  className="bg-white hover:bg-gray-100 text-gray-600 border border-gray-250 text-xs font-bold rounded-xl h-8 px-4 cursor-pointer"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={isSubmittingPassword}
+                  className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-8 px-4 cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSubmittingPassword ? "Updating..." : "Update Password"}
                 </Button>
               </div>
 

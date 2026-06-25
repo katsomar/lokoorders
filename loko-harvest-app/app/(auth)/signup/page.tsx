@@ -17,9 +17,7 @@ const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
-  role: z.enum(["store_manager", "sales_accounts", "driver", "production_manager"], {
-    message: "Please select a valid role",
-  }),
+  role: z.literal("admin"),
   password: z.string().min(6, "Password must be at least 6 characters"),
   password_confirmation: z.string().min(6, "Password confirmation must be at least 6 characters"),
 }).refine((data) => data.password === data.password_confirmation, {
@@ -42,7 +40,7 @@ export default function SignupPage() {
   } = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      role: undefined,
+      role: "admin",
     }
   });
 
@@ -61,12 +59,7 @@ export default function SignupPage() {
     }
   };
 
-  const roleOptions = [
-    { label: "Store Manager", value: "store_manager" },
-    { label: "Sales & Accounts", value: "sales_accounts" },
-    { label: "Driver", value: "driver" },
-    { label: "Production Manager", value: "production_manager" },
-  ];
+  // Role is locked to admin for self-signups
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-brand-sage p-4 font-body">
@@ -137,13 +130,7 @@ export default function SignupPage() {
                       required
                     />
 
-                    <Select
-                      label="Operational Role"
-                      options={roleOptions}
-                      {...register("role")}
-                      error={errors.role?.message}
-                      required
-                    />
+                    {/* Default role is admin */}
 
                     <Input
                       label="Password"

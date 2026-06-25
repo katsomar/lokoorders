@@ -40,12 +40,12 @@ class UserRegistrationTest extends TestCase
     public function test_user_can_register()
     {
         $response = $this->postJson('/api/v1/auth/register', [
-            'name' => 'Alice Manager',
+            'name' => 'Alice Admin',
             'email' => 'alice@test.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
             'phone' => '0700000002',
-            'role' => 'store_manager',
+            'role' => 'admin',
         ]);
 
         $response->assertStatus(201)
@@ -56,7 +56,7 @@ class UserRegistrationTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'alice@test.com',
-            'role' => 'store_manager',
+            'role' => 'admin',
             'status' => 'pending',
         ]);
     }
@@ -242,5 +242,56 @@ class UserRegistrationTest extends TestCase
         $this->actingAs($this->driver, 'sanctum')
             ->deleteJson("/api/v1/admin/users/{$user->id}")
             ->assertStatus(403);
+    }
+
+    public function test_non_admin_roles_cannot_self_register()
+    {
+        $nonAdminRoles = ['store_manager', 'sales_accounts', 'driver', 'production_manager'];
+
+        foreach ($nonAdminRoles as $role) {
+            $response = $this->postJson('/api/v1/auth/register', [
+                'name' => 'Alice ' . $role,
+                'email' => $role . '@test.com',
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'phone' => '0700000002',
+                'role' => $role,
+            ]);
+            $response->assertStatus(422);
+        }
+    }
+
+    public function test_authenticated_user_can_change_password()
+    {
+        $response = $this->actingAs($this->driver, 'sanctum')
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'password',
+                'new_password' => 'newsecret123',
+                'new_password_confirmation' => 'newsecret123',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['success' => true]);
+
+        // Attempt login with new password
+        $loginRes = $this->postJson('/api/v1/auth/login', [
+            'email' => $this->driver->email,
+            'password' => 'newsecret123',
+            'device_name' => 'test-device',
+        ]);
+        $loginRes->assertStatus(200);
+    }
+
+    public function test_change_password_requires_correct_current_password()
+    {
+        $response = $this->actingAs($this->driver, 'sanctum')
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'wrongpassword',
+                'new_password' => 'newsecret123',
+                'new_password_confirmation' => 'newsecret123',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['current_password']);
     }
 }

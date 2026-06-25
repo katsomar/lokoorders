@@ -58,7 +58,7 @@ class AuthController extends Controller
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:6|confirmed',
             'phone' => 'nullable|string',
-            'role' => 'required|string|in:store_manager,sales_accounts,driver,production_manager',
+            'role' => 'required|string|in:admin',
         ]);
 
         $user = User::create([
@@ -93,6 +93,30 @@ class AuthController extends Controller
             'success' => true,
             'data' => $request->user(),
             'message' => 'User profile retrieved'
+        ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($request->current_password, $user->password)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'current_password' => ['The provided current password is incorrect.'],
+            ]);
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully.'
         ]);
     }
 }

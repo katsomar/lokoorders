@@ -19,14 +19,6 @@ class UserSeeder extends Seeder
                 'status' => 'active',
                 'phone' => '0700000000',
             ],
-            [
-                'name' => 'Sarah Sales',
-                'email' => 'sales@lokoharvest.com',
-                'password' => Hash::make('password'),
-                'role' => 'sales_accounts',
-                'status' => 'active',
-                'phone' => '0700000001',
-            ],
         ];
 
         foreach ($users as $userData) {
