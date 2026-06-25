@@ -36,12 +36,20 @@ import api from "@/lib/api";
 export default function ProductionStoreActivityPage() {
   const router = useRouter();
   const [transfers, setTransfers] = useState<any[]>([]);
-  const [allTransfersForAnalytics, setAllTransfersForAnalytics] = useState<any[]>([]);
+  const [aggregates, setAggregates] = useState<any>({
+    total_quantity: 0,
+    total_quantity_trays: 0,
+    total_quantity_others: 0,
+    total_valuation: 0,
+    count: 0,
+    product_values: {}
+  });
   const [productionStores, setProductionStores] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
-  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filters State
   const [startDate, setStartDate] = useState("");
@@ -77,6 +85,7 @@ export default function ProductionStoreActivityPage() {
   // Fetch paginated transfers
   const fetchTransfers = async () => {
     setIsLoading(true);
+    setIsAnalyticsLoading(true);
     try {
       const res = await api.get("/store-transfers", {
         params: {
@@ -95,38 +104,20 @@ export default function ProductionStoreActivityPage() {
         setTotalPages(responseData.last_page || 1);
         setTotalItems(responseData.total || 0);
         setPerPage(responseData.per_page || 15);
+        if (responseData.aggregates) {
+          setAggregates(responseData.aggregates);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch transfers:", err);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Fetch all filtered records for full-context analytics
-  const fetchAllForAnalytics = async () => {
-    setIsAnalyticsLoading(true);
-    try {
-      const res = await api.get("/store-transfers", {
-        params: {
-          production_store_id: selectedStore || undefined,
-          product_id: selectedProduct || undefined,
-          start_date: startDate || undefined,
-          end_date: endDate || undefined,
-          per_page: 1000 // Large page size to pull entire context
-        }
-      });
-      setAllTransfersForAnalytics(res.data.data?.data || []);
-    } catch (err) {
-      console.error("Failed to fetch analytics data:", err);
-    } finally {
       setIsAnalyticsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchTransfers();
-    fetchAllForAnalytics();
   }, [startDate, endDate, selectedStore, selectedProduct, currentPage]);
 
   // Reset page when filters change
@@ -136,32 +127,12 @@ export default function ProductionStoreActivityPage() {
 
   // Dynamic analytics calculations
   const analytics = useMemo(() => {
-    let totalValuation = 0;
-    let totalQuantityTrays = 0;
-    let totalQuantityOthers = 0;
-    const count = allTransfersForAnalytics.length;
-
-    // Category value distributions
-    const productValues: { [name: string]: number } = {};
-
-    allTransfersForAnalytics.forEach(t => {
-      const qty = parseFloat(t.quantity) || 0;
-      const price = parseFloat(t.unit_price) || 0;
-      const value = qty * price;
-      
-      totalValuation += value;
-
-      if (t.product?.unit_of_measure === "trays") {
-        totalQuantityTrays += qty;
-      } else {
-        totalQuantityOthers += qty;
-      }
-
-      const prodName = t.product?.name || "Other Products";
-      productValues[prodName] = (productValues[prodName] || 0) + value;
-    });
-
+    const totalValuation = aggregates.total_valuation || 0;
+    const totalQuantityTrays = aggregates.total_quantity_trays || 0;
+    const totalQuantityOthers = aggregates.total_quantity_others || 0;
+    const count = aggregates.count || 0;
     const averageValuation = count > 0 ? totalValuation / count : 0;
+    const productValues = aggregates.product_values || {};
 
     return {
       totalValuation,
@@ -171,7 +142,7 @@ export default function ProductionStoreActivityPage() {
       averageValuation,
       productValues
     };
-  }, [allTransfersForAnalytics]);
+  }, [aggregates]);
 
   const getLogoColor = (productName: string = "") => {
     const lower = productName.toLowerCase();
@@ -181,35 +152,54 @@ export default function ProductionStoreActivityPage() {
     return "bg-red-50 text-red-700 border border-red-100";
   };
 
-  const exportCSV = () => {
-    if (allTransfersForAnalytics.length === 0) {
-      alert("No data available to export.");
-      return;
-    }
-    const headers = ["Date", "Product", "Product Code", "Source Store", "Destination Store", "Quantity", "Unit Price (UGX)", "Total Valuation (UGX)", "Authorized By", "Notes"];
-    const rows = allTransfersForAnalytics.map(t => [
-      t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd"),
-      t.product?.name || "N/A",
-      t.product?.code || "N/A",
-      t.production_store?.name || "N/A",
-      t.sales_store?.name || "N/A",
-      t.quantity,
-      t.unit_price || 0,
-      (parseFloat(t.quantity) * parseFloat(t.unit_price || 0)),
-      t.user?.name || "System",
-      t.notes || ""
-    ]);
+  const exportCSV = async () => {
+    setIsExporting(true);
+    try {
+      const res = await api.get("/store-transfers", {
+        params: {
+          production_store_id: selectedStore || undefined,
+          product_id: selectedProduct || undefined,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+          per_page: 2000 // Large page size to pull entire context on-demand for CSV
+        }
+      });
+      const records = res.data.data?.data || [];
+      if (records.length === 0) {
+        alert("No data available to export.");
+        return;
+      }
+      
+      const headers = ["Date", "Product", "Product Code", "Source Store", "Destination Store", "Quantity", "Unit Price (UGX)", "Total Valuation (UGX)", "Authorized By", "Notes"];
+      const rows = records.map((t: any) => [
+        t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd"),
+        t.product?.name || "N/A",
+        t.product?.code || "N/A",
+        t.production_store?.name || "N/A",
+        t.sales_store?.name || "N/A",
+        t.quantity,
+        t.unit_price || 0,
+        (parseFloat(t.quantity) * parseFloat(t.unit_price || 0)),
+        t.user?.name || "System",
+        t.notes || ""
+      ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
-    
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `production_transfers_audit_${format(new Date(), "yyyy-MM-dd")}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const csvContent = "data:text/csv;charset=utf-8," 
+        + [headers.join(","), ...rows.map((e: any[]) => e.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `production_transfers_audit_${format(new Date(), "yyyy-MM-dd")}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Failed to export analytics data:", err);
+      alert("Failed to export CSV.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -234,10 +224,11 @@ export default function ProductionStoreActivityPage() {
           <Button 
             variant="outline" 
             onClick={exportCSV}
+            disabled={isExporting}
             className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm cursor-pointer"
           >
-            <Download size={14} />
-            Export CSV Log
+            {isExporting ? <Loader2 className="animate-spin" size={14} /> : <Download size={14} />}
+            {isExporting ? "Exporting..." : "Export CSV Log"}
           </Button>
         </div>
 
@@ -398,7 +389,7 @@ export default function ProductionStoreActivityPage() {
                 <div className="text-center text-xs text-gray-400 py-6">No data to display in distribution.</div>
               ) : (
                 <div className="space-y-3.5">
-                  {Object.entries(analytics.productValues).map(([name, val]) => {
+                  {Object.entries(analytics.productValues).map(([name, val]: [string, any]) => {
                     const percentage = analytics.totalValuation > 0 ? (val / analytics.totalValuation) * 100 : 0;
                     return (
                       <div key={name} className="space-y-1">

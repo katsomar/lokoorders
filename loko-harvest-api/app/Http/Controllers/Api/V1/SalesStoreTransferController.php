@@ -16,16 +16,51 @@ class SalesStoreTransferController extends Controller
 
     public function index(Request $request)
     {
-        $transfers = SalesStoreTransfer::with(['product', 'fromStore', 'toStore', 'user'])
+        $query = SalesStoreTransfer::with(['product', 'fromStore', 'toStore', 'user'])
+            ->when($request->from_sales_store_id, fn($q) => $q->where('from_sales_store_id', $request->from_sales_store_id))
+            ->when($request->to_sales_store_id, fn($q) => $q->where('to_sales_store_id', $request->to_sales_store_id))
+            ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
+            ->when($request->start_date, fn($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
+            ->when($request->end_date, fn($q) => $q->whereDate('transfer_date', '<=', $request->end_date));
+
+        // Calculate aggregates on the database level
+        $totalQty = (float)$query->sum('quantity');
+        $totalVal = (float)DB::table('sales_store_transfers')
+            ->join('products', 'sales_store_transfers.product_id', '=', 'products.id')
             ->when($request->from_sales_store_id, fn($q) => $q->where('from_sales_store_id', $request->from_sales_store_id))
             ->when($request->to_sales_store_id, fn($q) => $q->where('to_sales_store_id', $request->to_sales_store_id))
             ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
             ->when($request->start_date, fn($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
             ->when($request->end_date, fn($q) => $q->whereDate('transfer_date', '<=', $request->end_date))
-            ->latest()
-            ->paginate($request->per_page ?? 15);
+            ->sum(DB::raw('sales_store_transfers.quantity * COALESCE(products.sales_unit_price, products.default_unit_price)'));
 
-        return $this->success($transfers);
+        $productValues = DB::table('sales_store_transfers')
+            ->join('products', 'sales_store_transfers.product_id', '=', 'products.id')
+            ->select('products.name', DB::raw('SUM(sales_store_transfers.quantity * COALESCE(products.sales_unit_price, products.default_unit_price)) as value'))
+            ->when($request->from_sales_store_id, fn($q) => $q->where('from_sales_store_id', $request->from_sales_store_id))
+            ->when($request->to_sales_store_id, fn($q) => $q->where('to_sales_store_id', $request->to_sales_store_id))
+            ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
+            ->when($request->start_date, fn($q) => $q->whereDate('transfer_date', '>=', $request->start_date))
+            ->when($request->end_date, fn($q) => $q->whereDate('transfer_date', '<=', $request->end_date))
+            ->groupBy('products.name')
+            ->pluck('value', 'products.name')
+            ->toArray();
+
+        foreach ($productValues as $k => $v) {
+            $productValues[$k] = (float)$v;
+        }
+
+        $transfers = $query->latest()->paginate($request->per_page ?? 15);
+
+        $response = $transfers->toArray();
+        $response['aggregates'] = [
+            'total_quantity' => $totalQty,
+            'total_valuation' => $totalVal,
+            'count' => $transfers->total(),
+            'product_values' => $productValues
+        ];
+
+        return $this->success($response);
     }
 
     public function store(Request $request)

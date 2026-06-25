@@ -122,7 +122,7 @@ export default function DeliveriesPage() {
       const [deliveriesRes, driversRes, ordersRes, vehiclesRes] = await Promise.all([
         api.get("/deliveries"),
         api.get("/drivers"),
-        api.get("/orders", { params: { per_page: 1000 } }),
+        api.get("/orders", { params: { status: "pending,processing,ready_for_dispatch", per_page: 100 } }),
         api.get("/vehicles")
       ]);
       

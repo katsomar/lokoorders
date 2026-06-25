@@ -20,6 +20,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('/admin/users/{id}', [App\Http\Controllers\Api\V1\AdminUserController::class, 'destroy']);
         
         // Orders
+        Route::get('/orders/metrics', [App\Http\Controllers\Api\V1\OrderController::class, 'metrics']);
         Route::get('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'index']);
         Route::post('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'store']);
         Route::get('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'show']);

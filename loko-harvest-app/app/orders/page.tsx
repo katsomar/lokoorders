@@ -86,16 +86,17 @@ export default function OrdersPage() {
 
   const fetchMetrics = async () => {
     try {
-      // Query a larger batch to determine stats across active orders
-      const res = await api.get("/orders", { params: { per_page: 1000 } });
-      const allOrders = res.data.data?.data || [];
-      setMetrics({
-        totalUrgent: allOrders.filter((o: any) => o.urgency === "urgent" || o.urgency === "critical").length,
-        totalPending: allOrders.filter((o: any) => o.status === "pending").length,
-        totalDispatched: allOrders.filter((o: any) => o.status === "dispatched").length,
-        totalDelivered: allOrders.filter((o: any) => o.status === "delivered").length,
-        totalUndelivered: allOrders.filter((o: any) => o.status !== "delivered").length,
-      });
+      const res = await api.get("/orders/metrics");
+      const data = res.data.data;
+      if (data) {
+        setMetrics({
+          totalUrgent: data.totalUrgent || 0,
+          totalPending: data.totalPending || 0,
+          totalDispatched: data.totalDispatched || 0,
+          totalDelivered: data.totalDelivered || 0,
+          totalUndelivered: data.totalUndelivered || 0,
+        });
+      }
     } catch (err) {
       console.error("Failed to load metrics:", err);
     }

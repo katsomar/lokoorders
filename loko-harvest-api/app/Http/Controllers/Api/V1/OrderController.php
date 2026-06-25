@@ -15,6 +15,23 @@ class OrderController extends Controller
 {
     use ApiResponses;
 
+    public function metrics(Request $request)
+    {
+        $totalUrgent = Order::whereIn('urgency', ['urgent', 'critical'])->count();
+        $totalPending = Order::where('status', 'pending')->count();
+        $totalDispatched = Order::where('status', 'dispatched')->count();
+        $totalDelivered = Order::where('status', 'delivered')->count();
+        $totalUndelivered = Order::where('status', '!=', 'delivered')->count();
+
+        return $this->success([
+            'totalUrgent' => $totalUrgent,
+            'totalPending' => $totalPending,
+            'totalDispatched' => $totalDispatched,
+            'totalDelivered' => $totalDelivered,
+            'totalUndelivered' => $totalUndelivered,
+        ]);
+    }
+
     public function index(Request $request)
     {
         $orders = Order::with(['customer.parent', 'salesStore', 'items.product'])
@@ -29,7 +46,12 @@ class OrderController extends Controller
                     $q->where('status', '!=', 'delivered')
                       ->where('required_delivery_date', '<', now()->toDateString());
                 } else {
-                    $q->where('status', $request->status);
+                    $statuses = explode(',', $request->status);
+                    if (count($statuses) > 1) {
+                        $q->whereIn('status', $statuses);
+                    } else {
+                        $q->where('status', $request->status);
+                    }
                 }
             })
             ->when($request->urgency, fn($q) => $q->where('urgency', $request->urgency))
