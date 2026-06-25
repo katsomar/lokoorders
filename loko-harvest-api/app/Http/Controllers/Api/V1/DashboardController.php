@@ -154,15 +154,27 @@ class DashboardController extends Controller
             ];
         }
 
-        // 4. Revenue Trends (Last 30 Days)
+        // 4. Revenue Trends (Last 30 Days) - Optimized to run only 2 grouped queries instead of 60 separate queries
+        $thirtyDaysAgo = Carbon::today()->subDays(29)->startOfDay()->toDateString();
+
+        $ordersSumByDate = Order::where('order_date', '>=', $thirtyDaysAgo)
+            ->select('order_date', DB::raw('SUM(total_amount) as total'))
+            ->groupBy('order_date')
+            ->pluck('total', 'order_date');
+
+        $paymentsSumByDate = Payment::where('payment_date', '>=', $thirtyDaysAgo)
+            ->select('payment_date', DB::raw('SUM(amount) as total'))
+            ->groupBy('payment_date')
+            ->pluck('total', 'payment_date');
+
         $revenueTrend = [];
         for ($i = 29; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i);
             $dateStr = $date->toDateString();
             $label = $date->format('d M');
 
-            $invoiced = (float)Order::whereDate('order_date', $dateStr)->sum('total_amount');
-            $collected = (float)Payment::whereDate('payment_date', $dateStr)->sum('amount');
+            $invoiced = (float)($ordersSumByDate[$dateStr] ?? 0);
+            $collected = (float)($paymentsSumByDate[$dateStr] ?? 0);
 
             $revenueTrend[] = [
                 'name' => $label,
