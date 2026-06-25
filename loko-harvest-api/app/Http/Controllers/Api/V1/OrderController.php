@@ -34,7 +34,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $orders = Order::with(['customer.parent', 'salesStore', 'items.product'])
+        $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('order_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {
@@ -54,6 +54,7 @@ class OrderController extends Controller
                     }
                 }
             })
+            ->when($request->customer_id, fn($q) => $q->where('customer_id', $request->customer_id))
             ->when($request->urgency, fn($q) => $q->where('urgency', $request->urgency))
             ->latest()
             ->paginate($request->per_page ?? 15);

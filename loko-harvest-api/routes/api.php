@@ -106,6 +106,11 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/reports/driver-performance', [App\Http\Controllers\Api\V1\ReportController::class, 'driverPerformance']);
         Route::get('/dashboard/admin', [App\Http\Controllers\Api\V1\DashboardController::class, 'adminDashboard']);
         
+        // Return Vouchers
+        Route::get('/returns', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'index']);
+        Route::post('/returns', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'store']);
+        Route::post('/returns/{id}/post-credit', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'postCredit']);
+        
         // Drivers & Vehicles
         Route::get('/driver/dashboard', [App\Http\Controllers\Api\V1\DriverController::class, 'dashboard']);
         Route::get('/drivers', [App\Http\Controllers\Api\V1\DriverController::class, 'index']);

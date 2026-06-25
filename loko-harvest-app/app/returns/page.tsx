@@ -1,23 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   ShoppingBag, 
   Search, 
   Plus, 
-  Download, 
-  Filter,
-  Eye,
-  Calendar,
-  Wallet,
-  ArrowRight,
-  TrendingDown,
-  RefreshCcw,
-  CheckCircle2,
-  X,
-  FileText,
-  AlertTriangle,
-  Coins
+  Eye, 
+  TrendingDown, 
+  RefreshCcw, 
+  CheckCircle2, 
+  X, 
+  FileText, 
+  AlertTriangle, 
+  Coins 
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -34,15 +29,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { format } from "date-fns";
+import api from "@/lib/api";
 
 interface ReturnVoucher {
   id: string;
   voucher_number: string;
   customer: string;
+  customer_id: string;
   delivery_id: string;
+  delivery_number: string;
   order_id: string;
+  order_number: string;
   return_date: string;
   product: string;
+  product_id: string;
   quantity: number;
   unit_price: number;
   monetary_value: number;
@@ -52,77 +52,6 @@ interface ReturnVoucher {
   notes: string;
   created_by: string;
 }
-
-const mockReturnsInitial: ReturnVoucher[] = [
-  {
-    id: "1",
-    voucher_number: "LHRV-2026-0001",
-    customer: "Carrefour Oasis",
-    delivery_id: "LHD-0039",
-    order_id: "LHO-0039",
-    return_date: "2026-05-15",
-    product: "Grade A Eggs (Large)",
-    quantity: 5,
-    unit_price: 15000,
-    monetary_value: 75000,
-    reason_code: "broken_cracked",
-    return_type: "credit",
-    account_credit_posted: true,
-    notes: "15 eggs were cracked upon delivery arrival.",
-    created_by: "Sarah Namubiru"
-  },
-  {
-    id: "2",
-    voucher_number: "LHRV-2026-0002",
-    customer: "Shoprite Lugogo",
-    delivery_id: "LHD-0035",
-    order_id: "LHO-0035",
-    return_date: "2026-05-14",
-    product: "Fresh Milk 1L",
-    quantity: 20,
-    unit_price: 3500,
-    monetary_value: 70000,
-    reason_code: "rotten_spoiled",
-    return_type: "physical_replacement",
-    account_credit_posted: false,
-    notes: "Milk turned sour, batch code mismatch.",
-    created_by: "John Okello"
-  },
-  {
-    id: "3",
-    voucher_number: "LHRV-2026-0003",
-    customer: "Café Javas",
-    delivery_id: "LHD-0031",
-    order_id: "LHO-0031",
-    return_date: "2026-05-12",
-    product: "Organic Tomatoes (KG)",
-    quantity: 12.5,
-    unit_price: 6000,
-    monetary_value: 75000,
-    reason_code: "wrong_product",
-    return_type: "credit",
-    account_credit_posted: true,
-    notes: "Delivered cherry tomatoes instead of regular slicing tomatoes.",
-    created_by: "Musa Driver"
-  },
-  {
-    id: "4",
-    voucher_number: "LHRV-2026-0004",
-    customer: "KFC Bukoto",
-    delivery_id: "LHD-0028",
-    order_id: "LHO-0028",
-    return_date: "2026-05-10",
-    product: "Fresh Chicken Capons",
-    quantity: 30,
-    unit_price: 14000,
-    monetary_value: 420000,
-    reason_code: "near_expiry",
-    return_type: "credit",
-    account_credit_posted: false,
-    notes: "Under 2 days of shelf-life, refused by quality control.",
-    created_by: "Sarah Namubiru"
-  }
-];
 
 const reasonLabels: Record<string, string> = {
   broken_cracked: "Broken / Cracked",
@@ -142,16 +71,9 @@ const reasonColors: Record<string, string> = {
   other: "bg-gray-50 text-gray-700 border-gray-100"
 };
 
-const productsList = [
-  { label: "Grade A Eggs (Large) - UGX 15,000", value: "Grade A Eggs (Large)", price: 15000 },
-  { label: "Fresh Milk 1L - UGX 3,500", value: "Fresh Milk 1L", price: 3500 },
-  { label: "Organic Tomatoes (KG) - UGX 6,000", value: "Organic Tomatoes (KG)", price: 6000 },
-  { label: "Fresh Chicken Capons - UGX 14,000", value: "Fresh Chicken Capons", price: 14000 },
-  { label: "Sweet Potatoes (Bag) - UGX 80,000", value: "Sweet Potatoes (Bag)", price: 80000 },
-];
-
 export default function ReturnsPage() {
-  const [returns, setReturns] = useState<ReturnVoucher[]>(mockReturnsInitial);
+  const [returns, setReturns] = useState<ReturnVoucher[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [reasonFilter, setReasonFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -160,15 +82,219 @@ export default function ReturnsPage() {
   const [selectedReturn, setSelectedReturn] = useState<ReturnVoucher | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
 
-  // Form state
+  // Form dependencies state
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
+  const [formOrderProductOptions, setFormOrderProductOptions] = useState<any[]>([]);
+  const [qtyError, setQtyError] = useState("");
+
+  // Form fields state
   const [formCustomer, setFormCustomer] = useState("");
+  const [formOrder, setFormOrder] = useState("");
   const [formProduct, setFormProduct] = useState("");
   const [formQty, setFormQty] = useState("");
   const [formType, setFormType] = useState<"credit" | "physical_replacement">("credit");
   const [formReason, setFormReason] = useState<ReturnVoucher["reason_code"]>("broken_cracked");
   const [formNotes, setFormNotes] = useState("");
-  const [formDelivery, setFormDelivery] = useState("");
-  const [formOrder, setFormOrder] = useState("");
+
+  const mapVoucher = (apiVoucher: any): ReturnVoucher => ({
+    id: apiVoucher.id,
+    voucher_number: apiVoucher.voucher_number,
+    customer: apiVoucher.customer?.name || "Unknown Customer",
+    customer_id: apiVoucher.customer_id,
+    delivery_id: apiVoucher.delivery?.id || apiVoucher.delivery_id,
+    delivery_number: apiVoucher.order?.order_number ? `LHD-${apiVoucher.order.order_number.replace('LHO-', '')}` : "N/A",
+    order_id: apiVoucher.order_id,
+    order_number: apiVoucher.order?.order_number || "N/A",
+    return_date: apiVoucher.return_date,
+    product: apiVoucher.product?.name || "Unknown Product",
+    product_id: apiVoucher.product_id,
+    quantity: parseFloat(apiVoucher.quantity),
+    unit_price: parseFloat(apiVoucher.unit_price),
+    monetary_value: parseFloat(apiVoucher.monetary_value),
+    reason_code: apiVoucher.reason_code,
+    return_type: apiVoucher.return_type,
+    account_credit_posted: !!apiVoucher.account_credit_posted,
+    notes: apiVoucher.notes || "",
+    created_by: apiVoucher.creator?.name || "System"
+  });
+
+  const fetchReturns = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get("/returns", {
+        params: {
+          search: searchTerm,
+          reason_code: reasonFilter,
+          return_type: typeFilter,
+          per_page: 100
+        }
+      });
+      if (res.data && res.data.success) {
+        const mapped = (res.data.data.data || []).map(mapVoucher);
+        setReturns(mapped);
+      }
+    } catch (err) {
+      console.error("Error fetching return vouchers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchDependencies = async () => {
+    try {
+      const custRes = await api.get("/customers", { params: { per_page: 200 } });
+      if (custRes.data && custRes.data.success) {
+        setCustomers(custRes.data.data.data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching dependencies:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDependencies();
+  }, []);
+
+  useEffect(() => {
+    fetchReturns();
+  }, [searchTerm, reasonFilter, typeFilter]);
+
+  const handleCustomerChange = async (customerId: string) => {
+    setFormCustomer(customerId);
+    setFormOrder("");
+    setFormProduct("");
+    setFormOrderProductOptions([]);
+    setSelectedOrderDetails(null);
+    setQtyError("");
+    setFormQty("");
+    if (!customerId) {
+      setCustomerOrders([]);
+      return;
+    }
+    try {
+      setLoadingOrders(true);
+      const res = await api.get("/orders", {
+        params: {
+          customer_id: customerId,
+          status: "delivered",
+          per_page: 100
+        }
+      });
+      if (res.data && res.data.success) {
+        setCustomerOrders(res.data.data.data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching customer orders:", err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handleOrderChange = (orderId: string) => {
+    setFormOrder(orderId);
+    setFormProduct("");
+    setQtyError("");
+    setFormQty("");
+    if (!orderId) {
+      setSelectedOrderDetails(null);
+      setFormOrderProductOptions([]);
+      return;
+    }
+    const order = customerOrders.find(o => o.id === orderId);
+    if (order) {
+      setSelectedOrderDetails(order);
+      const options = (order.items || []).map((item: any) => ({
+        label: `${item.product?.name || "Product"} - UGX ${parseFloat(item.unit_price).toLocaleString()} (Ordered: ${parseFloat(item.quantity)})`,
+        value: item.product_id,
+        price: parseFloat(item.unit_price),
+        maxQty: parseFloat(item.quantity)
+      }));
+      setFormOrderProductOptions(options);
+    }
+  };
+
+  const handleProductChange = (productId: string) => {
+    setFormProduct(productId);
+    setFormQty("");
+    setQtyError("");
+  };
+
+  const handleQtyChange = (val: string) => {
+    setFormQty(val);
+    if (!val) {
+      setQtyError("");
+      return;
+    }
+    const matchedOpt = formOrderProductOptions.find(o => o.value === formProduct);
+    if (matchedOpt && parseFloat(val) > matchedOpt.maxQty) {
+      setQtyError(`Returned quantity cannot exceed ordered quantity (${matchedOpt.maxQty})`);
+    } else {
+      setQtyError("");
+    }
+  };
+
+  const handlePostLedger = async (id: string) => {
+    try {
+      const res = await api.post(`/returns/${id}/post-credit`);
+      if (res.data && res.data.success) {
+        fetchReturns();
+        if (selectedReturn && selectedReturn.id === id) {
+          setSelectedReturn(prev => prev ? { ...prev, account_credit_posted: true } : null);
+        }
+      }
+    } catch (err: any) {
+      console.error("Error posting return credit:", err);
+      alert(err.response?.data?.message || "Failed to post return credit.");
+    }
+  };
+
+  const handleCreateVoucher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formCustomer || !formProduct || !formQty || !formOrder || qtyError) return;
+
+    const matchedDelivery = selectedOrderDetails?.deliveries?.[0];
+    if (!matchedDelivery) {
+      alert("Error: No delivery record found associated with this order.");
+      return;
+    }
+
+    const matchedProductOption = formOrderProductOptions.find(p => p.value === formProduct);
+    const unitPrice = matchedProductOption ? matchedProductOption.price : 0;
+
+    try {
+      const res = await api.post("/returns", {
+        customer_id: formCustomer,
+        product_id: formProduct,
+        order_id: formOrder,
+        delivery_id: matchedDelivery.id,
+        quantity: parseFloat(formQty),
+        unit_price: unitPrice,
+        return_type: formType,
+        reason_code: formReason,
+        notes: formNotes,
+        return_date: format(new Date(), "yyyy-MM-dd")
+      });
+
+      if (res.data && res.data.success) {
+        setIsNewModalOpen(false);
+        // Reset form
+        setFormCustomer("");
+        setFormOrder("");
+        setFormProduct("");
+        setFormQty("");
+        setFormNotes("");
+        setSelectedOrderDetails(null);
+        setFormOrderProductOptions([]);
+        fetchReturns();
+      }
+    } catch (err: any) {
+      console.error("Error creating return voucher:", err);
+      alert(err.response?.data?.message || "Failed to record return voucher.");
+    }
+  };
 
   // Calculate metrics
   const totalReturnVal = returns.reduce((acc, curr) => acc + curr.monetary_value, 0);
@@ -177,67 +303,9 @@ export default function ReturnsPage() {
     .reduce((acc, curr) => acc + curr.monetary_value, 0);
   const totalCount = returns.length;
 
-  const handlePostLedger = (id: string) => {
-    setReturns(prev =>
-      prev.map(r => r.id === id ? { ...r, account_credit_posted: true } : r)
-    );
-    if (selectedReturn && selectedReturn.id === id) {
-      setSelectedReturn(prev => prev ? { ...prev, account_credit_posted: true } : null);
-    }
-  };
-
-  const handleCreateVoucher = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formCustomer || !formProduct || !formQty) return;
-
-    const matchedProduct = productsList.find(p => p.value === formProduct);
-    const price = matchedProduct ? matchedProduct.price : 5000;
-    const qtyNum = parseFloat(formQty);
-    const monetaryVal = qtyNum * price;
-
-    const newVoucher: ReturnVoucher = {
-      id: String(returns.length + 1),
-      voucher_number: `LHRV-2026-000${returns.length + 1}`,
-      customer: formCustomer,
-      delivery_id: formDelivery || `LHD-00${Math.floor(Math.random() * 50) + 10}`,
-      order_id: formOrder || `LHO-00${Math.floor(Math.random() * 50) + 10}`,
-      return_date: new Date().toISOString().split("T")[0],
-      product: formProduct,
-      quantity: qtyNum,
-      unit_price: price,
-      monetary_value: monetaryVal,
-      reason_code: formReason,
-      return_type: formType,
-      account_credit_posted: false,
-      notes: formNotes,
-      created_by: "Administrator"
-    };
-
-    setReturns(prev => [newVoucher, ...prev]);
-    setIsNewModalOpen(false);
-
-    // Reset form
-    setFormCustomer("");
-    setFormProduct("");
-    setFormQty("");
-    setFormNotes("");
-    setFormDelivery("");
-    setFormOrder("");
-    setFormType("credit");
-    setFormReason("broken_cracked");
-  };
-
-  const filteredReturns = returns.filter(item => {
-    const matchesSearch = 
-      item.voucher_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.product.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesReason = reasonFilter ? item.reason_code === reasonFilter : true;
-    const matchesType = typeFilter ? item.return_type === typeFilter : true;
-
-    return matchesSearch && matchesReason && matchesType;
-  });
+  const matchedProductOption = formOrderProductOptions.find(p => p.value === formProduct);
+  const unitPrice = matchedProductOption ? matchedProductOption.price : 0;
+  const estimatedValue = (parseFloat(formQty) || 0) * unitPrice;
 
   return (
     <DashboardLayout>
@@ -358,97 +426,103 @@ export default function ReturnsPage() {
 
         {/* Table */}
         <div className="bg-white rounded-xl shadow-sm border border-brand-sage overflow-hidden">
-          <Table>
-            <TableHeader className="bg-gray-50/55">
-              <TableRow>
-                <TableHead className="font-semibold text-brand-forest">Voucher #</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Customer</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Date</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Product Details</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Reason</TableHead>
-                <TableHead className="font-semibold text-brand-forest text-right">Value (UGX)</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Type</TableHead>
-                <TableHead className="font-semibold text-brand-forest">Ledger Post</TableHead>
-                <TableHead className="font-semibold text-brand-forest text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredReturns.length === 0 ? (
+          {loading ? (
+            <div className="py-20 text-center text-gray-400 font-medium">
+              Loading return vouchers...
+            </div>
+          ) : (
+            <Table>
+              <TableHeader className="bg-gray-50/55">
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-12 text-gray-400">
-                    No return vouchers found. Try adjusting your search filters.
-                  </TableCell>
+                  <TableHead className="font-semibold text-brand-forest">Voucher #</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Customer</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Date</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Product Details</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Reason</TableHead>
+                  <TableHead className="font-semibold text-brand-forest text-right">Value (UGX)</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Type</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Ledger Post</TableHead>
+                  <TableHead className="font-semibold text-brand-forest text-right">Actions</TableHead>
                 </TableRow>
-              ) : (
-                filteredReturns.map((item) => (
-                  <TableRow key={item.id} className="hover:bg-gray-50/40 transition-colors">
-                    <TableCell className="font-mono font-bold text-brand-forest text-sm">
-                      {item.voucher_number}
+              </TableHeader>
+              <TableBody>
+                {returns.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                      No return vouchers found. Try adjusting your search filters.
                     </TableCell>
-                    <TableCell className="font-semibold text-gray-900 text-sm">
-                      {item.customer}
-                    </TableCell>
-                    <TableCell className="text-xs text-gray-500">
-                      {format(new Date(item.return_date), "dd MMM yyyy")}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      <span className="font-medium text-gray-800">{item.product}</span>
-                      <span className="block text-xs text-gray-500">Qty: {item.quantity} × UGX {item.unit_price.toLocaleString()}</span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${reasonColors[item.reason_code] || "bg-gray-50 text-gray-700"}`}>
-                        {reasonLabels[item.reason_code] || item.reason_code}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right font-bold text-rose-600 text-sm">
-                      {item.monetary_value.toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      {item.return_type === "credit" ? (
-                        <Badge variant="processing" className="text-[10px] bg-blue-50 text-blue-700">CREDIT NOTE</Badge>
-                      ) : (
-                        <Badge variant="ready" className="text-[10px] bg-indigo-50 text-indigo-700">REPLACEMENT</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {item.account_credit_posted ? (
-                        <Badge variant="delivered" className="text-[10px] bg-green-50 text-green-700 flex items-center gap-1 w-max">
-                          <CheckCircle2 size={10} /> POSTED
-                        </Badge>
-                      ) : (
-                        <Badge variant="pending" className="text-[10px] bg-amber-50 text-amber-700 flex items-center gap-1 w-max">
-                          <AlertTriangle size={10} /> PENDING
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1.5">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 hover:bg-brand-sage/30"
-                          onClick={() => setSelectedReturn(item)}
-                        >
-                          <Eye size={16} className="text-brand-forest" />
-                        </Button>
-                        {!item.account_credit_posted && item.return_type === "credit" && (
+                  </TableRow>
+                ) : (
+                  returns.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-gray-50/40 transition-colors">
+                      <TableCell className="font-mono font-bold text-brand-forest text-sm">
+                        {item.voucher_number}
+                      </TableCell>
+                      <TableCell className="font-semibold text-gray-900 text-sm">
+                        {item.customer}
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500">
+                        {format(new Date(item.return_date), "dd MMM yyyy")}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <span className="font-medium text-gray-800">{item.product}</span>
+                        <span className="block text-xs text-gray-500">Qty: {item.quantity} × UGX {item.unit_price.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${reasonColors[item.reason_code] || "bg-gray-50 text-gray-700"}`}>
+                          {reasonLabels[item.reason_code] || item.reason_code}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-rose-600 text-sm">
+                        {item.monetary_value.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        {item.return_type === "credit" ? (
+                          <Badge variant="processing" className="text-[10px] bg-blue-50 text-blue-700 border-none">CREDIT NOTE</Badge>
+                        ) : (
+                          <Badge variant="ready" className="text-[10px] bg-indigo-50 text-indigo-700 border-none">REPLACEMENT</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {item.account_credit_posted ? (
+                          <Badge variant="delivered" className="text-[10px] bg-green-50 text-green-700 flex items-center gap-1 w-max border-none">
+                            <CheckCircle2 size={10} /> POSTED
+                          </Badge>
+                        ) : (
+                          <Badge variant="pending" className="text-[10px] bg-amber-50 text-amber-700 flex items-center gap-1 w-max border-none">
+                            <AlertTriangle size={10} /> PENDING
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1.5">
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 hover:bg-green-50 text-green-600"
-                            onClick={() => handlePostLedger(item.id)}
-                            title="Post Credit to Customer Ledger"
+                            className="h-8 w-8 hover:bg-brand-sage/30"
+                            onClick={() => setSelectedReturn(item)}
                           >
-                            <CheckCircle2 size={16} />
+                            <Eye size={16} className="text-brand-forest" />
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                          {!item.account_credit_posted && item.return_type === "credit" && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 hover:bg-green-50 text-green-600 animate-pulse"
+                              onClick={() => handlePostLedger(item.id)}
+                              title="Post Credit to Customer Ledger"
+                            >
+                              <CheckCircle2 size={16} />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
 
         {/* View Details Drawer / Modal */}
@@ -504,11 +578,11 @@ export default function ReturnsPage() {
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Delivery Ref</p>
-                    <p className="font-mono text-xs text-brand-mid font-bold mt-0.5">{selectedReturn.delivery_id}</p>
+                    <p className="font-mono text-xs text-brand-mid font-bold mt-0.5">{selectedReturn.delivery_number}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Order Ref</p>
-                    <p className="font-mono text-xs text-brand-mid font-bold mt-0.5">{selectedReturn.order_id}</p>
+                    <p className="font-mono text-xs text-brand-mid font-bold mt-0.5">{selectedReturn.order_number}</p>
                   </div>
                 </div>
 
@@ -545,9 +619,9 @@ export default function ReturnsPage() {
                   <div>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Return Resolution Type</p>
                     {selectedReturn.return_type === "credit" ? (
-                      <Badge variant="processing" className="text-xs">Credit Note (Balance Adjustment)</Badge>
+                      <Badge variant="processing" className="text-xs border-none bg-blue-50 text-blue-700">Credit Note (Balance Adjustment)</Badge>
                     ) : (
-                      <Badge variant="ready" className="text-xs">Physical Replacement (Goods Resent)</Badge>
+                      <Badge variant="ready" className="text-xs border-none bg-indigo-50 text-indigo-700">Physical Replacement (Goods Resent)</Badge>
                     )}
                   </div>
 
@@ -560,7 +634,7 @@ export default function ReturnsPage() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-150 pt-4 mt-6 text-center text-xs text-gray-400">
+              <div className="border-t border-gray-150 pt-4 mt-6 text-center text-xs text-gray-400 font-body">
                 Created by {selectedReturn.created_by}
               </div>
 
@@ -593,22 +667,21 @@ export default function ReturnsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select
                     label="Customer"
-                    options={[
-                      { label: "Shoprite Lugogo", value: "Shoprite Lugogo" },
-                      { label: "KFC Bukoto", value: "KFC Bukoto" },
-                      { label: "Café Javas", value: "Café Javas" },
-                      { label: "Carrefour Oasis", value: "Carrefour Oasis" }
-                    ]}
+                    options={customers.map(c => ({ label: c.name, value: c.id }))}
                     value={formCustomer}
-                    onChange={(e) => setFormCustomer(e.target.value)}
+                    onChange={(e) => handleCustomerChange(e.target.value)}
                     required
                   />
 
                   <Select
-                    label="Product returned"
-                    options={productsList}
-                    value={formProduct}
-                    onChange={(e) => setFormProduct(e.target.value)}
+                    label="Order Reference"
+                    options={customerOrders.map(o => ({
+                      label: `${o.order_number} (${format(new Date(o.order_date), "dd MMM yyyy")})`,
+                      value: o.id
+                    }))}
+                    value={formOrder}
+                    onChange={(e) => handleOrderChange(e.target.value)}
+                    disabled={!formCustomer || loadingOrders}
                     required
                   />
                 </div>
@@ -616,29 +689,37 @@ export default function ReturnsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="Delivery Reference"
-                    placeholder="e.g. LHD-0042"
-                    value={formDelivery}
-                    onChange={(e) => setFormDelivery(e.target.value)}
+                    placeholder="Auto-detected from order"
+                    value={selectedOrderDetails?.deliveries?.[0] ? `LHD-${selectedOrderDetails.order_number.replace('LHO-', '')}` : ""}
+                    disabled
                   />
 
-                  <Input
-                    label="Order Reference"
-                    placeholder="e.g. LHO-0042"
-                    value={formOrder}
-                    onChange={(e) => setFormOrder(e.target.value)}
+                  <Select
+                    label="Product returned"
+                    options={formOrderProductOptions}
+                    value={formProduct}
+                    onChange={(e) => handleProductChange(e.target.value)}
+                    disabled={!formOrder}
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input
-                    label="Quantity returned"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formQty}
-                    onChange={(e) => setFormQty(e.target.value)}
-                    required
-                  />
+                  <div className="space-y-1.5">
+                    <Input
+                      label="Quantity returned"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formQty}
+                      onChange={(e) => handleQtyChange(e.target.value)}
+                      disabled={!formProduct}
+                      required
+                    />
+                    {qtyError && (
+                      <p className="text-xs text-red-500 font-semibold">{qtyError}</p>
+                    )}
+                  </div>
 
                   <Select
                     label="Return Type"
@@ -654,14 +735,10 @@ export default function ReturnsPage() {
 
                 <Select
                   label="Reason Code"
-                  options={[
-                    { label: "Broken / Cracked", value: "broken_cracked" },
-                    { label: "Rotten / Spoiled", value: "rotten_spoiled" },
-                    { label: "Wrong Product Delivered", value: "wrong_product" },
-                    { label: "Near Expiry Date", value: "near_expiry" },
-                    { label: "Packaging Damage", value: "packaging_damage" },
-                    { label: "Other", value: "other" }
-                  ]}
+                  options={Object.entries(reasonLabels).map(([val, label]) => ({
+                    label,
+                    value: val
+                  }))}
                   value={formReason}
                   onChange={(e) => setFormReason(e.target.value as any)}
                   required
@@ -670,18 +747,18 @@ export default function ReturnsPage() {
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-gray-700 font-body">Adjustment Notes</label>
                   <textarea
-                    className="flex min-h-[80px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest focus-visible:ring-offset-0"
+                    className="flex min-h-[80px] w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-forest focus-visible:ring-offset-0 font-body"
                     placeholder="Specify details about damage or reasons..."
                     value={formNotes}
                     onChange={(e) => setFormNotes(e.target.value)}
                   />
                 </div>
 
-                {formProduct && formQty && (
+                {formProduct && formQty && !qtyError && (
                   <div className="p-4 bg-brand-sage/20 rounded-xl border border-brand-sage flex justify-between items-center text-sm">
                     <span className="font-semibold text-brand-forest">Estimated Value Adjusted:</span>
-                    <span className="text-base font-extrabold text-rose-600">
-                      UGX {((parseFloat(formQty) || 0) * (productsList.find(p => p.value === formProduct)?.price || 0)).toLocaleString()}
+                    <span className="text-base font-extrabold text-rose-600 font-heading">
+                      UGX {estimatedValue.toLocaleString()}
                     </span>
                   </div>
                 )}
@@ -698,6 +775,7 @@ export default function ReturnsPage() {
                   <Button 
                     type="submit" 
                     className="flex-1 h-12 bg-brand-forest hover:bg-brand-forest/90 font-bold"
+                    disabled={!!qtyError || !formQty}
                   >
                     Record Return
                   </Button>
