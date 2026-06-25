@@ -86,6 +86,8 @@ export default function ProductionStorePage() {
   const [newStoreCode, setNewStoreCode] = useState("");
   const [newStoreLocation, setNewStoreLocation] = useState("");
   const [isSubmittingStore, setIsSubmittingStore] = useState(false);
+  const [deleteStoreTarget, setDeleteStoreTarget] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [isDeletingStore, setIsDeletingStore] = useState(false);
 
   // Inter-Store Transfer State
   const [interProductId, setInterProductId] = useState("");
@@ -273,14 +275,18 @@ export default function ProductionStorePage() {
   };
 
   // Delete Production Store
-  const handleDeleteStore = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
+  const handleConfirmDeleteStore = async () => {
+    if (!deleteStoreTarget) return;
+    setIsDeletingStore(true);
     try {
-      await api.delete(`/production-stores/${id}`);
+      await api.delete(`/production-stores/${deleteStoreTarget.id}`);
       alert("Production store deleted successfully!");
+      setDeleteStoreTarget(null);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to delete store. Verify it has no active stock or transaction history.");
+      alert(err.response?.data?.message || "Failed to delete store.");
+    } finally {
+      setIsDeletingStore(false);
     }
   };
 
@@ -774,10 +780,9 @@ export default function ProductionStorePage() {
                         </TableCell>
                         <TableCell className="text-center pr-6">
                           <button
-                            onClick={() => handleDeleteStore(store.id, store.name)}
-                            disabled={store.code === "MAIN-PROD"}
-                            className={`p-1.5 rounded-lg transition-colors ${store.code === "MAIN-PROD" ? "text-gray-250 cursor-not-allowed" : "text-gray-500 hover:text-red-600 hover:bg-red-50"}`}
-                            title={store.code === "MAIN-PROD" ? "Cannot delete default store" : "Delete Store"}
+                            onClick={() => setDeleteStoreTarget({ id: store.id, name: store.name, code: store.code })}
+                            className="p-1.5 rounded-lg transition-colors text-gray-500 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            title="Delete Store"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -1273,6 +1278,63 @@ export default function ProductionStorePage() {
 
             </form>
 
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STORE MODAL */}
+      {deleteStoreTarget && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-red-600 text-white px-6 py-4 flex items-center gap-2.5">
+              <Trash2 size={22} className="text-white animate-bounce-slow" />
+              <div>
+                <h3 className="font-heading font-black text-base">Delete Store Location?</h3>
+                <p className="text-[10px] text-white/80">Permanent removal of {deleteStoreTarget.name}</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs text-gray-650 font-bold leading-relaxed">
+                Are you sure you want to delete <span className="text-brand-forest font-black">"{deleteStoreTarget.name}"</span>?
+              </p>
+
+              {deleteStoreTarget.code === "MAIN-PROD" && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-850 rounded-xl text-[11px] font-bold space-y-1">
+                  <span className="flex items-center gap-1 text-xs text-amber-900 font-extrabold uppercase">⚠️ Warning: Default Store</span>
+                  <p className="leading-relaxed">
+                    This is the default system production store. Deleting this store may impact automated harvest intakes. Please proceed with caution!
+                  </p>
+                </div>
+              )}
+
+              <div className="p-3.5 bg-red-50 border border-red-100 text-red-750 rounded-xl text-[11px] font-semibold space-y-1">
+                <span className="flex items-center gap-1 text-xs text-red-900 font-extrabold uppercase">⚠️ Critical Notice</span>
+                <p className="leading-relaxed text-red-600">
+                  This action cannot be undone. Deleting this facility will permanently delete all associated stock levels, intake records, inter-store transfers, and snapshots from the system.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setDeleteStoreTarget(null)}
+                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10 cursor-pointer"
+                  disabled={isDeletingStore}
+                >
+                  Cancel, Keep Store
+                </Button>
+                <Button 
+                  type="button"
+                  onClick={handleConfirmDeleteStore}
+                  className="bg-red-600 text-white hover:bg-red-700 font-bold border-none text-xs rounded-xl h-10 px-6 shadow-md cursor-pointer"
+                  isLoading={isDeletingStore}
+                >
+                  Yes, Delete Store
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

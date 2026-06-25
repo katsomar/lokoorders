@@ -70,32 +70,7 @@ class SalesStoreController extends Controller
     public function destroy($id)
     {
         $store = SalesStore::findOrFail($id);
-
-        // Check if there is non-zero stock in the store
-        $hasStock = SalesStoreStock::where('sales_store_id', $store->id)
-            ->where('current_quantity', '>', 0)
-            ->exists();
-
-        if ($hasStock) {
-            return $this->error('Cannot delete store because it currently contains active stock.', 422);
-        }
-
-        // Check if there is any historical movement, inter-store transfer, or production-to-sales transfer
-        $hasMovements = SalesStoreMovement::where('sales_store_id', $store->id)->exists();
-        $hasSalesTransfers = StoreTransfer::where('sales_store_id', $store->id)->exists();
-        $hasInterTransfers = SalesStoreTransfer::where('from_sales_store_id', $store->id)
-            ->orWhere('to_sales_store_id', $store->id)
-            ->exists();
-
-        if ($hasMovements || $hasSalesTransfers || $hasInterTransfers) {
-            return $this->error('Cannot delete store because it has historical transactions associated with it.', 422);
-        }
-
-        // Cascade delete any zero-stock records just in case
-        SalesStoreStock::where('sales_store_id', $store->id)->delete();
-
         $store->delete();
-
         return $this->success(null, 'Sales store deleted successfully');
     }
 }

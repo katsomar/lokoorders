@@ -70,32 +70,7 @@ class ProductionStoreController extends Controller
     public function destroy($id)
     {
         $store = ProductionStore::findOrFail($id);
-
-        // Check if there is non-zero stock in the store
-        $hasStock = ProductionStoreStock::where('production_store_id', $store->id)
-            ->where('current_quantity', '>', 0)
-            ->exists();
-
-        if ($hasStock) {
-            return $this->error('Cannot delete store because it currently contains active stock.', 422);
-        }
-
-        // Check if there is any historical intake, inter-store transfer, or sales transfer associated with this store
-        $hasIntakes = ProductionStoreIntake::where('production_store_id', $store->id)->exists();
-        $hasSalesTransfers = StoreTransfer::where('production_store_id', $store->id)->exists();
-        $hasInterTransfers = ProductionStoreTransfer::where('from_production_store_id', $store->id)
-            ->orWhere('to_production_store_id', $store->id)
-            ->exists();
-
-        if ($hasIntakes || $hasSalesTransfers || $hasInterTransfers) {
-            return $this->error('Cannot delete store because it has historical transactions associated with it.', 422);
-        }
-
-        // Cascade delete any zero-stock records just in case
-        ProductionStoreStock::where('production_store_id', $store->id)->delete();
-
         $store->delete();
-
         return $this->success(null, 'Production store deleted successfully');
     }
 }
