@@ -170,18 +170,60 @@ export default function CustomerDetailPage() {
     try {
       const customerId = params.id as string;
       
-      // Fetch all customer profiles to check parent-child structure
-      const resCustomers = await api.get("/customers", { params: { per_page: 100 } });
-      const allDb = resCustomers.data.data?.data || resCustomers.data.data || [];
-
-      const dbCustomer = allDb.find((c: any) => c.id === customerId);
+      // Fetch specific customer profile (which eager loads branches, parent, zone, account)
+      const resCustomer = await api.get(`/customers/${customerId}`);
+      const dbCustomer = resCustomer.data.data;
       if (!dbCustomer) {
         throw new Error("Customer profile not found");
       }
 
-      const branchesDb = allDb.filter((c: any) => c.parent_id === customerId);
+      const branchesDb = dbCustomer.branches || [];
+      const isParent = branchesDb.length > 0;
 
-      if (branchesDb.length > 0) {
+      // Fetch consolidated ledger in one query (automatically fetches HQ + branches)
+      const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 100 } });
+      const txs = ledgerRes.data.data?.data || [];
+
+      const mappedTxs = txs.map((tx: any) => {
+        const items = tx.invoice?.order?.items || [];
+        const mappedItems = items.map((item: any) => ({
+          productName: item.product?.name || "Product",
+          quantity: item.quantity,
+          unit: item.product?.unit_of_measure || "units",
+          unitPrice: parseFloat(item.unit_price || 0)
+        }));
+
+        const deliveries = tx.invoice?.order?.deliveries || [];
+        const completedDelivery = deliveries.find((d: any) => d.status === "delivered");
+        const firstProof = completedDelivery?.proofs?.[0];
+
+        const rawBranchName = tx.customer?.name || "";
+        const branchName = rawBranchName.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", "");
+
+        return {
+          id: tx.id,
+          date: tx.transaction_date,
+          branchId: tx.customer_id,
+          branchName: branchName || "HQ",
+          type: tx.type === "invoice_raised" ? "invoice" : "payment",
+          ref: tx.reference_number,
+          description: tx.description,
+          debit: parseFloat(tx.debit_amount || 0),
+          credit: parseFloat(tx.credit_amount || 0),
+          balance: parseFloat(tx.running_balance || 0),
+          efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
+          paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
+          deliveredBy: completedDelivery?.driver?.full_name || "-",
+          receivedBy: tx.user?.name || "System",
+          proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
+          signatureUrl: firstProof?.signature_proof_url || null,
+          items: mappedItems
+        };
+      });
+
+      setLedger(mappedTxs);
+
+      if (isParent) {
         // It is a dynamic corporate parent HQ!
         const branchItems = branchesDb.map((c: any) => ({
           id: c.id,
@@ -216,100 +258,9 @@ export default function CustomerDetailPage() {
         };
 
         setCustomer(parentObj);
-
-        // Fetch consolidated ledger from all branches + parent
-        const ledgersPromise = [dbCustomer, ...branchesDb].map((b: any) => 
-          api.get(`/accounts/${b.id}/ledger`, { params: { per_page: 50 } })
-            .then(res => ({
-              branchId: b.id,
-              branchName: b.name.replace("Shoprite ", "").replace("Mega Standard ", "").replace(" Branch", ""),
-              data: res.data.data?.data || []
-            }))
-            .catch(() => ({ branchId: b.id, branchName: b.name, data: [] }))
-        );
-
-        const branchesLedgers = await Promise.all(ledgersPromise);
-        let consolidatedLedger: any[] = [];
-        
-        branchesLedgers.forEach(bl => {
-          bl.data.forEach((tx: any) => {
-            const items = tx.invoice?.order?.items || [];
-            const mappedItems = items.map((item: any) => ({
-              productName: item.product?.name || "Product",
-              quantity: item.quantity,
-              unit: item.product?.unit_of_measure || "units",
-              unitPrice: parseFloat(item.unit_price || 0)
-            }));
-
-            const deliveries = tx.invoice?.order?.deliveries || [];
-            const completedDelivery = deliveries.find((d: any) => d.status === "delivered");
-            const firstProof = completedDelivery?.proofs?.[0];
-
-            consolidatedLedger.push({
-              id: tx.id,
-              date: tx.transaction_date,
-              branchId: bl.branchId,
-              branchName: bl.branchName,
-              type: tx.type === "invoice_raised" ? "invoice" : "payment",
-              ref: tx.reference_number,
-              description: tx.description,
-              debit: parseFloat(tx.debit_amount || 0),
-              credit: parseFloat(tx.credit_amount || 0),
-              balance: parseFloat(tx.running_balance || 0),
-              efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
-              paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-              deliveredBy: completedDelivery?.driver?.full_name || "-",
-              receivedBy: tx.user?.name || "System",
-              proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
-              signatureUrl: firstProof?.signature_proof_url || null,
-              items: mappedItems
-            });
-          });
-        });
-
-        consolidatedLedger.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setLedger(consolidatedLedger);
-
       } else {
         // Standalone customer or individual branch
         const c = dbCustomer;
-        const ledgerRes = await api.get(`/accounts/${customerId}/ledger`, { params: { per_page: 50 } });
-        const txs = ledgerRes.data.data?.data || [];
-        
-        const mappedTxs = txs.map((tx: any) => {
-          const items = tx.invoice?.order?.items || [];
-          const mappedItems = items.map((item: any) => ({
-            productName: item.product?.name || "Product",
-            quantity: item.quantity,
-            unit: item.product?.unit_of_measure || "units",
-            unitPrice: parseFloat(item.unit_price || 0)
-          }));
-
-          const deliveries = tx.invoice?.order?.deliveries || [];
-          const completedDelivery = deliveries.find((d: any) => d.status === "delivered");
-          const firstProof = completedDelivery?.proofs?.[0];
-
-          return {
-            id: tx.id,
-            date: tx.transaction_date,
-            type: tx.type === "invoice_raised" ? "invoice" : "payment",
-            ref: tx.reference_number,
-            description: tx.description,
-            debit: parseFloat(tx.debit_amount || 0),
-            credit: parseFloat(tx.credit_amount || 0),
-            balance: parseFloat(tx.running_balance || 0),
-            efrisNumber: tx.type === "invoice_raised" ? tx.reference_number : "-",
-            paymentMethod: tx.type === "payment_received" ? "Direct Credit" : "-",
-            deliveredBy: completedDelivery?.driver?.full_name || "-",
-            receivedBy: tx.user?.name || "System",
-            proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
-            signatureUrl: firstProof?.signature_proof_url || null,
-            items: mappedItems
-          };
-        });
-
-        setLedger(mappedTxs);
-
         const detailObj = {
           id: c.id,
           name: c.name,

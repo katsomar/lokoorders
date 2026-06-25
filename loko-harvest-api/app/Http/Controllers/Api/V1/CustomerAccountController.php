@@ -21,10 +21,24 @@ class CustomerAccountController extends Controller
 
     public function ledger($customerId, Request $request)
     {
-        $transactions = AccountTransaction::with(['user', 'invoice.order.items.product', 'invoice.order.deliveries.proofs', 'invoice.order.deliveries.driver'])->where('customer_id', $customerId)
-            ->latest('transaction_date')
-            ->latest('id')
-            ->paginate($request->per_page ?? 20);
+        $customerIds = [$customerId];
+        $customer = Customer::find($customerId);
+        if ($customer) {
+            $branchIds = Customer::where('parent_id', $customerId)->pluck('id')->toArray();
+            $customerIds = array_merge($customerIds, $branchIds);
+        }
+
+        $transactions = AccountTransaction::with([
+            'user', 
+            'invoice.order.items.product', 
+            'invoice.order.deliveries.proofs', 
+            'invoice.order.deliveries.driver',
+            'customer'
+        ])
+        ->whereIn('customer_id', $customerIds)
+        ->latest('transaction_date')
+        ->latest('id')
+        ->paginate($request->per_page ?? 20);
 
         return $this->success($transactions);
     }

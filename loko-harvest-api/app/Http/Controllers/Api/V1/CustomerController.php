@@ -32,7 +32,7 @@ class CustomerController extends Controller
 
     public function show($id)
     {
-        $customer = Customer::with(['zone', 'orders', 'account', 'parent'])->findOrFail($id);
+        $customer = Customer::with(['zone', 'account', 'parent', 'branches.account', 'branches.zone'])->findOrFail($id);
         return $this->success($customer);
     }
 
