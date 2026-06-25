@@ -111,6 +111,19 @@ export default function LoginPage() {
               <Button type="submit" className="w-full" isLoading={isLoading}>
                 Sign In
               </Button>
+              
+              <div className="text-center mt-4 border-t border-gray-100 pt-4">
+                <p className="text-sm text-gray-500">
+                  Don't have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/signup")}
+                    className="font-bold text-brand-forest hover:text-[#14491F] transition-colors hover:underline cursor-pointer"
+                  >
+                    Request Signup
+                  </button>
+                </p>
+              </div>
             </form>
           </CardContent>
         </Card>

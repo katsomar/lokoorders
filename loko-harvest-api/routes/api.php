@@ -5,10 +5,18 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::post('/auth/login', [App\Http\Controllers\Api\V1\AuthController::class, 'login']);
+    Route::post('/auth/register', [App\Http\Controllers\Api\V1\AuthController::class, 'register']);
     
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [App\Http\Controllers\Api\V1\AuthController::class, 'logout']);
         Route::get('/auth/me', [App\Http\Controllers\Api\V1\AuthController::class, 'me']);
+        
+        // Admin User Management
+        Route::get('/admin/users', [App\Http\Controllers\Api\V1\AdminUserController::class, 'index']);
+        Route::post('/admin/users/{id}/approve', [App\Http\Controllers\Api\V1\AdminUserController::class, 'approve']);
+        Route::post('/admin/users/{id}/reject', [App\Http\Controllers\Api\V1\AdminUserController::class, 'reject']);
+        Route::post('/admin/users/{id}/suspend', [App\Http\Controllers\Api\V1\AdminUserController::class, 'suspend']);
+        Route::delete('/admin/users/{id}', [App\Http\Controllers\Api\V1\AdminUserController::class, 'destroy']);
         
         // Orders
         Route::get('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'index']);

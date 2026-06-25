@@ -6,7 +6,7 @@ interface User {
   name: string;
   email: string;
   role: 'admin' | 'store_manager' | 'sales_accounts' | 'driver' | 'production_manager';
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending' | 'suspended' | 'rejected';
 }
 
 interface AuthState {

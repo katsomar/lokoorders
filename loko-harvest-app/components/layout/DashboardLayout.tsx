@@ -47,6 +47,7 @@ const navItems = [
     { name: "Reports", href: "/reports", icon: BarChart3 },
   ]},
   { group: "System", items: [
+    { name: "Users", href: "/users", icon: Users },
     { name: "Settings", href: "/settings", icon: Settings },
   ]}
 ];
@@ -104,8 +105,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-hide">
-          {navItems.map((group) => (
-            <div key={group.group} className="space-y-2">
+          {navItems
+            .map((group) => ({
+              ...group,
+              items: group.items.filter(
+                (item) => item.href !== "/users" || user?.role === "admin"
+              ),
+            }))
+            .filter((group) => group.items.length > 0)
+            .map((group) => (
+              <div key={group.group} className="space-y-2">
               {isSidebarOpen && (
                 <h3 className="px-2 text-xs font-semibold uppercase tracking-wider text-sage-300 opacity-50 font-heading">
                   {group.group}

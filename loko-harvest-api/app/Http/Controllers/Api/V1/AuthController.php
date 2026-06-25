@@ -27,8 +27,17 @@ class AuthController extends Controller
         }
 
         if ($user->status !== 'active') {
+            $message = 'Your account is inactive.';
+            if ($user->status === 'pending') {
+                $message = 'Your account is pending administrator approval.';
+            } elseif ($user->status === 'suspended') {
+                $message = 'Your account has been suspended.';
+            } elseif ($user->status === 'rejected') {
+                $message = 'Your account registration has been rejected.';
+            }
+
             throw ValidationException::withMessages([
-                'email' => ['Your account is inactive.'],
+                'email' => [$message],
             ]);
         }
 
@@ -40,6 +49,32 @@ class AuthController extends Controller
             ],
             'message' => 'Login successful'
         ]);
+    }
+
+    public function register(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:6|confirmed',
+            'phone' => 'nullable|string',
+            'role' => 'required|string|in:store_manager,sales_accounts,driver,production_manager',
+        ]);
+
+        $user = User::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'phone' => $request->phone,
+            'role' => $request->role,
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registration request submitted successfully. It is pending administrator approval.',
+            'data' => $user
+        ], 201);
     }
 
     public function logout(Request $request)
