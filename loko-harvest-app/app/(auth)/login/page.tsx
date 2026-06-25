@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +24,19 @@ export default function LoginPage() {
   const { setAuth } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      const handleError = (e: ErrorEvent) => {
+        setClientError(`${e.message} at ${e.filename}:${e.lineno}`);
+      };
+      window.addEventListener("error", handleError);
+      return () => window.removeEventListener("error", handleError);
+    }
+  }, []);
 
   const {
     register,
@@ -61,7 +74,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-white font-body">
+    <div className="flex min-h-screen w-full lg:h-screen lg:w-screen lg:overflow-hidden bg-white font-body">
       {/* Left side: Hero branding panel */}
       <div className="relative hidden w-1/2 flex-col justify-between bg-brand-forest p-12 text-white lg:flex">
         {/* Decorative background gradients */}
@@ -127,7 +140,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right side: Form panel */}
-      <div className="relative flex w-full flex-col justify-between p-6 sm:p-12 lg:w-1/2 bg-gray-50/50">
+      <div className="relative flex w-full flex-col justify-between p-6 sm:p-12 lg:w-1/2 bg-gray-50/50 min-h-screen lg:min-h-0">
         <div className="flex items-center justify-between lg:justify-end">
           <div className="flex items-center gap-2 lg:hidden">
             <img 
@@ -146,75 +159,117 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <div className="my-auto mx-auto w-full max-w-lg">
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="space-y-6"
-          >
-            <div className="space-y-1">
-              <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Welcome Back</h2>
-              <p className="text-sm text-gray-500 font-medium leading-relaxed">
-                Sign in to your account to continue managing Loko Harvest ODS.
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {error && (
-                <div className="rounded-xl bg-red-50 p-3 text-xs text-red-600 border border-red-100 font-bold">
-                  {error}
-                </div>
-              )}
-              
-              <div className="space-y-3.5">
-                <Input
-                  label="Email Address"
-                  type="email"
-                  placeholder="name@company.com"
-                  {...register("email")}
-                  error={errors.email?.message}
-                  required
-                  className="h-11 text-sm rounded-xl"
-                />
-
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="••••••••"
-                  {...register("password")}
-                  error={errors.password?.message}
-                  required
-                  className="h-11 text-sm rounded-xl"
-                />
+        <div className="my-auto mx-auto w-full max-w-lg py-8">
+          {mounted ? (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="space-y-6"
+            >
+              <div className="space-y-1">
+                <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Welcome Back</h2>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                  Sign in to your account to continue managing Loko Harvest ODS.
+                </p>
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full font-bold text-sm rounded-xl h-11.5 cursor-pointer mt-2 flex items-center justify-center gap-1.5" 
-                isLoading={isLoading}
-              >
-                <LogIn size={14} />
-                Sign In
-              </Button>
-            </form>
-            
-            <div className="text-center border-t border-gray-100 pt-4 lg:hidden">
-              <p className="text-xs text-gray-500 font-medium">
-                Don't have an account?{" "}
-                <button
-                  type="button"
-                  onClick={() => router.push("/signup")}
-                  className="font-bold text-brand-forest hover:text-[#14491F] transition-colors hover:underline cursor-pointer"
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                {error && (
+                  <div className="rounded-xl bg-red-50 p-3 text-xs text-red-600 border border-red-100 font-bold">
+                    {error}
+                  </div>
+                )}
+                
+                <div className="space-y-3.5">
+                  <Input
+                    label="Email Address"
+                    type="email"
+                    placeholder="name@company.com"
+                    {...register("email")}
+                    error={errors.email?.message}
+                    required
+                    className="h-11 text-sm rounded-xl"
+                  />
+
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="••••••••"
+                    {...register("password")}
+                    error={errors.password?.message}
+                    required
+                    className="h-11 text-sm rounded-xl"
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full font-bold text-sm rounded-xl h-11.5 cursor-pointer mt-2 flex items-center justify-center gap-1.5" 
+                  isLoading={isLoading}
                 >
-                  Request Signup
-                </button>
-              </p>
+                  <LogIn size={14} />
+                  Sign In
+                </Button>
+              </form>
+              
+              <div className="text-center border-t border-gray-100 pt-4 lg:hidden">
+                <p className="text-xs text-gray-500 font-medium">
+                  Don't have an account?{" "}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/signup")}
+                    className="font-bold text-brand-forest hover:text-[#14491F] transition-colors hover:underline cursor-pointer"
+                  >
+                    Request Signup
+                  </button>
+                </p>
+              </div>
+            </motion.div>
+          ) : (
+            <div className="space-y-6 opacity-0">
+              <div className="space-y-1">
+                <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Welcome Back</h2>
+                <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                  Sign in to your account to continue managing Loko Harvest ODS.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-3.5">
+                  <Input
+                    label="Email Address"
+                    type="email"
+                    placeholder="name@company.com"
+                    required
+                    className="h-11 text-sm rounded-xl"
+                    disabled
+                  />
+
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="••••••••"
+                    required
+                    className="h-11 text-sm rounded-xl"
+                    disabled
+                  />
+                </div>
+
+                <Button 
+                  type="button" 
+                  className="w-full font-bold text-sm rounded-xl h-11.5 mt-2 flex items-center justify-center gap-1.5" 
+                  disabled
+                >
+                  <LogIn size={14} />
+                  Sign In
+                </Button>
+              </div>
             </div>
-          </motion.div>
+          )}
         </div>
 
-        <div className="text-center text-[10px] text-gray-400 font-medium lg:hidden mt-6">
+        <div className="text-center text-[10px] text-gray-400 font-medium lg:hidden mt-6 pb-4">
           &copy; {new Date().getFullYear()} Loko Harvest Limited. All rights reserved.
         </div>
         <div className="hidden lg:block" /> {/* spacer for flex layout spacing */}

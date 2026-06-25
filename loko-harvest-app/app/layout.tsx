@@ -34,6 +34,56 @@ export default function RootLayout({
       lang="en"
       className={`${plusJakartaSans.variable} ${dmSans.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('error', function(e) {
+                var div = document.getElementById('debug-error-banner');
+                if (!div) {
+                  div = document.createElement('div');
+                  div.id = 'debug-error-banner';
+                  div.style.position = 'fixed';
+                  div.style.top = '0';
+                  div.style.left = '0';
+                  div.style.width = '100%';
+                  div.style.backgroundColor = 'red';
+                  div.style.color = 'white';
+                  div.style.padding = '15px';
+                  div.style.zIndex = '999999';
+                  div.style.fontFamily = 'monospace';
+                  div.style.fontSize = '12px';
+                  div.style.wordBreak = 'break-all';
+                  div.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                  document.body.appendChild(div);
+                }
+                div.innerText = 'JS Error: ' + e.message + '\\nAt: ' + e.filename + ':' + e.lineno + ':' + e.colno + '\\nStack:\\n' + (e.error ? e.error.stack : 'No stack trace');
+              });
+              window.addEventListener('unhandledrejection', function(e) {
+                var div = document.getElementById('debug-error-banner');
+                if (!div) {
+                  div = document.createElement('div');
+                  div.id = 'debug-error-banner';
+                  div.style.position = 'fixed';
+                  div.style.top = '0';
+                  div.style.left = '0';
+                  div.style.width = '100%';
+                  div.style.backgroundColor = 'orange';
+                  div.style.color = 'black';
+                  div.style.padding = '15px';
+                  div.style.zIndex = '999999';
+                  div.style.fontFamily = 'monospace';
+                  div.style.fontSize = '12px';
+                  div.style.wordBreak = 'break-all';
+                  div.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                  document.body.appendChild(div);
+                }
+                div.innerText = 'Promise Rejection: ' + e.reason;
+              });
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ToastContainer />

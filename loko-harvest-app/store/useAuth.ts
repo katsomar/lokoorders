@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 
 interface User {
   id: string;
@@ -16,26 +16,66 @@ interface AuthState {
   clearAuth: () => void;
 }
 
+// Safe localStorage wrapper to prevent SecurityError or ReferenceError on mobile devices/incognito tabs
+const safeLocalStorage: StateStorage = {
+  getItem: (name: string): string | null => {
+    try {
+      if (typeof window === 'undefined') return null;
+      return window.localStorage.getItem(name);
+    } catch (e) {
+      console.warn("Storage item fetch failed:", e);
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(name, value);
+      }
+    } catch (e) {
+      console.warn("Storage item set failed:", e);
+    }
+  },
+  removeItem: (name: string): void => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(name);
+      }
+    } catch (e) {
+      console.warn("Storage item removal failed:", e);
+    }
+  },
+};
+
 export const useAuth = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
       token: null,
       setAuth: (user, token) => {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('token', token);
+        try {
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('token', token);
+          }
+        } catch (e) {
+          console.warn(e);
         }
         set({ user, token });
       },
       clearAuth: () => {
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('token');
+        try {
+          if (typeof window !== 'undefined') {
+            window.localStorage.removeItem('token');
+          }
+        } catch (e) {
+          console.warn(e);
         }
         set({ user: null, token: null });
       },
     }),
     {
       name: 'loko-auth-storage',
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );
