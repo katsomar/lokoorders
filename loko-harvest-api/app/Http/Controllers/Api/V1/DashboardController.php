@@ -98,37 +98,30 @@ class DashboardController extends Controller
             });
 
         // 3. Order Status Distribution (Percentage distribution for current month)
-        $monthOrders = Order::whereMonth('order_date', Carbon::today()->month)
+        $monthOrdersCount = Order::whereMonth('order_date', Carbon::today()->month)
             ->whereYear('order_date', Carbon::today()->year)
-            ->get();
-        
-        $totalMonthOrders = $monthOrders->count();
-        
-        // If no orders this month, take all time to populate donut chart
-        if ($totalMonthOrders === 0) {
-            $monthOrders = Order::all();
-            $totalMonthOrders = $monthOrders->count();
+            ->count();
+
+        if ($monthOrdersCount === 0) {
+            $dbStatusCounts = Order::select('status', DB::raw('count(*) as total'))
+                ->groupBy('status')
+                ->pluck('total', 'status');
+        } else {
+            $dbStatusCounts = Order::whereMonth('order_date', Carbon::today()->month)
+                ->whereYear('order_date', Carbon::today()->year)
+                ->select('status', DB::raw('count(*) as total'))
+                ->groupBy('status')
+                ->pluck('total', 'status');
         }
 
         $statusCounts = [
-            'Delivered' => 0,
-            'Pending' => 0,
-            'Dispatched' => 0,
-            'Processing' => 0,
+            'Delivered' => (int)($dbStatusCounts['delivered'] ?? 0),
+            'Pending' => (int)($dbStatusCounts['pending'] ?? 0),
+            'Dispatched' => (int)($dbStatusCounts['dispatched'] ?? 0),
+            'Processing' => (int)($dbStatusCounts['processing'] ?? 0) + (int)($dbStatusCounts['ready_for_dispatch'] ?? 0),
             'Returned' => 0
         ];
 
-        foreach ($monthOrders as $ord) {
-            if ($ord->status === 'delivered') {
-                $statusCounts['Delivered']++;
-            } elseif ($ord->status === 'pending') {
-                $statusCounts['Pending']++;
-            } elseif ($ord->status === 'dispatched') {
-                $statusCounts['Dispatched']++;
-            } elseif (in_array($ord->status, ['processing', 'ready_for_dispatch'])) {
-                $statusCounts['Processing']++;
-            }
-        }
         // Returned is based on returned vouchers count
         $statusCounts['Returned'] = ReturnVoucher::whereMonth('return_date', Carbon::today()->month)
             ->whereYear('return_date', Carbon::today()->year)
