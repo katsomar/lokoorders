@@ -82,14 +82,17 @@ export default function ProductionIntakePage() {
     }
   }, [productionStores, setValue]);
 
+  const allowedIntakeCodes = ["EGG-WHT", "EGG-BRN", "EGG-CRM", "POU-DRS", "POU-LVE", "BY-MNR"];
+  const filteredProducts = products.filter((p) => allowedIntakeCodes.includes(p.code));
+
   useEffect(() => {
-    if (watchProductId && products.length > 0) {
-      const selected = products.find((p) => p.id === watchProductId);
+    if (watchProductId && filteredProducts.length > 0) {
+      const selected = filteredProducts.find((p) => p.id === watchProductId);
       if (selected) {
         setValue("valuation_price", parseFloat(selected.default_unit_price) || 0);
       }
     }
-  }, [watchProductId, products, setValue]);
+  }, [watchProductId, filteredProducts, setValue]);
 
   const onSubmit = async (data: IntakeFormValues) => {
     setIsLoading(true);
@@ -104,12 +107,12 @@ export default function ProductionIntakePage() {
     }
   };
 
-  const productOptions = products.map((p) => ({
+  const productOptions = filteredProducts.map((p) => ({
     label: `${p.name} (Code: ${p.code})`,
     value: p.id,
   }));
 
-  const selectedProduct = products.find((p) => p.id === watchProductId);
+  const selectedProduct = filteredProducts.find((p) => p.id === watchProductId);
 
   if (isSuccess) {
     return (

@@ -38,6 +38,11 @@ class ProductionStoreIntakeController extends Controller
         return DB::transaction(function () use ($validated) {
             $product = \App\Models\Product::findOrFail($validated['product_id']);
 
+            $allowedCodes = ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'];
+            if (!in_array($product->code, $allowedCodes)) {
+                return $this->error('Only white plain trays, brown plain trays, cream plain trays, live chicken, dressed chicken, and manure can be recorded as production store intakes.', 422);
+            }
+
             $intake = ProductionStoreIntake::create([
                 'intake_date' => $validated['intake_date'],
                 'production_store_id' => $validated['production_store_id'],

@@ -819,7 +819,7 @@ class DriverVehicleTest extends TestCase
         // Batch-tracked product (eggs)
         $eggs = \App\Models\Product::create([
             'name' => 'Golden Eggs',
-            'code' => 'EGG-GLD',
+            'code' => 'EGG-CRM',
             'category' => 'eggs',
             'unit_of_measure' => 'trays',
             'default_unit_price' => 12000,

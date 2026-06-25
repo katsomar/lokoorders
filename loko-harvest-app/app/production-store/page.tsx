@@ -69,9 +69,11 @@ export default function ProductionStorePage() {
 
   // Transfer to Sales state
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferType, setTransferType] = useState<"cream" | "white" | "brown" | "damaged">("cream");
+  const [transferProductId, setTransferProductId] = useState("");
   const [transferQty, setTransferQty] = useState("");
   const [salesTransferStoreId, setSalesTransferStoreId] = useState("");
+  const [salesTransferStoreDestId, setSalesTransferStoreDestId] = useState("");
+  const [salesStores, setSalesStores] = useState<any[]>([]);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
 
   // Edit stock state
@@ -138,12 +140,13 @@ export default function ProductionStorePage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [stockRes, intakeRes, storesRes, interRes, productsRes] = await Promise.all([
+      const [stockRes, intakeRes, storesRes, interRes, productsRes, salesStoresRes] = await Promise.all([
         api.get('/production-stock'),
         api.get('/production-intakes'),
         api.get('/production-stores'),
         api.get('/production-store-transfers'),
-        api.get('/products')
+        api.get('/products'),
+        api.get('/sales-stores')
       ]);
       
       const stockData = stockRes.data.data || [];
@@ -193,7 +196,21 @@ export default function ProductionStorePage() {
 
       setProductionStores(storesRes.data.data || []);
       setInterTransfers(interRes.data.data.data || []);
-      setProducts(productsRes.data.data || []);
+      const productsData = productsRes.data.data || [];
+      setProducts(productsData);
+      
+      const allowedProds = productsData.filter((p: any) => 
+        ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)
+      );
+      if (allowedProds.length > 0) {
+        setTransferProductId(allowedProds[0].id);
+      }
+      
+      const salesData = salesStoresRes.data.data || [];
+      setSalesStores(salesData);
+      if (salesData.length > 0) {
+        setSalesTransferStoreDestId(salesData[0].id);
+      }
       
     } catch (err) {
       console.error("Failed to fetch production store data", err);
@@ -326,39 +343,28 @@ export default function ProductionStorePage() {
   // Live Conversion Previews for the transfer dialog
   const getTransferPreview = () => {
     const qty = parseFloat(transferQty) || 0;
-    if (transferType === "cream" || transferType === "white") {
+    const selectedProd = products.find(p => p.id === transferProductId);
+    if (!selectedProd) return null;
+
+    const code = selectedProd.code;
+    if (code === "EGG-CRM" || code === "EGG-WHT") {
       return {
         singlePacks: qty,
         pack15: qty * 2,
         pack6: qty * 5,
         eggsCount: qty * 30,
         plainTrays: 0,
-        looseEggs: 0,
-        damagedTrays: 0,
-        remainderEggs: 0
       };
-    } else if (transferType === "brown") {
+    } else if (code === "EGG-BRN") {
       return {
         singlePacks: 0,
         pack15: 0,
         pack6: 0,
         eggsCount: qty * 30,
         plainTrays: qty,
-        looseEggs: 0,
-        damagedTrays: 0,
-        remainderEggs: 0
       };
     } else {
-      return {
-        singlePacks: 0,
-        pack15: 0,
-        pack6: 0,
-        eggsCount: 0,
-        plainTrays: 0,
-        looseEggs: qty,
-        damagedTrays: Math.floor(qty / 30),
-        remainderEggs: qty % 30
-      };
+      return null;
     }
   };
 
@@ -371,19 +377,29 @@ export default function ProductionStorePage() {
       alert("Please select a source production store.");
       return;
     }
+    if (!salesTransferStoreDestId) {
+      alert("Please select a destination sales store.");
+      return;
+    }
+    if (!transferProductId) {
+      alert("Please select a product to transfer.");
+      return;
+    }
 
-    // Verify stock availability in selected store
-    const targetCode = transferType === "cream" ? "EGG-CRM" : 
-                       transferType === "white" ? "EGG-WHT" :
-                       transferType === "brown" ? "EGG-BRN" : "EGG-DMG";
-    
+    const selectedProd = products.find(p => p.id === transferProductId);
+    if (!selectedProd) {
+      alert("Selected product not found.");
+      return;
+    }
+
+    // Verify stock availability in selected store for this product ID
     const storeTargetItems = stockItems.filter(item => 
-      item.code.includes(targetCode) && item.production_store_id === salesTransferStoreId
+      item.product_id === transferProductId && item.production_store_id === salesTransferStoreId
     );
     const totalQtyInStore = storeTargetItems.reduce((sum, item) => sum + item.quantity, 0);
 
     if (totalQtyInStore < qty) {
-      alert(`Insufficient stock! Only ${totalQtyInStore} trays available in the selected Production Store.`);
+      alert(`Insufficient stock! Only ${totalQtyInStore} ${selectedProd.unit_of_measure === 'trays' ? 'trays' : selectedProd.unit_of_measure === 'units' ? 'units' : 'kg'} available in the selected Production Store.`);
       return;
     }
 
@@ -391,17 +407,17 @@ export default function ProductionStorePage() {
     try {
       const response = await api.post("/store-transfers", {
         production_store_id: salesTransferStoreId,
-        product_id: storeTargetItems[0].product_id,
+        sales_store_id: salesTransferStoreDestId,
+        product_id: transferProductId,
         quantity: qty,
         transfer_date: new Date().toISOString().split('T')[0],
-        notes: `Transfer requested from Production Store UI for ${transferType}`
+        notes: `Transfer requested from Production Store UI for ${selectedProd.name}`
       });
 
       if (response.data.success) {
         alert("Transfer request successful! Products are now pending receipt at the Sales Store.");
         setShowTransferModal(false);
         setTransferQty("");
-        setSalesTransferStoreId("");
         fetchData();
       }
     } catch (err: any) {
@@ -1114,91 +1130,114 @@ export default function ProductionStorePage() {
                 </select>
               </div>
 
-              {/* Product Category Selector */}
+              {/* Destination Sales Store */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-brand-forest block mb-1">
-                  Egg Bulk Category to Transfer
+                  Destination Sales Store
                 </label>
                 <select 
-                  value={transferType}
-                  onChange={(e) => setTransferType(e.target.value as any)}
+                  value={salesTransferStoreDestId}
+                  onChange={(e) => setSalesTransferStoreDestId(e.target.value)}
                   className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                  required
                 >
-                  <option value="cream">Cream Eggs Bulk Trays</option>
-                  <option value="white">White Eggs Bulk Trays</option>
-                  <option value="brown">Brown Eggs Bulk Trays</option>
-                  <option value="damaged">Loose Damaged Eggs</option>
+                  <option value="">Select destination sales store...</option>
+                  {salesStores.map(store => (
+                    <option key={store.id} value={store.id}>{store.name} ({store.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Product Selector */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-brand-forest block mb-1">
+                  Bulk Product to Transfer
+                </label>
+                <select 
+                  value={transferProductId}
+                  onChange={(e) => setTransferProductId(e.target.value)}
+                  className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
+                  required
+                >
+                  <option value="">Select bulk product...</option>
+                  {products.filter(p => ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)).map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                  ))}
                 </select>
               </div>
 
               {/* Quantity */}
               <Input
-                label={transferType === "damaged" ? "Quantity to Transfer (Individual Eggs)" : "Quantity to Transfer (Trays of 30 Eggs)"}
+                label={
+                  (() => {
+                    const selectedProd = products.find(p => p.id === transferProductId);
+                    if (selectedProd?.unit_of_measure === 'trays') {
+                      return "Quantity to Transfer (Trays of 30 Eggs)";
+                    } else if (selectedProd?.unit_of_measure === 'units') {
+                      return "Quantity to Transfer (Units)";
+                    } else if (selectedProd?.unit_of_measure === 'kg') {
+                      return "Quantity to Transfer (Kg)";
+                    }
+                    return "Quantity to Transfer";
+                  })()
+                }
                 type="number"
+                step="0.01"
                 value={transferQty}
                 onChange={(e) => setTransferQty(e.target.value)}
-                placeholder={transferType === "damaged" ? "Enter egg count" : "Enter tray count"}
+                placeholder="Enter quantity"
                 required
               />
 
               {/* LIVE CONVERSION CONVERTER PREVIEW DISPLAY */}
-              <div className="bg-brand-sage/10 border border-brand-sage/30 rounded-xl p-4 space-y-3">
-                <p className="text-xs font-bold text-brand-forest border-b border-brand-sage/20 pb-1.5">
-                  Live Converted Sales Product Estimates
-                </p>
+              {(() => {
+                const preview = getTransferPreview();
+                if (!preview) return null;
+
+                const selectedProd = products.find(p => p.id === transferProductId);
                 
-                {transferType === "cream" || transferType === "white" ? (
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">Single Packs</p>
-                      <p className="text-sm font-black text-brand-forest mt-1">
-                        {getTransferPreview().singlePacks.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Trays</span>
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">15-Packs</p>
-                      <p className="text-sm font-black text-brand-forest mt-1">
-                        {getTransferPreview().pack15.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Packs</span>
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">6-Packs</p>
-                      <p className="text-sm font-black text-brand-forest mt-1">
-                        {getTransferPreview().pack6.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Packs</span>
-                      </p>
-                    </div>
-                  </div>
-                ) : transferType === "brown" ? (
-                  <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20 text-center">
-                    <p className="text-[9px] text-gray-400 font-bold uppercase">Plain Brown Trays</p>
-                    <p className="text-sm font-black text-brand-forest mt-1">
-                      {getTransferPreview().plainTrays.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Trays</span>
+                return (
+                  <div className="bg-brand-sage/10 border border-brand-sage/30 rounded-xl p-4 space-y-3">
+                    <p className="text-xs font-bold text-brand-forest border-b border-brand-sage/20 pb-1.5">
+                      Live Converted Sales Product Estimates
+                    </p>
+                    
+                    {selectedProd?.code !== "EGG-BRN" ? (
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">Single Packs</p>
+                          <p className="text-sm font-black text-brand-forest mt-1">
+                            {preview.singlePacks.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Trays</span>
+                          </p>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">15-Packs</p>
+                          <p className="text-sm font-black text-brand-forest mt-1">
+                            {preview.pack15.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Packs</span>
+                          </p>
+                        </div>
+                        <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
+                          <p className="text-[9px] text-gray-400 font-bold uppercase">6-Packs</p>
+                          <p className="text-sm font-black text-brand-forest mt-1">
+                            {preview.pack6.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Packs</span>
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20 text-center">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Plain Brown Trays</p>
+                        <p className="text-sm font-black text-brand-forest mt-1">
+                          {preview.plainTrays.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Trays</span>
+                        </p>
+                      </div>
+                    )}
+                    
+                    <p className="text-[9px] text-gray-400 text-center font-medium">
+                      Formula calculations: 1 bulk tray of 30 eggs yields: 1 Single Pack (Tray) OR 2 x 15-Packs OR 5 x 6-Packs.
                     </p>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">Loose Eggs</p>
-                      <p className="text-sm font-black text-brand-forest mt-1">
-                        {getTransferPreview().looseEggs.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Eggs</span>
-                      </p>
-                    </div>
-                    <div className="p-2.5 bg-white rounded-lg shadow-sm border border-brand-sage/20">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase">Damaged Trays Equivalent</p>
-                      <p className="text-sm font-black text-brand-forest mt-1">
-                        {getTransferPreview().damagedTrays.toLocaleString()} <span className="text-[9px] font-normal text-gray-400">Trays</span>
-                      </p>
-                      {getTransferPreview().remainderEggs > 0 && (
-                        <p className="text-[9px] text-red-500 font-bold mt-0.5">+{getTransferPreview().remainderEggs} loose eggs leftover</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                <p className="text-[9px] text-gray-400 text-center font-medium">
-                  Formula calculations: 1 bulk tray of 30 eggs yields: 1 Single Pack (Tray) OR 2 x 15-Packs OR 5 x 6-Packs.
-                </p>
-              </div>
+                );
+              })()}
 
               {/* Buttons */}
               <div className="flex justify-end gap-2.5 pt-3">

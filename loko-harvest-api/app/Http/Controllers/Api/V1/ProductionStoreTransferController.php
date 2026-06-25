@@ -37,9 +37,15 @@ class ProductionStoreTransferController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
+            $productId = $validated['product_id'];
+            $product = \App\Models\Product::findOrFail($productId);
+            $allowedCodes = ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'];
+            if (!in_array($product->code, $allowedCodes)) {
+                return $this->error('Only white plain trays, brown plain trays, cream plain trays, live chicken, dressed chicken, and manure can be transferred.', 422);
+            }
+
             $fromStoreId = $validated['from_production_store_id'];
             $toStoreId = $validated['to_production_store_id'];
-            $productId = $validated['product_id'];
             $qty = $validated['quantity'];
             
             $fromBatch = $validated['from_batch_reference'] ?? $validated['batch_reference'] ?? null;
