@@ -75,6 +75,7 @@ export default function ProductionIntakePage() {
   const watchQty = watch("quantity") || 0;
   const watchPrice = watch("valuation_price") || 0;
   const watchBatch = watch("batch_number") || "";
+  const lastProductIdRef = React.useRef("");
 
   useEffect(() => {
     if (productionStores.length > 0) {
@@ -86,10 +87,11 @@ export default function ProductionIntakePage() {
   const filteredProducts = products.filter((p) => allowedIntakeCodes.includes(p.code));
 
   useEffect(() => {
-    if (watchProductId && filteredProducts.length > 0) {
+    if (watchProductId && filteredProducts.length > 0 && watchProductId !== lastProductIdRef.current) {
       const selected = filteredProducts.find((p) => p.id === watchProductId);
       if (selected) {
         setValue("valuation_price", parseFloat(selected.default_unit_price) || 0);
+        lastProductIdRef.current = watchProductId;
       }
     }
   }, [watchProductId, filteredProducts, setValue]);
