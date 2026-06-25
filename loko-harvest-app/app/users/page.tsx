@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import api from "@/lib/api";
 import { useAuth } from "@/store/useAuth";
+import { useToast } from "@/store/useToast";
 
 interface UserRecord {
   id: string;
@@ -39,11 +40,10 @@ type TabType = "pending" | "active" | "suspended" | "rejected";
 export default function UsersManagementPage() {
   const router = useRouter();
   const { user: currentUser } = useAuth();
+  const toast = useToast();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>("pending");
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -62,7 +62,6 @@ export default function UsersManagementPage() {
 
   const fetchUsers = async () => {
     setIsLoading(true);
-    setError(null);
     try {
       const response = await api.get("/admin/users");
       if (response.data.success) {
@@ -70,7 +69,7 @@ export default function UsersManagementPage() {
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.message || "Failed to fetch user accounts.");
+      toast.error(err.response?.data?.message || "Failed to fetch user accounts.");
     } finally {
       setIsLoading(false);
     }
@@ -89,14 +88,6 @@ export default function UsersManagementPage() {
       fetchUsers();
     }
   }, [currentUser]);
-
-  // Clean success message after 5 seconds
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
 
   if (!currentUser) {
     return (
@@ -168,12 +159,12 @@ export default function UsersManagementPage() {
       }
 
       if (response && response.data.success) {
-        setSuccessMessage(response.data.message || `Action ${type} completed successfully.`);
+        toast.success(response.data.message || `Action ${type} completed successfully.`);
         // Refresh local listings
         fetchUsers();
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || `Operation failed. Please try again.`);
+      toast.error(err.response?.data?.message || `Operation failed. Please try again.`);
     } finally {
       setIsActionLoading(null);
     }
@@ -237,27 +228,6 @@ export default function UsersManagementPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6 font-body relative">
-        {/* Success / Error Banners */}
-        {successMessage && (
-          <div className="rounded-xl bg-green-50 p-4 border border-green-200 text-green-700 font-semibold text-sm flex items-center justify-between shadow-sm animate-fade-in">
-            <div className="flex items-center gap-2">
-              <Check size={18} className="text-green-600 shrink-0" />
-              <span>{successMessage}</span>
-            </div>
-            <button onClick={() => setSuccessMessage(null)} className="hover:text-green-900 font-bold text-xs cursor-pointer">Dismiss</button>
-          </div>
-        )}
-
-        {error && (
-          <div className="rounded-xl bg-red-50 p-4 border border-red-200 text-red-700 font-semibold text-sm flex items-center justify-between shadow-sm animate-fade-in">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={18} className="text-red-600 shrink-0" />
-              <span>{error}</span>
-            </div>
-            <button onClick={() => setError(null)} className="hover:text-red-900 font-bold text-xs cursor-pointer">Dismiss</button>
-          </div>
-        )}
-
         {/* Action Confirmation Modal */}
         {confirmModal.isOpen && (
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
