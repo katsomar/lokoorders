@@ -19,7 +19,8 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
-  Loader2
+  Loader2,
+  RefreshCcw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +82,8 @@ export default function DeliveryConfirmationPage() {
     customer_latitude: number | null;
     customer_longitude: number | null;
     vehicle: VehicleDetails | null;
+    customer_id?: string;
+    order_id?: string;
   }
 
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
@@ -104,6 +107,25 @@ export default function DeliveryConfirmationPage() {
   const [geofenceError, setGeofenceError] = useState<string | null>(null);
   const [hasGeofenceCleared, setHasGeofenceCleared] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Returns & Replacements states
+  const [showDeclareReturnsQuestionModal, setShowDeclareReturnsQuestionModal] = useState(false);
+  const [showDeclareReturnsFormModal, setShowDeclareReturnsFormModal] = useState(false);
+  const [showPendingReplacementsModal, setShowPendingReplacementsModal] = useState(false);
+  const [pastOrders, setPastOrders] = useState<any[]>([]);
+  const [selectedPastOrder, setSelectedPastOrder] = useState<any>(null);
+  const [pastOrderItems, setPastOrderItems] = useState<any[]>([]);
+  const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
+  
+  // Return Form inputs
+  const [formReasonCode, setFormReasonCode] = useState("broken_cracked");
+  const [formNotes, setFormNotes] = useState("");
+  const [formRepName, setFormRepName] = useState("");
+  const [formSignature, setFormSignature] = useState("");
+
+  // Replacement Form inputs
+  const [replaceRepName, setReplaceRepName] = useState("");
+  const [replaceSignature, setReplaceSignature] = useState("");
 
   // Tracking states
   const latestCoordsRef = useRef<{lat: number, lng: number} | null>(null);
@@ -178,6 +200,8 @@ export default function DeliveryConfirmationPage() {
               fuel_tank_capacity: Number(d.driver.vehicle.fuel_tank_capacity ?? 80.0),
               consumption_per_km: Number(d.driver.vehicle.consumption_per_km ?? 0.12),
             } : null,
+            customer_id: d.order?.customer_id || "N/A",
+            order_id: d.order_id || "N/A",
           });
           
           if (d.status === "in_transit") {
@@ -301,6 +325,231 @@ export default function DeliveryConfirmationPage() {
     showToast("Geofence verified! (TEMPORARILY BYPASSED FOR TESTING) Inputs unlocked.");
   };
 
+  // Returns & Replacements logic
+  const handleReturnsFlowStart = () => {
+    setShowDeclareReturnsQuestionModal(true);
+  };
+
+  const handleNoReturns = async () => {
+    setShowDeclareReturnsQuestionModal(false);
+    if (!delivery?.customer_id) {
+      setStep(4);
+      setTimeout(() => router.push("/driver"), 2500);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await api.get('/returns', {
+        params: {
+          customer_id: delivery.customer_id,
+          pending_replacements: true,
+        }
+      });
+      if (res.data?.success && res.data.data.data.length > 0) {
+        const mapped = res.data.data.data.map((item: any) => ({
+          ...item,
+          replacedToday: "",
+        }));
+        setPendingReplacements(mapped);
+        setShowPendingReplacementsModal(true);
+      } else {
+        setStep(4);
+        setTimeout(() => router.push("/driver"), 2500);
+      }
+    } catch (e) {
+      console.error("Failed to check pending replacements:", e);
+      setStep(4);
+      setTimeout(() => router.push("/driver"), 2500);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleYesReturns = async () => {
+    setShowDeclareReturnsQuestionModal(false);
+    if (!delivery?.customer_id) return;
+    setIsLoading(true);
+    try {
+      const res = await api.get('/orders', {
+        params: {
+          customer_id: delivery.customer_id,
+          status: 'delivered',
+          per_page: 10,
+        }
+      });
+      if (res.data?.success) {
+        setPastOrders(res.data.data.data || []);
+        setShowDeclareReturnsFormModal(true);
+      }
+    } catch (e) {
+      console.error("Failed to load past orders:", e);
+      alert("Failed to load past orders.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePastOrderSelect = (orderId: string) => {
+    if (!orderId) {
+      setSelectedPastOrder(null);
+      setPastOrderItems([]);
+      return;
+    }
+    const order = pastOrders.find(o => o.id === orderId);
+    if (order) {
+      setSelectedPastOrder(order);
+      const items = (order.items || []).map((item: any) => ({
+        product_id: item.product_id,
+        name: item.product?.name || "Unknown Product",
+        batch_reference: item.batch_reference || "",
+        quantity: parseFloat(item.quantity) || 0,
+        unit_price: parseFloat(item.unit_price) || 0,
+        returnQty: "",
+        replaceQty: "",
+      }));
+      setPastOrderItems(items);
+    }
+  };
+
+  const handleItemQtyChange = (productId: string, field: 'returnQty' | 'replaceQty', val: string) => {
+    setPastOrderItems(prev => prev.map(item => {
+      if (item.product_id === productId) {
+        if (field === 'returnQty') {
+          const returnQtyVal = parseFloat(val) || 0;
+          const qty = Math.min(returnQtyVal, item.quantity);
+          return {
+            ...item,
+            returnQty: val === "" ? "" : qty.toString(),
+            replaceQty: item.replaceQty !== "" && parseFloat(item.replaceQty) > qty ? qty.toString() : item.replaceQty
+          };
+        } else {
+          const returnQtyVal = parseFloat(item.returnQty) || 0;
+          const replaceQtyVal = parseFloat(val) || 0;
+          const qty = Math.min(replaceQtyVal, returnQtyVal);
+          return {
+            ...item,
+            replaceQty: val === "" ? "" : qty.toString()
+          };
+        }
+      }
+      return item;
+    }));
+  };
+
+  const handleSubmitReturns = async () => {
+    if (!formRepName.trim()) {
+      alert("Please enter the name of the acknowledging client representative.");
+      return;
+    }
+    if (!formSignature) {
+      alert("Please capture the client's signature.");
+      return;
+    }
+    
+    const itemsToSubmit = pastOrderItems
+      .filter((item: any) => parseFloat(item.returnQty) > 0)
+      .map((item: any) => ({
+        product_id: item.product_id,
+        batch_reference: item.batch_reference || null,
+        quantity: parseFloat(item.returnQty),
+        unit_price: parseFloat(item.unit_price),
+        replacement_quantity: parseFloat(item.replaceQty) || 0,
+      }));
+
+    if (itemsToSubmit.length === 0) {
+      alert("Please enter a return quantity of at least one item.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await api.post('/returns/bulk', {
+        delivery_id: delivery?.id,
+        order_id: selectedPastOrder.id,
+        customer_id: delivery?.customer_id,
+        reason_code: formReasonCode,
+        notes: formNotes,
+        acknowledged_by: formRepName,
+        signature_data: formSignature,
+        items: itemsToSubmit,
+      });
+
+      if (res.data?.success) {
+        setShowDeclareReturnsFormModal(false);
+        setFormRepName("");
+        setFormSignature("");
+        setFormNotes("");
+        // Check for any other pending replacements
+        handleNoReturns();
+      }
+    } catch (e: any) {
+      console.error("Failed to submit bulk returns:", e);
+      alert(e.response?.data?.message || "Failed to submit returns. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReplacementQtyChange = (voucherId: string, val: string) => {
+    setPendingReplacements(prev => prev.map(item => {
+      if (item.id === voucherId) {
+        const remaining = item.quantity - item.replacement_quantity;
+        const replaceVal = parseFloat(val) || 0;
+        const qty = Math.min(replaceVal, remaining);
+        return {
+          ...item,
+          replacedToday: val === "" ? "" : qty.toString()
+        };
+      }
+      return item;
+    }));
+  };
+
+  const handleSubmitReplacements = async () => {
+    if (!replaceRepName.trim()) {
+      alert("Please enter the name of the acknowledging client representative.");
+      return;
+    }
+    if (!replaceSignature) {
+      alert("Please capture the client's signature.");
+      return;
+    }
+
+    const replacementsToSubmit = pendingReplacements
+      .filter((item: any) => parseFloat(item.replacedToday) > 0)
+      .map((item: any) => ({
+        return_voucher_id: item.id,
+        replacement_quantity: parseFloat(item.replacedToday),
+      }));
+
+    if (replacementsToSubmit.length === 0) {
+      alert("Please enter a replaced quantity of at least one item.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await api.post('/returns/replacements', {
+        acknowledged_by: replaceRepName,
+        signature_data: replaceSignature,
+        replacements: replacementsToSubmit,
+      });
+
+      if (res.data?.success) {
+        setShowPendingReplacementsModal(false);
+        setReplaceRepName("");
+        setReplaceSignature("");
+        setStep(4);
+        setTimeout(() => router.push("/driver"), 2500);
+      }
+    } catch (e: any) {
+      console.error("Failed to submit replacements:", e);
+      alert(e.response?.data?.message || "Failed to submit replacements. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (!delivery) return;
     const activeDelivery = delivery;
@@ -364,8 +613,7 @@ export default function DeliveryConfirmationPage() {
 
         if (res.data?.success) {
           setDeliveryStatus("Delivered");
-          setStep(4); // Success Splash
-          setTimeout(() => router.push("/driver"), 2500);
+          handleReturnsFlowStart();
         }
       } catch (err: any) {
         console.error(err);
@@ -940,6 +1188,333 @@ export default function DeliveryConfirmationPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* MODAL 1: DECLARE RETURNS PROMPT QUESTION */}
+      {showDeclareReturnsQuestionModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+          <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl p-5 text-center space-y-6">
+            <div className="h-14 w-14 rounded-full bg-brand-yellow/15 text-brand-yellow flex items-center justify-center mx-auto">
+              <RefreshCcw size={28} className="animate-spin" style={{ animationDuration: '6s' }} />
+            </div>
+            <div className="space-y-2">
+              <h3 className="font-heading font-black text-brand-yellow text-lg">Declare Returns?</h3>
+              <p className="text-xs text-gray-300 leading-relaxed font-medium">
+                Does the customer have any returned or damaged products (like rotten, cracked, dirty, or abnormal eggs) to declare from past orders?
+              </p>
+            </div>
+            <div className="flex gap-4">
+              <Button
+                onClick={handleNoReturns}
+                className="flex-1 h-12 bg-transparent hover:bg-white/5 border border-brand-forest/40 text-gray-300 font-bold rounded-xl"
+              >
+                No Returns
+              </Button>
+              <Button
+                onClick={handleYesReturns}
+                className="flex-1 h-12 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest font-black rounded-xl"
+              >
+                Yes, Declare
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: DECLARE RETURNS BATCH FORM ENTRY */}
+      {showDeclareReturnsFormModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="bg-[#0B1510] text-white px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">
+              <div className="flex items-center gap-2">
+                <RefreshCcw className="text-brand-yellow" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Record Return Items</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowDeclareReturnsFormModal(false);
+                  handleNoReturns();
+                }} 
+                className="text-gray-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-5 overflow-y-auto flex-1 text-xs">
+              
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Past Order *</label>
+                <select
+                  required
+                  value={selectedPastOrder?.id || ""}
+                  onChange={(e) => handlePastOrderSelect(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                >
+                  <option value="">-- Choose Past Order --</option>
+                  {pastOrders.map(order => (
+                    <option key={order.id} value={order.id}>
+                      {order.order_number} ({order.order_date}) - UGX {parseFloat(order.total_amount).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedPastOrder && pastOrderItems.length > 0 && (
+                <div className="space-y-4">
+                  <div className="bg-[#0B1510] p-3 rounded-xl border border-brand-forest/20">
+                    <p className="text-[9px] text-brand-yellow font-black uppercase tracking-wider mb-2">Order Items Details</p>
+                    <div className="space-y-3.5">
+                      {pastOrderItems.map((item: any) => {
+                        const lineTotal = (parseFloat(item.returnQty) || 0) * item.unit_price;
+                        return (
+                          <div key={item.product_id} className="border-b border-brand-forest/10 pb-3 last:border-0 last:pb-0 space-y-2">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-bold text-white">{item.name}</p>
+                                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                                  Ordered: {item.quantity} Trays | Price: UGX {item.unit_price.toLocaleString()}
+                                </p>
+                                {item.batch_reference && (
+                                  <p className="text-[9px] text-brand-yellow font-bold mt-0.5">Batch: {item.batch_reference}</p>
+                                )}
+                              </div>
+                              {lineTotal > 0 && (
+                                <span className="text-[10px] font-mono font-black text-red-400">
+                                  -UGX {lineTotal.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                              <div>
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Return Qty (Trays)</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={item.returnQty}
+                                  onChange={(e) => handleItemQtyChange(item.product_id, 'returnQty', e.target.value)}
+                                  className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Replaced Today (Qty)</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={item.replaceQty}
+                                  disabled={!item.returnQty}
+                                  onChange={(e) => handleItemQtyChange(item.product_id, 'replaceQty', e.target.value)}
+                                  className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow disabled:opacity-40"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Reason Code */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Reason Code *</label>
+                    <select
+                      required
+                      value={formReasonCode}
+                      onChange={(e) => setFormReasonCode(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                    >
+                      <option value="broken_cracked">Broken / Cracked Eggs</option>
+                      <option value="rotten_spoiled">Rotten / Spoiled Eggs</option>
+                      <option value="wrong_product">Wrong Product Delivered</option>
+                      <option value="near_expiry">Near Expiry</option>
+                      <option value="packaging_damage">Packaging Damage</option>
+                      <option value="other">Other Reason</option>
+                    </select>
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Adjustment Notes</label>
+                    <textarea
+                      placeholder="Specify returns details..."
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      className="w-full h-16 p-2 rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white text-xs font-semibold focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Acknowledged By */}
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Acknowledged By (Client Rep Name) *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Sarah Namubiru"
+                      value={formRepName}
+                      onChange={(e) => setFormRepName(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Signature */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Client Representative Signature *</label>
+                    <div className="bg-[#0B1510] p-3 rounded-2xl border border-brand-forest/20">
+                      <SignatureCanvas onSave={(data) => setFormSignature(data)} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Total Values */}
+              {selectedPastOrder && pastOrderItems.some(i => parseFloat(i.returnQty) > 0) && (
+                <div className="bg-brand-yellow/10 border border-brand-yellow/20 p-3.5 rounded-xl flex justify-between items-center">
+                  <span className="font-extrabold text-brand-yellow">Estimated Return Value:</span>
+                  <span className="font-mono font-black text-brand-yellow text-sm">
+                    UGX {pastOrderItems.reduce((acc, curr) => acc + ((parseFloat(curr.returnQty) || 0) * curr.unit_price), 0).toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-3 border-t border-brand-forest/20">
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    setShowDeclareReturnsFormModal(false);
+                    handleNoReturns();
+                  }} 
+                  className="flex-1 bg-transparent hover:bg-white/5 text-gray-400 hover:text-white border border-brand-forest/30 text-xs font-bold rounded-xl h-11"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubmitReturns}
+                  disabled={isLoading || !formRepName || !formSignature || !pastOrderItems.some(i => parseFloat(i.returnQty) > 0)}
+                  className="flex-1 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest text-xs font-black rounded-xl h-11"
+                >
+                  {isLoading ? "Submitting..." : "Record Returns"}
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: DELIVER PENDING REPLACEMENTS FORM ENTRY */}
+      {showPendingReplacementsModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="bg-[#0B1510] text-white px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">
+              <div className="flex items-center gap-2">
+                <RefreshCcw className="text-brand-yellow animate-spin" style={{ animationDuration: '6s' }} size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Deliver Pending Replacements</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowPendingReplacementsModal(false);
+                  setStep(4);
+                  setTimeout(() => router.push("/driver"), 2500);
+                }} 
+                className="text-gray-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-5 overflow-y-auto flex-1 text-xs">
+              <p className="text-gray-300 leading-normal font-medium">
+                This customer has past return items that were never fully replaced. Record any replacements you are delivering to them today:
+              </p>
+
+              <div className="space-y-4">
+                <div className="bg-[#0B1510] p-3 rounded-xl border border-brand-forest/20 space-y-3.5">
+                  <p className="text-[9px] text-brand-yellow font-black uppercase tracking-wider mb-2">Pending Replacement items</p>
+                  {pendingReplacements.map((item: any) => {
+                    const remaining = item.quantity - item.replacement_quantity;
+                    return (
+                      <div key={item.id} className="border-b border-brand-forest/10 pb-3 last:border-0 last:pb-0 space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-white">{item.product?.name || "Product"}</p>
+                            <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
+                              Returned: {item.quantity} | Replaced: {item.replacement_quantity} | Remaining: <span className="text-red-400 font-bold">{remaining}</span>
+                            </p>
+                            <p className="text-[9px] text-gray-500 font-bold mt-0.5">Voucher: {item.voucher_number} ({item.return_date})</p>
+                          </div>
+                        </div>
+
+                        <div className="pt-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Deliver Today (Qty)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={item.replacedToday}
+                            onChange={(e) => handleReplacementQtyChange(item.id, e.target.value)}
+                            className="w-2/3 h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Acknowledged By */}
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Acknowledged By (Client Rep Name) *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sarah Namubiru"
+                    value={replaceRepName}
+                    onChange={(e) => setReplaceRepName(e.target.value)}
+                    className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none"
+                  />
+                </div>
+
+                {/* Signature */}
+                <div className="space-y-2">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Client Representative Signature *</label>
+                  <div className="bg-[#0B1510] p-3 rounded-2xl border border-brand-forest/20">
+                    <SignatureCanvas onSave={(data) => setReplaceSignature(data)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-3 border-t border-brand-forest/20">
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    setShowPendingReplacementsModal(false);
+                    setStep(4);
+                    setTimeout(() => router.push("/driver"), 2500);
+                  }} 
+                  className="flex-1 bg-transparent hover:bg-white/5 text-gray-400 hover:text-white border border-brand-forest/30 text-xs font-bold rounded-xl h-11"
+                >
+                  Skip / Later
+                </Button>
+                <Button 
+                  onClick={handleSubmitReplacements}
+                  disabled={isLoading || !replaceRepName || !replaceSignature || !pendingReplacements.some(i => parseFloat(i.replacedToday) > 0)}
+                  className="flex-1 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest text-xs font-black rounded-xl h-11"
+                >
+                  {isLoading ? "Submitting..." : "Submit Deliveries"}
+                </Button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

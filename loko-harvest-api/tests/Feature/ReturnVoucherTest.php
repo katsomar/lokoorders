@@ -294,4 +294,125 @@ class ReturnVoucherTest extends TestCase
         
         $responseDuplicate->assertStatus(422);
     }
+
+    public function test_can_filter_returns_by_customer_id_and_pending_replacements()
+    {
+        ReturnVoucher::create([
+            'voucher_number' => 'LHRV-2026-0001',
+            'customer_id' => $this->customer->id,
+            'product_id' => $this->product->id,
+            'order_id' => $this->order->id,
+            'delivery_id' => $this->delivery->id,
+            'quantity' => 5,
+            'replacement_quantity' => 2,
+            'unit_price' => 15000,
+            'monetary_value' => 75000,
+            'return_type' => 'physical_replacement',
+            'reason_code' => 'broken_cracked',
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        ReturnVoucher::create([
+            'voucher_number' => 'LHRV-2026-0002',
+            'customer_id' => $this->customer->id,
+            'product_id' => $this->product->id,
+            'order_id' => $this->order->id,
+            'delivery_id' => $this->delivery->id,
+            'quantity' => 3,
+            'replacement_quantity' => 3, // fully replaced
+            'unit_price' => 15000,
+            'monetary_value' => 45000,
+            'return_type' => 'physical_replacement',
+            'reason_code' => 'rotten_spoiled',
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        // Filter by customer and pending_replacements
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->getJson("/api/v1/returns?customer_id={$this->customer->id}&pending_replacements=true");
+
+        $response->assertStatus(200)
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.voucher_number', 'LHRV-2026-0001');
+    }
+
+    public function test_can_store_bulk_return_vouchers()
+    {
+        $signatureData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/returns/bulk', [
+                'delivery_id' => $this->delivery->id,
+                'order_id' => $this->order->id,
+                'customer_id' => $this->customer->id,
+                'reason_code' => 'rotten_spoiled',
+                'notes' => 'Bulk returns note',
+                'acknowledged_by' => 'Store Rep Sarah',
+                'signature_data' => $signatureData,
+                'items' => [
+                    [
+                        'product_id' => $this->product->id,
+                        'batch_reference' => 'B-EG-25',
+                        'quantity' => 4,
+                        'unit_price' => 15000,
+                        'replacement_quantity' => 1,
+                    ]
+                ]
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(1, 'data');
+
+        $this->assertDatabaseHas('return_vouchers', [
+            'customer_id' => $this->customer->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'B-EG-25',
+            'quantity' => 4,
+            'replacement_quantity' => 1,
+            'acknowledged_by' => 'Store Rep Sarah',
+        ]);
+    }
+
+    public function test_can_deliver_replacements_for_pending_vouchers()
+    {
+        $voucher = ReturnVoucher::create([
+            'voucher_number' => 'LHRV-2026-0001',
+            'customer_id' => $this->customer->id,
+            'product_id' => $this->product->id,
+            'order_id' => $this->order->id,
+            'delivery_id' => $this->delivery->id,
+            'quantity' => 5,
+            'replacement_quantity' => 2,
+            'unit_price' => 15000,
+            'monetary_value' => 75000,
+            'return_type' => 'physical_replacement',
+            'reason_code' => 'broken_cracked',
+            'return_date' => now()->toDateString(),
+            'created_by' => $this->user->id,
+        ]);
+
+        $signatureData = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+        $response = $this->actingAs($this->user, 'sanctum')
+            ->postJson('/api/v1/returns/replacements', [
+                'acknowledged_by' => 'Sarah Acknowledged',
+                'signature_data' => $signatureData,
+                'replacements' => [
+                    [
+                        'return_voucher_id' => $voucher->id,
+                        'replacement_quantity' => 2,
+                    ]
+                ]
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true);
+
+        $this->assertEquals(4, $voucher->fresh()->replacement_quantity);
+        $this->assertEquals('Sarah Acknowledged', $voucher->fresh()->acknowledged_by);
+        $this->assertNotNull($voucher->fresh()->signature_path);
+    }
 }

@@ -109,6 +109,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         // Return Vouchers
         Route::get('/returns', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'index']);
         Route::post('/returns', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'store']);
+        Route::post('/returns/bulk', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'storeBulk']);
+        Route::post('/returns/replacements', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'deliverReplacements']);
         Route::post('/returns/{id}/post-credit', [App\Http\Controllers\Api\V1\ReturnVoucherController::class, 'postCredit']);
         
         // Drivers & Vehicles

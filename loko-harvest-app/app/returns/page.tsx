@@ -51,6 +51,12 @@ interface ReturnVoucher {
   account_credit_posted: boolean;
   notes: string;
   created_by: string;
+  batch_reference?: string | null;
+  replacement_quantity: number;
+  date_replaced?: string | null;
+  acknowledged_by?: string;
+  signature_path?: string | null;
+  store_name?: string;
 }
 
 const reasonLabels: Record<string, string> = {
@@ -81,6 +87,14 @@ export default function ReturnsPage() {
   // Modals state
   const [selectedReturn, setSelectedReturn] = useState<ReturnVoucher | null>(null);
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [selectedSignatureUrl, setSelectedSignatureUrl] = useState<string | null>(null);
+
+  const backendBaseUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/api\/v1\/?$/, "");
+  const getSignatureUrl = (path: string | null | undefined) => {
+    if (!path) return null;
+    if (path.startsWith("http")) return path;
+    return `${backendBaseUrl}/storage/${path}`;
+  };
 
   // Form dependencies state
   const [customers, setCustomers] = useState<any[]>([]);
@@ -118,7 +132,13 @@ export default function ReturnsPage() {
     return_type: apiVoucher.return_type,
     account_credit_posted: !!apiVoucher.account_credit_posted,
     notes: apiVoucher.notes || "",
-    created_by: apiVoucher.creator?.name || "System"
+    created_by: apiVoucher.creator?.name || "System",
+    batch_reference: apiVoucher.batch_reference || null,
+    replacement_quantity: apiVoucher.replacement_quantity ? parseFloat(apiVoucher.replacement_quantity) : 0,
+    date_replaced: apiVoucher.date_replaced || null,
+    acknowledged_by: apiVoucher.acknowledged_by || "",
+    signature_path: apiVoucher.signature_path || null,
+    store_name: apiVoucher.order?.sales_store?.name || apiVoucher.order?.salesStore?.name || "N/A"
   });
 
   const fetchReturns = async () => {
@@ -434,64 +454,118 @@ export default function ReturnsPage() {
             <Table>
               <TableHeader className="bg-gray-50/55">
                 <TableRow>
-                  <TableHead className="font-semibold text-brand-forest">Voucher #</TableHead>
-                  <TableHead className="font-semibold text-brand-forest">Customer</TableHead>
-                  <TableHead className="font-semibold text-brand-forest">Date</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Voucher & Batch #</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Customer & Store</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Date Returned</TableHead>
                   <TableHead className="font-semibold text-brand-forest">Product Details</TableHead>
-                  <TableHead className="font-semibold text-brand-forest">Reason</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Returned vs Replaced</TableHead>
                   <TableHead className="font-semibold text-brand-forest text-right">Value (UGX)</TableHead>
-                  <TableHead className="font-semibold text-brand-forest">Type</TableHead>
-                  <TableHead className="font-semibold text-brand-forest">Ledger Post</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Type / Date Replaced</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Reason</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Acknowledged By</TableHead>
+                  <TableHead className="font-semibold text-brand-forest">Signature</TableHead>
                   <TableHead className="font-semibold text-brand-forest text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {returns.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-gray-400">
+                    <TableCell colSpan={11} className="text-center py-12 text-gray-400">
                       No return vouchers found. Try adjusting your search filters.
                     </TableCell>
                   </TableRow>
                 ) : (
                   returns.map((item) => (
                     <TableRow key={item.id} className="hover:bg-gray-50/40 transition-colors">
-                      <TableCell className="font-mono font-bold text-brand-forest text-sm">
-                        {item.voucher_number}
+                      <TableCell className="text-sm">
+                        <div className="font-mono font-bold text-brand-forest">{item.voucher_number}</div>
+                        {item.batch_reference && (
+                          <div className="text-[10px] text-gray-500 font-semibold mt-0.5">
+                            Batch: {item.batch_reference}
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell className="font-semibold text-gray-900 text-sm">
-                        {item.customer}
+                      <TableCell className="text-sm">
+                        <div className="font-semibold text-gray-900">{item.customer}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          Store: <span className="font-semibold text-brand-forest">{item.store_name}</span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-xs text-gray-500">
-                        {format(new Date(item.return_date), "dd MMM yyyy")}
+                        <div className="font-medium text-gray-800">{format(new Date(item.return_date), "dd MMM yyyy")}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">By: {item.created_by}</div>
                       </TableCell>
                       <TableCell className="text-sm">
                         <span className="font-medium text-gray-800">{item.product}</span>
-                        <span className="block text-xs text-gray-500">Qty: {item.quantity} × UGX {item.unit_price.toLocaleString()}</span>
+                        <span className="block text-xs text-gray-500">Unit Price: UGX {item.unit_price.toLocaleString()}</span>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div className="font-bold text-gray-900">{item.quantity} Trays</div>
+                        {item.return_type === "physical_replacement" ? (
+                          <div className="mt-1 space-y-1">
+                            <div className="text-[10px] font-semibold text-brand-mid">
+                              Replaced: {item.replacement_quantity} / {item.quantity}
+                            </div>
+                            <div className="w-20 bg-gray-100 h-1 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-brand-forest h-full rounded-full"
+                                style={{ width: `${Math.min(100, (item.replacement_quantity / item.quantity) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-gray-400 mt-0.5">N/A (Credit)</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-bold text-rose-600 text-sm">
+                        {item.monetary_value.toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        <div className="mb-1 flex flex-wrap gap-1">
+                          {item.return_type === "credit" ? (
+                            <Badge variant="processing" className="text-[9px] bg-blue-50 text-blue-700 border-none">CREDIT NOTE</Badge>
+                          ) : (
+                            <Badge variant="ready" className="text-[9px] bg-indigo-50 text-indigo-700 border-none">REPLACEMENT</Badge>
+                          )}
+                          {item.account_credit_posted ? (
+                            <Badge variant="delivered" className="text-[9px] bg-green-50 text-green-700 flex items-center gap-0.5 border-none">
+                              <CheckCircle2 size={8} /> POSTED
+                            </Badge>
+                          ) : (
+                            item.return_type === "credit" && (
+                              <Badge variant="pending" className="text-[9px] bg-amber-50 text-amber-700 flex items-center gap-0.5 border-none">
+                                <AlertTriangle size={8} /> PENDING
+                              </Badge>
+                            )
+                          )}
+                        </div>
+                        {item.return_type === "physical_replacement" && (
+                          <div className="text-[10px] text-gray-500">
+                            Replaced: {item.date_replaced ? format(new Date(item.date_replaced), "dd MMM yyyy") : <span className="text-amber-600 font-bold">Pending</span>}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${reasonColors[item.reason_code] || "bg-gray-50 text-gray-700"}`}>
                           {reasonLabels[item.reason_code] || item.reason_code}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right font-bold text-rose-600 text-sm">
-                        {item.monetary_value.toLocaleString()}
+                      <TableCell className="text-xs text-gray-800">
+                        {item.acknowledged_by || <span className="text-gray-400 font-medium">N/A</span>}
                       </TableCell>
                       <TableCell>
-                        {item.return_type === "credit" ? (
-                          <Badge variant="processing" className="text-[10px] bg-blue-50 text-blue-700 border-none">CREDIT NOTE</Badge>
+                        {item.signature_path ? (
+                          <div className="relative group flex items-center">
+                            <img 
+                              src={getSignatureUrl(item.signature_path) || ""} 
+                              alt="Signature" 
+                              className="h-8 w-16 object-contain bg-gray-50 border border-gray-200 rounded hover:scale-105 transition-transform cursor-pointer"
+                              onClick={() => setSelectedSignatureUrl(getSignatureUrl(item.signature_path))}
+                              title="Click to view signature"
+                            />
+                          </div>
                         ) : (
-                          <Badge variant="ready" className="text-[10px] bg-indigo-50 text-indigo-700 border-none">REPLACEMENT</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {item.account_credit_posted ? (
-                          <Badge variant="delivered" className="text-[10px] bg-green-50 text-green-700 flex items-center gap-1 w-max border-none">
-                            <CheckCircle2 size={10} /> POSTED
-                          </Badge>
-                        ) : (
-                          <Badge variant="pending" className="text-[10px] bg-amber-50 text-amber-700 flex items-center gap-1 w-max border-none">
-                            <AlertTriangle size={10} /> PENDING
-                          </Badge>
+                          <span className="text-xs text-gray-400 font-medium">N/A</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -535,7 +609,14 @@ export default function ReturnsPage() {
                   <FileText className="text-brand-forest" size={24} />
                   <div>
                     <h3 className="font-heading font-bold text-xl text-brand-forest">Return Voucher</h3>
-                    <p className="text-xs font-mono text-gray-500">{selectedReturn.voucher_number}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-xs font-mono text-gray-500">{selectedReturn.voucher_number}</p>
+                      {selectedReturn.batch_reference && (
+                        <span className="text-[10px] bg-brand-yellow/10 text-brand-forest font-bold px-1.5 py-0.5 rounded border border-brand-yellow/20">
+                          Batch: {selectedReturn.batch_reference}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button 
@@ -571,10 +652,18 @@ export default function ReturnsPage() {
                     <p className="font-bold text-gray-900 mt-0.5">{selectedReturn.customer}</p>
                   </div>
                   <div>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Origin Store</p>
+                    <p className="font-bold text-brand-forest mt-0.5">{selectedReturn.store_name}</p>
+                  </div>
+                  <div>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Date Recorded</p>
                     <p className="font-medium text-gray-700 mt-0.5">
                       {format(new Date(selectedReturn.return_date), "dd MMM yyyy")}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Recorded By</p>
+                    <p className="font-medium text-gray-700 mt-0.5">{selectedReturn.created_by}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Delivery Ref</p>
@@ -592,15 +681,32 @@ export default function ReturnsPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-bold text-brand-forest">{selectedReturn.product}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Quantity returned: <span className="font-bold text-gray-700">{selectedReturn.quantity}</span>
-                      </p>
+                      <div className="text-xs text-gray-500 mt-1 space-y-1">
+                        <p>Quantity returned: <span className="font-bold text-gray-700">{selectedReturn.quantity} Trays</span></p>
+                        {selectedReturn.return_type === "physical_replacement" && (
+                          <p>Replaced quantity: <span className="font-bold text-green-700">{selectedReturn.replacement_quantity} / {selectedReturn.quantity} Trays</span></p>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-xs text-gray-400 font-medium">Unit Price</p>
                       <p className="font-semibold text-gray-800 text-sm">UGX {selectedReturn.unit_price.toLocaleString()}</p>
                     </div>
                   </div>
+                  {selectedReturn.return_type === "physical_replacement" && (
+                    <div className="pt-2 border-t border-brand-sage/40">
+                      <div className="flex justify-between text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">
+                        <span>Replacement Progress</span>
+                        <span>{Math.round((selectedReturn.replacement_quantity / selectedReturn.quantity) * 100)}%</span>
+                      </div>
+                      <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-brand-forest h-full rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, (selectedReturn.replacement_quantity / selectedReturn.quantity) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="border-t border-brand-sage/60 pt-3 flex justify-between items-center">
                     <span className="text-sm font-bold text-gray-900">Total Value Adjusted:</span>
                     <span className="text-lg font-extrabold text-rose-600">UGX {selectedReturn.monetary_value.toLocaleString()}</span>
@@ -624,6 +730,36 @@ export default function ReturnsPage() {
                       <Badge variant="ready" className="text-xs border-none bg-indigo-50 text-indigo-700">Physical Replacement (Goods Resent)</Badge>
                     )}
                   </div>
+
+                  {selectedReturn.return_type === "physical_replacement" && (
+                    <div>
+                      <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">Date Replaced</p>
+                      <p className="text-sm font-medium text-gray-800">
+                        {selectedReturn.date_replaced ? format(new Date(selectedReturn.date_replaced), "dd MMM yyyy") : <span className="text-amber-600 font-bold">Pending Replacement Delivery</span>}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedReturn.acknowledged_by && (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+                      <div>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Acknowledge / Signature Proof</p>
+                        <p className="text-sm font-bold text-gray-800 mt-1 flex items-center gap-1.5">
+                          <span>Received By:</span>
+                          <span className="text-brand-forest">{selectedReturn.acknowledged_by}</span>
+                        </p>
+                      </div>
+                      {selectedReturn.signature_path && (
+                        <div className="bg-white p-2 border border-gray-150 rounded-lg flex justify-center max-w-[200px] hover:scale-105 transition-transform cursor-pointer" onClick={() => setSelectedSignatureUrl(getSignatureUrl(selectedReturn.signature_path))}>
+                          <img 
+                            src={getSignatureUrl(selectedReturn.signature_path) || ""} 
+                            alt="Customer Acknowledgement Signature" 
+                            className="h-16 object-contain"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {selectedReturn.notes && (
                     <div className="p-3 bg-rose-50/20 border border-rose-100 rounded-xl">
@@ -782,6 +918,31 @@ export default function ReturnsPage() {
                 </div>
               </form>
 
+            </div>
+          </div>
+        )}
+
+        {/* Signature Lightbox Modal */}
+        {selectedSignatureUrl && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 cursor-pointer"
+            onClick={() => setSelectedSignatureUrl(null)}
+          >
+            <div className="bg-white p-6 rounded-2xl max-w-lg w-full flex flex-col items-center justify-center shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+              <button 
+                className="absolute top-3 right-3 p-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 transition-colors"
+                onClick={() => setSelectedSignatureUrl(null)}
+              >
+                <X size={18} />
+              </button>
+              <h3 className="text-sm font-bold text-gray-800 mb-4">Customer Signature Proof</h3>
+              <div className="bg-gray-50 p-4 border border-gray-200 rounded-xl w-full flex justify-center">
+                <img 
+                  src={selectedSignatureUrl} 
+                  alt="Customer Signature Proof" 
+                  className="max-h-[50vh] max-w-full object-contain"
+                />
+              </div>
             </div>
           </div>
         )}
