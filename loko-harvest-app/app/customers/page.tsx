@@ -52,6 +52,7 @@ interface Branch {
   parent_id?: string;
   latitude: number | null;
   longitude: number | null;
+  classification?: "independent" | "file_opener" | "branch";
 }
 
 interface Customer {
@@ -73,6 +74,7 @@ interface Customer {
   logo_url?: string | null;
   latitude: number | null;
   longitude: number | null;
+  classification?: "independent" | "file_opener" | "branch";
 }
 
 export default function CustomersPage() {
@@ -95,10 +97,11 @@ export default function CustomersPage() {
   const [newPhone, setNewPhone] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newAddress, setNewAddress] = useState("");
-  const [newZoneId, setNewZoneId] = useState("");
+  const [newArea, setNewArea] = useState("");
   const [newType, setNewType] = useState("supermarket");
   const [newCreditLimit, setNewCreditLimit] = useState("10000000");
   const [newCreditTerms, setNewCreditTerms] = useState("7_days");
+  const [newClassification, setNewClassification] = useState<"independent" | "file_opener" | "branch">("independent");
 
   // Edit Customer Modal States
   const [showEditModal, setShowEditModal] = useState(false);
@@ -111,10 +114,11 @@ export default function CustomersPage() {
   const [editPhone, setEditPhone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editAddress, setEditAddress] = useState("");
-  const [editZoneId, setEditZoneId] = useState("");
+  const [editArea, setEditArea] = useState("");
   const [editType, setEditType] = useState("supermarket");
   const [editCreditLimit, setEditCreditLimit] = useState("");
   const [editCreditTerms, setEditCreditTerms] = useState("7_days");
+  const [editClassification, setEditClassification] = useState<"independent" | "file_opener" | "branch">("independent");
 
   const fetchCustomers = async () => {
     setIsLoading(true);
@@ -127,7 +131,7 @@ export default function CustomersPage() {
       const zonesData = zonesRes.data.data || [];
       setZones(zonesData);
       if (zonesData.length > 0) {
-        setNewZoneId(zonesData[0].id);
+        setNewArea(zonesData[0].name);
       }
     } catch (err) {
       console.error("Failed to fetch customer directory details:", err);
@@ -169,6 +173,7 @@ export default function CustomersPage() {
       parent_id: c.parent_id || undefined,
       latitude: c.latitude ? parseFloat(c.latitude) : null,
       longitude: c.longitude ? parseFloat(c.longitude) : null,
+      classification: c.classification,
     });
 
     dbCustomers.forEach(c => {
@@ -218,6 +223,7 @@ export default function CustomersPage() {
           balance: parseFloat(c.account?.current_balance || 0) + branches.reduce((acc, br) => acc + br.balance, 0),
           latitude: c.latitude ? parseFloat(c.latitude) : null,
           longitude: c.longitude ? parseFloat(c.longitude) : null,
+          classification: c.classification || "file_opener",
         });
       } else {
         // Standalone
@@ -239,6 +245,7 @@ export default function CustomersPage() {
           total_paid: parseFloat(c.account?.total_paid || 0),
           latitude: c.latitude ? parseFloat(c.latitude) : null,
           longitude: c.longitude ? parseFloat(c.longitude) : null,
+          classification: c.classification || "independent",
         });
       }
     });
@@ -248,24 +255,25 @@ export default function CustomersPage() {
 
   const handleAddCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomerName || !newZoneId) return;
+    if (!newCustomerName || !newArea) return;
 
     setIsSubmitting(true);
     try {
       await api.post("/customers", {
         name: newCustomerName,
-        parent_id: newParentId || null,
+        classification: newClassification,
+        parent_id: newClassification === "branch" ? (newParentId || null) : null,
         contact_person: newContactPerson || "N/A",
         phone_primary: newPhone || "N/A",
         email: newEmail || null,
         address: newAddress || "N/A",
-        delivery_zone_id: newZoneId,
+        delivery_zone: newArea,
         customer_type: newType,
         credit_terms: newCreditTerms,
         credit_limit: parseFloat(newCreditLimit) || 0,
         date_registered: new Date().toISOString().split('T')[0],
-        latitude: newLatitude,
-        longitude: newLongitude,
+        latitude: newClassification === "file_opener" ? null : newLatitude,
+        longitude: newClassification === "file_opener" ? null : newLongitude,
       });
 
       alert("Customer registered successfully!");
@@ -282,9 +290,8 @@ export default function CustomersPage() {
       setNewType("supermarket");
       setNewCreditLimit("10000000");
       setNewCreditTerms("7_days");
-      if (zones.length > 0) {
-        setNewZoneId(zones[0].id);
-      }
+      setNewClassification("independent");
+      setNewArea("");
       setShowAddModal(false);
       fetchCustomers();
     } catch (err: any) {
@@ -307,35 +314,37 @@ export default function CustomersPage() {
       setEditPhone(dbItem.phone_primary || "");
       setEditEmail(dbItem.email || "");
       setEditAddress(dbItem.address || "");
-      setEditZoneId(dbItem.delivery_zone_id || "");
+      setEditArea(dbItem.zone?.name || "");
       setEditType(dbItem.customer_type || "supermarket");
       setEditCreditLimit(dbItem.credit_limit ? dbItem.credit_limit.toString() : "0");
       setEditCreditTerms(dbItem.credit_terms || "7_days");
       setEditLatitude(dbItem.latitude ? parseFloat(dbItem.latitude) : null);
       setEditLongitude(dbItem.longitude ? parseFloat(dbItem.longitude) : null);
+      setEditClassification(dbItem.classification || (dbItem.parent_id ? "branch" : (cust.isParent ? "file_opener" : "independent")));
       setShowEditModal(true);
     }
   };
 
   const handleEditCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCustomer || !editCustomerName || !editZoneId) return;
+    if (!editingCustomer || !editCustomerName || !editArea) return;
 
     setIsSubmitting(true);
     try {
       await api.put(`/customers/${editingCustomer.id}`, {
         name: editCustomerName,
-        parent_id: editParentId || null,
+        classification: editClassification,
+        parent_id: editClassification === "branch" ? (editParentId || null) : null,
         contact_person: editContactPerson || "N/A",
         phone_primary: editPhone || "N/A",
         email: editEmail || null,
         address: editAddress || "N/A",
-        delivery_zone_id: editZoneId,
+        delivery_zone: editArea,
         customer_type: editType,
         credit_terms: editCreditTerms,
         credit_limit: parseFloat(editCreditLimit) || 0,
-        latitude: editLatitude,
-        longitude: editLongitude,
+        latitude: editClassification === "file_opener" ? null : editLatitude,
+        longitude: editClassification === "file_opener" ? null : editLongitude,
       });
 
       alert("Customer profile updated successfully!");
@@ -859,18 +868,40 @@ export default function CustomersPage() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ (Optional)</label>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Customer Relationship Classification *</label>
                     <select 
-                      value={newParentId}
-                      onChange={(e) => setNewParentId(e.target.value)}
+                      value={newClassification}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setNewClassification(val);
+                        if (val !== "branch") {
+                          setNewParentId("");
+                        }
+                      }}
                       className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
                     >
-                      <option value="">(None - Register as Standalone or HQ Parent)</option>
-                      {dbCustomers.filter(c => !c.parent_id).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                      <option value="independent">Independent / Stand-alone</option>
+                      <option value="file_opener">Corporate HQ / File Opener</option>
+                      <option value="branch">Branch Location</option>
                     </select>
                   </div>
+
+                  {newClassification === "branch" && (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ *</label>
+                      <select 
+                        required={newClassification === "branch"}
+                        value={newParentId}
+                        onChange={(e) => setNewParentId(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="">(Select Parent Corporate HQ)</option>
+                        {dbCustomers.filter(c => c.classification === 'file_opener' || (!c.parent_id && c.classification !== 'branch')).map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -889,16 +920,14 @@ export default function CustomersPage() {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fulfillment Delivery Zone</label>
-                      <select 
-                        value={newZoneId}
-                        onChange={(e) => setNewZoneId(e.target.value)}
-                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      >
-                        {zones.map(z => (
-                          <option key={z.id} value={z.id}>{z.name}</option>
-                        ))}
-                      </select>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Area *</label>
+                      <Input 
+                        placeholder="e.g. Kololo" 
+                        required 
+                        value={newArea}
+                        onChange={(e) => setNewArea(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 placeholder:text-gray-300 font-bold text-gray-800"
+                      />
                     </div>
                   </div>
 
@@ -957,17 +986,19 @@ export default function CustomersPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
-                    <MapPicker 
-                      lat={newLatitude}
-                      lng={newLongitude}
-                      onChange={(lat, lng) => {
-                        setNewLatitude(lat);
-                        setNewLongitude(lng);
-                      }}
-                    />
-                  </div>
+                  {newClassification !== "file_opener" && (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
+                      <MapPicker 
+                        lat={newLatitude}
+                        lng={newLongitude}
+                        onChange={(lat, lng) => {
+                          setNewLatitude(lat);
+                          setNewLongitude(lng);
+                        }}
+                      />
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1063,18 +1094,40 @@ export default function CustomersPage() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ (Optional)</label>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Customer Relationship Classification *</label>
                     <select 
-                      value={editParentId}
-                      onChange={(e) => setEditParentId(e.target.value)}
+                      value={editClassification}
+                      onChange={(e) => {
+                        const val = e.target.value as any;
+                        setEditClassification(val);
+                        if (val !== "branch") {
+                          setEditParentId("");
+                        }
+                      }}
                       className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
                     >
-                      <option value="">(None - Standalone or HQ Parent)</option>
-                      {dbCustomers.filter(c => !c.parent_id && c.id !== editingCustomer.id).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
+                      <option value="independent">Independent / Stand-alone</option>
+                      <option value="file_opener">Corporate HQ / File Opener</option>
+                      <option value="branch">Branch Location</option>
                     </select>
                   </div>
+
+                  {editClassification === "branch" && (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Belongs to Parent Corporate HQ *</label>
+                      <select 
+                        required={editClassification === "branch"}
+                        value={editParentId}
+                        onChange={(e) => setEditParentId(e.target.value)}
+                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      >
+                        <option value="">(Select Parent Corporate HQ)</option>
+                        {dbCustomers.filter(c => (c.classification === 'file_opener' || (!c.parent_id && c.classification !== 'branch')) && c.id !== editingCustomer.id).map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -1093,16 +1146,14 @@ export default function CustomersPage() {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Fulfillment Delivery Zone</label>
-                      <select 
-                        value={editZoneId}
-                        onChange={(e) => setEditZoneId(e.target.value)}
-                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      >
-                        {zones.map(z => (
-                          <option key={z.id} value={z.id}>{z.name}</option>
-                        ))}
-                      </select>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Area *</label>
+                      <Input 
+                        placeholder="e.g. Kololo" 
+                        required 
+                        value={editArea}
+                        onChange={(e) => setEditArea(e.target.value)}
+                        className="h-9.5 text-xs rounded-xl border-brand-sage/50 placeholder:text-gray-300 font-bold text-gray-800"
+                      />
                     </div>
                   </div>
 
@@ -1161,17 +1212,19 @@ export default function CustomersPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
-                    <MapPicker 
-                      lat={editLatitude}
-                      lng={editLongitude}
-                      onChange={(lat, lng) => {
-                        setEditLatitude(lat);
-                        setEditLongitude(lng);
-                      }}
-                    />
-                  </div>
+                  {editClassification !== "file_opener" && (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Map Location Coordinate Pin *</label>
+                      <MapPicker 
+                        lat={editLatitude}
+                        lng={editLongitude}
+                        onChange={(lat, lng) => {
+                          setEditLatitude(lat);
+                          setEditLongitude(lng);
+                        }}
+                      />
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>

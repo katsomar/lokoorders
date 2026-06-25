@@ -40,13 +40,15 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
+            'classification' => 'required|in:independent,file_opener,branch',
             'parent_id' => 'nullable|uuid|exists:customers,id',
             'contact_person' => 'required|string',
             'phone_primary' => 'required|string',
             'phone_secondary' => 'nullable|string',
             'email' => 'nullable|email',
             'address' => 'required|string',
-            'delivery_zone_id' => 'required|exists:delivery_zones,id',
+            'delivery_zone_id' => 'nullable|exists:delivery_zones,id',
+            'delivery_zone' => 'nullable|string',
             'customer_type' => 'required|in:supermarket,restaurant,individual,institution,wholesaler',
             'credit_terms' => 'required|in:cash,7_days,14_days,30_days',
             'credit_limit' => 'required|numeric|min:0',
@@ -54,6 +56,36 @@ class CustomerController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
         ]);
+
+        $zoneId = null;
+        if ($request->filled('delivery_zone')) {
+            $zoneName = trim($request->input('delivery_zone'));
+            $zone = \App\Models\DeliveryZone::where('name', $zoneName)->first();
+            if (!$zone) {
+                $zone = \App\Models\DeliveryZone::create([
+                    'name' => $zoneName,
+                    'is_active' => true
+                ]);
+            }
+            $zoneId = $zone->id;
+        } elseif ($request->filled('delivery_zone_id')) {
+            $zoneId = $request->input('delivery_zone_id');
+        }
+
+        if (!$zoneId) {
+            $zoneId = \App\Models\DeliveryZone::first()?->id;
+        }
+
+        $validated['delivery_zone_id'] = $zoneId;
+        unset($validated['delivery_zone']);
+
+        if ($validated['classification'] === 'file_opener') {
+            $validated['parent_id'] = null;
+            $validated['latitude'] = null;
+            $validated['longitude'] = null;
+        } elseif ($validated['classification'] === 'independent') {
+            $validated['parent_id'] = null;
+        }
 
         $validated['created_by'] = auth()->id();
         $customer = Customer::create($validated);
@@ -248,13 +280,15 @@ class CustomerController extends Controller
         
         $validated = $request->validate([
             'name' => 'sometimes|required|string',
+            'classification' => 'sometimes|required|in:independent,file_opener,branch',
             'parent_id' => 'nullable|uuid|exists:customers,id',
             'contact_person' => 'sometimes|required|string',
             'phone_primary' => 'sometimes|required|string',
             'phone_secondary' => 'nullable|string',
             'email' => 'nullable|email',
             'address' => 'sometimes|required|string',
-            'delivery_zone_id' => 'sometimes|required|exists:delivery_zones,id',
+            'delivery_zone_id' => 'nullable|exists:delivery_zones,id',
+            'delivery_zone' => 'nullable|string',
             'customer_type' => 'sometimes|required|in:supermarket,restaurant,individual,institution,wholesaler',
             'credit_terms' => 'sometimes|required|in:cash,7_days,14_days,30_days',
             'credit_limit' => 'sometimes|required|numeric|min:0',
@@ -262,6 +296,28 @@ class CustomerController extends Controller
             'latitude' => 'nullable|numeric|between:-90,90',
             'longitude' => 'nullable|numeric|between:-180,180',
         ]);
+
+        if ($request->filled('delivery_zone')) {
+            $zoneName = trim($request->input('delivery_zone'));
+            $zone = \App\Models\DeliveryZone::where('name', $zoneName)->first();
+            if (!$zone) {
+                $zone = \App\Models\DeliveryZone::create([
+                    'name' => $zoneName,
+                    'is_active' => true
+                ]);
+            }
+            $validated['delivery_zone_id'] = $zone->id;
+        }
+        unset($validated['delivery_zone']);
+
+        $classification = $validated['classification'] ?? $customer->classification;
+        if ($classification === 'file_opener') {
+            $validated['parent_id'] = null;
+            $validated['latitude'] = null;
+            $validated['longitude'] = null;
+        } elseif ($classification === 'independent') {
+            $validated['parent_id'] = null;
+        }
 
         $customer->update($validated);
         return $this->success($customer, 'Customer updated successfully');
