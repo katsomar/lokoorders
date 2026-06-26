@@ -53,6 +53,7 @@ export default function OrderManagerDashboard() {
   const [stockItems, setStockItems] = useState<any[]>([]);
   const [loadingStock, setLoadingStock] = useState(false);
   const [stockSearchQuery, setStockSearchQuery] = useState("");
+  const [selectedBatch, setSelectedBatch] = useState<string>("all");
 
   // Edit Order modal state
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
@@ -140,6 +141,7 @@ export default function OrderManagerDashboard() {
       }
     }
     if (activeTab === "inventory") {
+      setSelectedBatch("all");
       loadStores();
     }
   }, [storeType, activeTab]);
@@ -163,6 +165,7 @@ export default function OrderManagerDashboard() {
       }
     }
     if (activeTab === "inventory" && selectedStoreId) {
+      setSelectedBatch("all");
       loadStock();
     }
   }, [selectedStoreId, storeType, activeTab]);
@@ -297,12 +300,27 @@ export default function OrderManagerDashboard() {
   });
 
   const filteredStock = stockItems.filter(item => {
+    // 1. Filter by Batch selection dropdown
+    if (selectedBatch !== "all" && item.batch_reference !== selectedBatch) {
+      return false;
+    }
+
+    // 2. Filter by Search Query
     if (stockSearchQuery.trim()) {
       const q = stockSearchQuery.toLowerCase();
-      return item.product?.name.toLowerCase().includes(q) || item.product?.code.toLowerCase().includes(q);
+      const nameMatch = item.product?.name?.toLowerCase().includes(q) || false;
+      const codeMatch = item.product?.code?.toLowerCase().includes(q) || false;
+      const batchMatch = item.batch_reference?.toLowerCase().includes(q) || false;
+      return nameMatch || codeMatch || batchMatch;
     }
     return true;
   });
+
+  const uniqueBatches = Array.from(new Set(stockItems.map(item => item.batch_reference).filter(Boolean))) as string[];
+  const batchOptions = [
+    { label: "All Batch References", value: "all" },
+    ...uniqueBatches.map(batch => ({ label: `Batch: ${batch}`, value: batch }))
+  ];
 
   const getUrgencyBadge = (urgency: string) => {
     switch (urgency) {
@@ -599,6 +617,16 @@ export default function OrderManagerDashboard() {
                   options={storesList.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
                   required
                 />
+
+                {/* Batch Dropdown selector */}
+                {uniqueBatches.length > 0 && (
+                  <Select
+                    label="Filter by Batch Number"
+                    value={selectedBatch}
+                    onChange={(e) => setSelectedBatch(e.target.value)}
+                    options={batchOptions}
+                  />
+                )}
 
                 {/* Stock Search Bar */}
                 <div className="relative">
