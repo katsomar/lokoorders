@@ -291,7 +291,7 @@ export default function DriverDashboard() {
     <div className="min-h-screen bg-[#F4F6F5] flex flex-col font-body pb-24 text-gray-800">
       
       {/* 🟢 TOP PREMIUM BRAND HEADER */}
-      <header className={`bg-brand-forest text-white p-6 rounded-b-[2.5rem] shadow-xl relative overflow-hidden shrink-0 ${loading ? "animate-pulse" : ""}`}>
+      <header className={`bg-brand-forest text-white p-6 rounded-b-[2.5rem] shadow-xl sticky top-0 z-30 overflow-hidden shrink-0 ${loading ? "animate-pulse" : ""}`}>
         
         {/* Subtle Background Glow Details */}
         <div className="absolute -top-12 -right-12 h-44 w-44 rounded-full bg-brand-yellow/10 blur-xl pointer-events-none" />
