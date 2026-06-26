@@ -62,6 +62,8 @@ export default function LoginPage() {
         // Role-based redirect
         if (user.role === 'driver') {
           router.push("/driver");
+        } else if (user.role === 'order_manager') {
+          router.push("/order-manager");
         } else {
           router.push("/dashboard/admin");
         }

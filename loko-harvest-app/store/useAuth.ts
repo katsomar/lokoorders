@@ -5,7 +5,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'store_manager' | 'sales_accounts' | 'driver' | 'production_manager';
+  role: 'admin' | 'store_manager' | 'sales_accounts' | 'driver' | 'production_manager' | 'order_manager';
   status: 'active' | 'inactive' | 'pending' | 'suspended' | 'rejected';
 }
 

@@ -30,7 +30,7 @@ interface UserRecord {
   name: string;
   email: string;
   phone: string | null;
-  role: 'admin' | 'store_manager' | 'sales_accounts' | 'driver' | 'production_manager';
+  role: 'admin' | 'store_manager' | 'sales_accounts' | 'driver' | 'production_manager' | 'order_manager';
   status: 'pending' | 'active' | 'suspended' | 'rejected';
   created_at: string;
 }
@@ -81,6 +81,8 @@ export default function UsersManagementPage() {
       // Redirect to their dashboard or driver control center
       if (currentUser.role === "driver") {
         router.push("/driver");
+      } else if (currentUser.role === "order_manager") {
+        router.push("/order-manager");
       } else {
         router.push("/dashboard/admin");
       }
@@ -115,6 +117,8 @@ export default function UsersManagementPage() {
               onClick={() => {
                 if (currentUser.role === 'driver') {
                   router.push("/driver");
+                } else if (currentUser.role === 'order_manager') {
+                  router.push("/order-manager");
                 } else {
                   router.push("/dashboard/admin");
                 }
@@ -177,6 +181,7 @@ export default function UsersManagementPage() {
       case "sales_accounts": return "Sales & Accounts";
       case "driver": return "Fleet Driver";
       case "production_manager": return "Production Manager";
+      case "order_manager": return "Order Manager";
       default: return role;
     }
   };
@@ -188,6 +193,7 @@ export default function UsersManagementPage() {
       case "sales_accounts": return "processing"; // blue
       case "driver": return "ready"; // amber
       case "production_manager": return "delivered"; // green
+      case "order_manager": return "processing"; // blue
       default: return "outline";
     }
   };

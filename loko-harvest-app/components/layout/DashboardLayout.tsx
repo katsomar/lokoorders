@@ -58,6 +58,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, clearAuth } = useAuth();
 
+  React.useEffect(() => {
+    if (user && user.role === "order_manager") {
+      router.push("/order-manager");
+    }
+  }, [user, router]);
+
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const handleLogout = () => {

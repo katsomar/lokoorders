@@ -9,13 +9,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   phone: z.string().min(10, "Phone number must be at least 10 digits"),
-  role: z.literal("admin"),
+  role: z.enum(["admin", "order_manager"]),
   password: z.string().min(6, "Password must be at least 6 characters"),
   password_confirmation: z.string().min(6, "Password confirmation must be at least 6 characters"),
 }).refine((data) => data.password === data.password_confirmation, {
@@ -161,7 +162,7 @@ export default function SignupPage() {
                   className="space-y-6"
                 >
                   <div className="space-y-1">
-                    <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Admin Request</h2>
+                    <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Staff Account</h2>
                     <p className="text-sm text-gray-500 font-medium leading-relaxed">
                       Submit your registration details below. All signup requests require manual authorization from an existing admin before login.
                     </p>
@@ -205,6 +206,18 @@ export default function SignupPage() {
                           className="h-11 text-sm rounded-xl"
                         />
                       </div>
+
+                      <Select
+                        label="Desired Operational Role"
+                        options={[
+                          { label: "System Administrator", value: "admin" },
+                          { label: "Order Manager", value: "order_manager" },
+                        ]}
+                        {...register("role")}
+                        error={errors.role?.message}
+                        required
+                        className="h-11 text-sm rounded-xl"
+                      />
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <Input
@@ -253,7 +266,7 @@ export default function SignupPage() {
                   <div className="space-y-2">
                     <h3 className="text-xl font-bold text-brand-forest font-heading">Request Submitted!</h3>
                     <p className="text-xs text-gray-500 max-w-sm leading-relaxed font-medium mx-auto">
-                      Your staff admin account has been registered successfully and is now **pending approval**.
+                      Your staff account has been registered successfully and is now **pending approval**.
                     </p>
                     <div className="bg-brand-sage/35 border border-brand-sage/50 p-3 rounded-xl mt-3 max-w-sm mx-auto">
                       <p className="text-[11px] text-brand-forest font-semibold leading-relaxed">
