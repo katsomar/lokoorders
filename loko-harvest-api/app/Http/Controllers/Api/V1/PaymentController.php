@@ -92,9 +92,11 @@ class PaymentController extends Controller
                 'amount' => $validated['amount'],
                 'payment_method' => $validated['payment_method'],
                 'reference_number' => $validated['reference_number'] ?? null,
+                'transaction_reference' => $validated['reference_number'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'status' => 'completed',
                 'created_by' => auth()->id(),
+                'received_by' => auth()->id(),
             ]);
 
             // Update Customer Account
