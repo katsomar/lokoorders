@@ -245,15 +245,18 @@ export default function EditOrderPage() {
     return salesStock.filter(s => s.product_id === productId && (parseFloat(s.current_quantity) || 0) > 0);
   };
 
-  const productOptions = React.useMemo(() => {
-    return productsList.map(p => {
-      const avail = getAvailableStock(p.id);
-      return {
-        label: `${p.name} (${avail} available)`,
-        value: p.id
-      };
-    });
-  }, [productsList, salesStock]);
+  const getProductOptions = (selectedProdId?: string) => {
+    return productsList
+      .map(p => {
+        const avail = getAvailableStock(p.id);
+        return {
+          label: `${p.name} (${avail} available)`,
+          value: p.id,
+          avail: avail
+        };
+      })
+      .filter(p => p.avail >= 1 || p.value === selectedProdId);
+  };
 
   const totalAmount = (watchedItems || []).reduce((acc, item) => acc + ((item?.quantity || 0) * (item?.unit_price || 0)), 0);
 
@@ -474,7 +477,7 @@ export default function EditOrderPage() {
                         <TableRow key={field.id} className="hover:bg-brand-sage/5">
                           <TableCell>
                             <Select
-                              options={productOptions}
+                              options={getProductOptions(selectedProdId)}
                               {...register(`items.${index}.product_id` as const)}
                               onChange={(e) => {
                                 register(`items.${index}.product_id`).onChange(e);
