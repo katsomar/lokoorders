@@ -384,149 +384,6 @@ export default function NewOrderPage() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Line Items */}
-            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
-                <CardTitle className="text-base font-bold text-brand-forest">Ordered Farm Items</CardTitle>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => append({ product_id: "", batch_reference: "", quantity: 1, unit_price: 0 })}
-                  className="gap-1.5 h-8 border-brand-sage text-brand-forest font-bold text-xs"
-                >
-                  <Plus size={14} />
-                  Add Product Row
-                </Button>
-              </CardHeader>
-              
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[30%] text-brand-forest font-bold text-xs">Product Select</TableHead>
-                      <TableHead className="w-[25%] text-brand-forest font-bold text-xs">Batch Reference</TableHead>
-                      <TableHead className="text-brand-forest font-bold text-xs">Quantity</TableHead>
-                      <TableHead className="text-brand-forest font-bold text-xs">Unit Price (UGX)</TableHead>
-                      <TableHead className="text-brand-forest font-bold text-xs">Total Dues</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {fields.map((field, index) => {
-                      const selectedProdId = watchedItems[index]?.product_id;
-                      const selectedBatchRef = watchedItems[index]?.batch_reference;
-                      const avail = selectedProdId ? getBatchStock(selectedProdId, selectedBatchRef) : 0;
-                      const quantityValue = watchedItems[index]?.quantity || 0;
-                      const isExceeding = quantityValue > avail;
-                      const errorsItemsAtIndex = errors.items?.[index];
-
-                      return (
-                        <TableRow key={field.id} className="hover:bg-brand-sage/5">
-                          <TableCell>
-                            <Select
-                              options={getProductOptions(selectedProdId)}
-                              {...register(`items.${index}.product_id` as const)}
-                              onChange={(e) => {
-                                register(`items.${index}.product_id`).onChange(e);
-                                handleProductChange(index, e.target.value);
-                                setValue(`items.${index}.batch_reference`, "");
-                              }}
-                              error={errors.items?.[index]?.product_id?.message}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {selectedProdId ? (
-                              (() => {
-                                const prod = productsList.find(p => p.id === selectedProdId);
-                                const supportsBatch = prod && (prod.category === 'eggs' || (prod.category === 'poultry' && prod.code !== 'POU-LVE'));
-                                if (supportsBatch) {
-                                  const batches = getProductBatches(selectedProdId);
-                                  return (
-                                    <div className="space-y-1">
-                                      <select
-                                        className="w-full h-10 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-forest focus:border-transparent bg-white text-xs"
-                                        {...register(`items.${index}.batch_reference` as const)}
-                                      >
-                                        <option value="">-- Select Batch --</option>
-                                        {batches.map((b: any) => (
-                                          <option key={b.id} value={b.batch_reference}>
-                                            {b.batch_reference || 'Unbatched'} ({(parseFloat(b.current_quantity) || 0).toLocaleString()} avail)
-                                          </option>
-                                        ))}
-                                      </select>
-                                      {errorsItemsAtIndex && 'batch_reference' in errorsItemsAtIndex && (
-                                        <p className="text-[10px] text-red-500">Batch selection required</p>
-                                      )}
-                                    </div>
-                                  );
-                                } else {
-                                  return (
-                                    <span className="text-xs text-gray-400 font-medium italic">
-                                      FIFO / Not Tracked
-                                    </span>
-                                  );
-                                }
-                              })()
-                            ) : (
-                              <span className="text-xs text-gray-300 italic">Select product first</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <Input
-                                type="number"
-                                step="0.01"
-                                {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
-                                error={errors.items?.[index]?.quantity?.message}
-                              />
-                              {selectedProdId && (
-                                <div className={`text-[10px] font-bold ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
-                                  {isExceeding 
-                                    ? `Exceeds stock! (${avail} avail)` 
-                                    : `${avail} available${selectedBatchRef ? ' in batch' : ''}`
-                                  }
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              {...register(`items.${index}.unit_price` as const, { valueAsNumber: true })}
-                              error={errors.items?.[index]?.unit_price?.message}
-                            />
-                          </TableCell>
-                          <TableCell className="font-bold text-brand-forest text-xs whitespace-nowrap pt-4">
-                            UGX {((watchedItems[index]?.quantity || 0) * (watchedItems[index]?.unit_price || 0)).toLocaleString()}
-                          </TableCell>
-                          <TableCell>
-                            <Button 
-                              type="button" 
-                              variant="ghost" 
-                              size="icon" 
-                              onClick={() => remove(index)}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 mt-1"
-                              disabled={fields.length === 1}
-                            >
-                              <Trash2 size={15} />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-                
-                {errors.items?.message && (
-                  <p className="text-xs text-red-500 mt-2.5 flex items-center gap-1">
-                    <AlertCircle size={13} />
-                    {errors.items.message}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right Panel Summary */}
@@ -588,6 +445,149 @@ export default function NewOrderPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Line Items */}
+          <Card className="lg:col-span-3 border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
+              <CardTitle className="text-base font-bold text-brand-forest">Ordered Farm Items</CardTitle>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={() => append({ product_id: "", batch_reference: "", quantity: 1, unit_price: 0 })}
+                className="gap-1.5 h-8 border-brand-sage text-brand-forest font-bold text-xs"
+              >
+                <Plus size={14} />
+                Add Product Row
+              </Button>
+            </CardHeader>
+            
+            <CardContent className="pt-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[30%] text-brand-forest font-bold text-xs">Product Select</TableHead>
+                    <TableHead className="w-[25%] text-brand-forest font-bold text-xs">Batch Reference</TableHead>
+                    <TableHead className="text-brand-forest font-bold text-xs">Quantity</TableHead>
+                    <TableHead className="text-brand-forest font-bold text-xs">Unit Price (UGX)</TableHead>
+                    <TableHead className="text-brand-forest font-bold text-xs">Total Dues</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {fields.map((field, index) => {
+                    const selectedProdId = watchedItems[index]?.product_id;
+                    const selectedBatchRef = watchedItems[index]?.batch_reference;
+                    const avail = selectedProdId ? getBatchStock(selectedProdId, selectedBatchRef) : 0;
+                    const quantityValue = watchedItems[index]?.quantity || 0;
+                    const isExceeding = quantityValue > avail;
+                    const errorsItemsAtIndex = errors.items?.[index];
+
+                    return (
+                      <TableRow key={field.id} className="hover:bg-brand-sage/5">
+                        <TableCell>
+                          <Select
+                            options={getProductOptions(selectedProdId)}
+                            {...register(`items.${index}.product_id` as const)}
+                            onChange={(e) => {
+                              register(`items.${index}.product_id`).onChange(e);
+                              handleProductChange(index, e.target.value);
+                              setValue(`items.${index}.batch_reference`, "");
+                            }}
+                            error={errors.items?.[index]?.product_id?.message}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {selectedProdId ? (
+                            (() => {
+                              const prod = productsList.find(p => p.id === selectedProdId);
+                              const supportsBatch = prod && (prod.category === 'eggs' || (prod.category === 'poultry' && prod.code !== 'POU-LVE'));
+                              if (supportsBatch) {
+                                const batches = getProductBatches(selectedProdId);
+                                return (
+                                  <div className="space-y-1">
+                                    <select
+                                      className="w-full h-10 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-brand-forest focus:border-transparent bg-white text-xs"
+                                      {...register(`items.${index}.batch_reference` as const)}
+                                    >
+                                      <option value="">-- Select Batch --</option>
+                                      {batches.map((b: any) => (
+                                        <option key={b.id} value={b.batch_reference}>
+                                          {b.batch_reference || 'Unbatched'} ({(parseFloat(b.current_quantity) || 0).toLocaleString()} avail)
+                                        </option>
+                                      ))}
+                                    </select>
+                                    {errorsItemsAtIndex && 'batch_reference' in errorsItemsAtIndex && (
+                                      <p className="text-[10px] text-red-500">Batch selection required</p>
+                                    )}
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <span className="text-xs text-gray-400 font-medium italic">
+                                    FIFO / Not Tracked
+                                  </span>
+                                );
+                              }
+                            })()
+                          ) : (
+                            <span className="text-xs text-gray-300 italic">Select product first</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
+                              error={errors.items?.[index]?.quantity?.message}
+                            />
+                            {selectedProdId && (
+                              <div className={`text-[10px] font-bold ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
+                                {isExceeding 
+                                  ? `Exceeds stock! (${avail} avail)` 
+                                  : `${avail} available${selectedBatchRef ? ' in batch' : ''}`
+                                }
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            {...register(`items.${index}.unit_price` as const, { valueAsNumber: true })}
+                            error={errors.items?.[index]?.unit_price?.message}
+                          />
+                        </TableCell>
+                        <TableCell className="font-bold text-brand-forest text-xs whitespace-nowrap pt-4">
+                          UGX {((watchedItems[index]?.quantity || 0) * (watchedItems[index]?.unit_price || 0)).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => remove(index)}
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50 h-8 w-8 mt-1"
+                            disabled={fields.length === 1}
+                          >
+                            <Trash2 size={15} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              
+              {errors.items?.message && (
+                <p className="text-xs text-red-500 mt-2.5 flex items-center gap-1">
+                  <AlertCircle size={13} />
+                  {errors.items.message}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </form>
       </div>
     </DashboardLayout>
