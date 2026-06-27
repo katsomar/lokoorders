@@ -32,26 +32,61 @@ class DeliveryController extends Controller
     public function assign(Request $request)
     {
         $validated = $request->validate([
-            'order_id' => 'required|exists:orders,id',
+            'order_id' => 'required_without:order_ids|nullable|string|exists:orders,id',
+            'order_ids' => 'required_without:order_id|nullable|array',
+            'order_ids.*' => 'string|exists:orders,id',
             'driver_id' => 'required|exists:drivers,id',
             'vehicle_id' => 'nullable|string',
             'estimated_delivery_time' => 'nullable|date',
+            'prevent_status_update' => 'nullable|boolean',
         ]);
 
-        return DB::transaction(function () use ($validated) {
-            $order = Order::findOrFail($validated['order_id']);
-            
-            $delivery = Delivery::create([
-                'order_id' => $order->id,
-                'driver_id' => $validated['driver_id'],
-                'assigned_by' => auth()->id() ?? \App\Models\User::first()->id,
-                'status' => 'assigned',
-                'dispatched_at' => now(),
-            ]);
+        $driverId = $validated['driver_id'];
 
-            $order->update(['status' => 'dispatched']);
+        // Enforce constraint: If driver is enroute (has any active 'in_transit' deliveries), reject assignment.
+        $hasInTransit = Delivery::where('driver_id', $driverId)
+            ->where('status', 'in_transit')
+            ->exists();
 
-            return $this->success($delivery, 'Delivery assigned successfully');
+        if ($hasInTransit) {
+            return $this->error('This driver is currently enroute with another delivery trip and cannot be assigned new orders until they complete their current deliveries.', 422);
+        }
+
+        $orderIds = isset($validated['order_ids']) ? $validated['order_ids'] : [$validated['order_id']];
+        $preventStatusUpdate = $request->input('prevent_status_update', false);
+
+        return DB::transaction(function () use ($orderIds, $driverId, $preventStatusUpdate) {
+            $deliveries = [];
+            foreach ($orderIds as $orderId) {
+                // Prevent duplicate assignment if active delivery already exists for this order
+                $exists = Delivery::where('order_id', $orderId)
+                    ->whereIn('status', ['assigned', 'in_transit'])
+                    ->exists();
+                if ($exists) {
+                    continue;
+                }
+
+                $order = Order::findOrFail($orderId);
+                
+                $delivery = Delivery::create([
+                    'order_id' => $order->id,
+                    'driver_id' => $driverId,
+                    'assigned_by' => auth()->id() ?? \App\Models\User::first()->id,
+                    'status' => 'assigned',
+                    'dispatched_at' => now(),
+                ]);
+
+                if (!$preventStatusUpdate) {
+                    $order->update(['status' => 'dispatched']);
+                }
+                
+                $deliveries[] = $delivery;
+            }
+
+            return $this->success(
+                count($deliveries) === 1 ? $deliveries[0] : $deliveries,
+                'Deliveries assigned successfully'
+            );
         });
     }
 

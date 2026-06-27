@@ -55,6 +55,17 @@ export default function OrderManagerDashboard() {
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [selectedBatch, setSelectedBatch] = useState<string>("all");
 
+  // Driver Assignment States
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [driverModalOrder, setDriverModalOrder] = useState<any | null>(null);
+  const [driverModalOrders, setDriverModalOrders] = useState<string[]>([]);
+  const [selectedDriverIdForAssign, setSelectedDriverIdForAssign] = useState("");
+  const [isAssigningDriver, setIsAssigningDriver] = useState(false);
+  const [isDriverModalForDispatch, setIsDriverModalForDispatch] = useState(false);
+
   // Edit Order modal state
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
   const [editedItems, setEditedItems] = useState<Record<string, number>>({});
@@ -170,9 +181,29 @@ export default function OrderManagerDashboard() {
     }
   }, [selectedStoreId, storeType, activeTab]);
 
+  // Fetch Drivers
+  const fetchDrivers = async () => {
+    setLoadingDrivers(true);
+    try {
+      const res = await api.get("/drivers");
+      setDrivers(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load drivers:", err);
+    } finally {
+      setLoadingDrivers(false);
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
+    fetchDrivers();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (showDriverModal) {
+      fetchDrivers();
+    }
+  }, [showDriverModal]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +278,59 @@ export default function OrderManagerDashboard() {
       alert(error.response?.data?.message || "Failed to adjust order quantities.");
     } finally {
       setIsUpdatingOrder(false);
+    }
+  };
+
+  // Handle Set Off / Dispatch click logic
+  const handleSetOffClick = (order: any) => {
+    const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit");
+    if (activeDelivery) {
+      triggerStatusTransition(order, "dispatched");
+    } else {
+      setDriverModalOrder(order);
+      setDriverModalOrders([]);
+      setSelectedDriverIdForAssign("");
+      setIsDriverModalForDispatch(true);
+      setShowDriverModal(true);
+    }
+  };
+
+  // Submit driver assignment from Order Manager Modal
+  const handleAssignDriverOM = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriverIdForAssign) {
+      alert("Please select a driver.");
+      return;
+    }
+    setIsAssigningDriver(true);
+    try {
+      if (driverModalOrder) {
+        await api.post("/deliveries/assign", {
+          order_id: driverModalOrder.id,
+          driver_id: selectedDriverIdForAssign,
+          prevent_status_update: !isDriverModalForDispatch
+        });
+      } else if (driverModalOrders.length > 0) {
+        await api.post("/deliveries/assign", {
+          order_ids: driverModalOrders,
+          driver_id: selectedDriverIdForAssign,
+          prevent_status_update: true
+        });
+      }
+
+      alert("Driver assigned successfully!");
+      setShowDriverModal(false);
+      setDriverModalOrder(null);
+      setDriverModalOrders([]);
+      setSelectedOrderIds([]);
+      setSelectedDriverIdForAssign("");
+      fetchOrders();
+      fetchDrivers();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to assign driver.");
+    } finally {
+      setIsAssigningDriver(false);
     }
   };
 
@@ -472,8 +556,54 @@ export default function OrderManagerDashboard() {
                 </div>
               </div>
 
+              {/* Bulk driver assignment actions */}
+              {selectedOrderIds.length > 0 && (
+                <div className="bg-brand-sage/15 border border-brand-sage/35 p-3 rounded-2xl flex flex-col gap-2 relative z-10 text-xs mt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-brand-forest">
+                      Selected <strong className="font-extrabold">{selectedOrderIds.length}</strong> orders for bulk assignment
+                    </span>
+                    <button 
+                      onClick={() => setSelectedOrderIds([])}
+                      className="text-[10px] font-bold text-red-500 hover:underline"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const activeOrdersInTab = filteredOrders.filter(o => ["pending", "processing", "ready_for_dispatch"].includes(o.status));
+                        const allIds = activeOrdersInTab.map(o => o.id);
+                        const allSelected = allIds.every(id => selectedOrderIds.includes(id));
+                        if (allSelected) {
+                          setSelectedOrderIds(prev => prev.filter(id => !allIds.includes(id)));
+                        } else {
+                          setSelectedOrderIds(prev => Array.from(new Set([...prev, ...allIds])));
+                        }
+                      }}
+                      className="flex-1 py-1.5 rounded-lg font-bold text-[10px] uppercase bg-white border border-brand-sage text-brand-forest hover:bg-brand-sage/10 transition-colors"
+                    >
+                      { filteredOrders.filter(o => ["pending", "processing", "ready_for_dispatch"].includes(o.status)).map(o => o.id).every(id => selectedOrderIds.includes(id)) ? "Deselect All" : "Select All" }
+                    </button>
+                    <button
+                      onClick={() => {
+                        setDriverModalOrder(null);
+                        setDriverModalOrders(selectedOrderIds);
+                        setSelectedDriverIdForAssign("");
+                        setIsDriverModalForDispatch(false);
+                        setShowDriverModal(true);
+                      }}
+                      className="flex-1 py-1.5 rounded-lg font-black text-[10px] uppercase bg-brand-forest text-white hover:bg-brand-forest/90 transition-colors"
+                    >
+                      Assign Driver
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Order Cards */}
-              <div className="space-y-4">
+              <div className="space-y-4 mt-4">
                 {loadingOrders ? (
                   <div className="bg-white border border-brand-sage/40 rounded-2xl p-6 text-center text-gray-400 animate-pulse flex flex-col items-center gap-2">
                     <Loader2 className="animate-spin text-brand-forest" size={24} />
@@ -487,15 +617,31 @@ export default function OrderManagerDashboard() {
                   filteredOrders.map((order) => (
                     <div key={order.id} className="bg-white border border-brand-sage/40 rounded-2xl shadow-sm overflow-hidden p-4 space-y-3.5">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-black text-brand-forest">{order.order_number}</span>
-                            {getUrgencyBadge(order.urgency)}
-                          </div>
-                          <p className="text-xs font-bold text-gray-900 mt-1">{order.customer?.name}</p>
-                          {order.customer?.parent && (
-                            <p className="text-[10px] text-gray-400 font-semibold italic">Headquarter: {order.customer.parent.name}</p>
+                        <div className="flex items-start gap-3">
+                          {["pending", "processing", "ready_for_dispatch"].includes(order.status) && (
+                            <input 
+                              type="checkbox"
+                              checked={selectedOrderIds.includes(order.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedOrderIds(prev => [...prev, order.id]);
+                                } else {
+                                  setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+                                }
+                              }}
+                              className="h-4.5 w-4.5 mt-1.5 rounded border-brand-sage text-brand-forest focus:ring-brand-forest cursor-pointer shrink-0"
+                            />
                           )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-sm font-black text-brand-forest">{order.order_number}</span>
+                              {getUrgencyBadge(order.urgency)}
+                            </div>
+                            <p className="text-xs font-bold text-gray-900 mt-1">{order.customer?.name}</p>
+                            {order.customer?.parent && (
+                              <p className="text-[10px] text-gray-400 font-semibold italic">Headquarter: {order.customer.parent.name}</p>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right">
                           {getStatusBadge(order.status)}
@@ -519,6 +665,65 @@ export default function OrderManagerDashboard() {
                           <strong>Notes:</strong> {order.order_notes}
                         </div>
                       )}
+
+                      {/* Driver Display Line */}
+                      {(() => {
+                        const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit");
+                        const assignedDriverName = activeDelivery?.driver?.full_name || activeDelivery?.driver?.name;
+                        
+                        if (activeDelivery) {
+                          return (
+                            <div className="flex justify-between items-center bg-brand-sage/5 p-2.5 rounded-xl border border-brand-sage/20 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <Truck size={14} className="text-brand-forest" />
+                                <div>
+                                  <span className="font-bold text-gray-700">Driver: </span>
+                                  <span className="font-extrabold text-brand-forest">{assignedDriverName}</span>
+                                  {activeDelivery.status === "assigned" && (
+                                    <span className="text-[10px] text-brand-amber font-bold ml-1.5 uppercase">(Assigned)</span>
+                                  )}
+                                  {activeDelivery.status === "in_transit" && (
+                                    <span className="text-[10px] text-green-600 font-bold ml-1.5 uppercase tracking-wide animate-pulse">(En Route)</span>
+                                  )}
+                                </div>
+                              </div>
+                              {["pending", "processing", "ready_for_dispatch"].includes(order.status) && activeDelivery.status === "assigned" && (
+                                <button
+                                  onClick={() => {
+                                    setDriverModalOrder(order);
+                                    setDriverModalOrders([]);
+                                    setSelectedDriverIdForAssign(activeDelivery.driver_id || "");
+                                    setIsDriverModalForDispatch(false);
+                                    setShowDriverModal(true);
+                                  }}
+                                  className="text-[10px] font-extrabold text-brand-forest hover:underline"
+                                >
+                                  Change
+                                </button>
+                              )}
+                            </div>
+                          );
+                        } else if (["pending", "processing", "ready_for_dispatch"].includes(order.status)) {
+                          return (
+                            <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
+                              <span className="text-gray-400 font-semibold italic">No driver assigned</span>
+                              <button
+                                onClick={() => {
+                                  setDriverModalOrder(order);
+                                  setDriverModalOrders([]);
+                                  setSelectedDriverIdForAssign("");
+                                  setIsDriverModalForDispatch(false);
+                                  setShowDriverModal(true);
+                                }}
+                                className="text-[10px] font-black text-brand-forest uppercase hover:underline"
+                              >
+                                Assign Driver
+                              </button>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {/* Action Buttons depending on status */}
                       <div className="flex gap-2.5 pt-1">
@@ -554,7 +759,7 @@ export default function OrderManagerDashboard() {
 
                         {order.status === "ready_for_dispatch" && (
                           <button
-                            onClick={() => triggerStatusTransition(order, "dispatched")}
+                            onClick={() => handleSetOffClick(order)}
                             className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
                           >
                             <Truck size={14} />
@@ -961,6 +1166,80 @@ export default function OrderManagerDashboard() {
                   isLoading={isSubmittingPassword}
                 >
                   Update Password
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* 📱 ASSIGN DRIVER MODAL */}
+      {showDriverModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white border border-brand-sage/40 rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden"
+          >
+            <div className="bg-brand-forest p-4 text-white flex justify-between items-center">
+              <div>
+                <h3 className="font-black font-heading text-sm text-brand-yellow">
+                  {isDriverModalForDispatch ? "Assign & Set Off" : "Assign Driver"}
+                </h3>
+                <p className="text-[10px] text-brand-sage font-semibold uppercase mt-0.5">
+                  {driverModalOrder ? `Order: ${driverModalOrder.order_number}` : `Bulk Assignment (${driverModalOrders.length} orders)`}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowDriverModal(false);
+                  setDriverModalOrder(null);
+                  setDriverModalOrders([]);
+                }} 
+                className="text-white hover:text-red-300 p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAssignDriverOM} className="p-5 space-y-4">
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Active Driver *</label>
+                <select
+                  required
+                  value={selectedDriverIdForAssign}
+                  onChange={(e) => setSelectedDriverIdForAssign(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                >
+                  <option value="">-- Choose Driver --</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id} disabled={d.status === 'offline' || d.status === 'busy'}>
+                      {d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? ' [Offline]' : d.status === 'busy' ? ' [En Route - Locked]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2.5">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowDriverModal(false);
+                    setDriverModalOrder(null);
+                    setDriverModalOrders([]);
+                  }}
+                  className="font-bold text-xs h-9 rounded-xl border-brand-sage/60"
+                  disabled={isAssigningDriver}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="font-bold text-xs h-9 bg-brand-forest text-white rounded-xl"
+                  isLoading={isAssigningDriver}
+                >
+                  {isDriverModalForDispatch ? "Assign & Set Off" : "Confirm Assignment"}
                 </Button>
               </div>
             </form>

@@ -34,7 +34,7 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
-        $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries'])
+        $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries.driver'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('order_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {

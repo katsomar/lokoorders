@@ -70,6 +70,7 @@ export default function DeliveriesPage() {
   // Assign Delivery Modal State
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
 
@@ -243,20 +244,26 @@ export default function DeliveriesPage() {
 
   const handleAssignDelivery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedOrderId || !selectedDriverId) {
-      alert("Please select both an order and a driver.");
+    if (!selectedOrderId && selectedOrderIds.length === 0) {
+      alert("Please select at least one order to assign.");
+      return;
+    }
+    if (!selectedDriverId) {
+      alert("Please select a driver.");
       return;
     }
 
     setIsAssigning(true);
     try {
-      await api.post("/deliveries/assign", {
-        order_id: selectedOrderId,
-        driver_id: selectedDriverId
-      });
+      const payload = selectedOrderId 
+        ? { order_id: selectedOrderId, driver_id: selectedDriverId }
+        : { order_ids: selectedOrderIds, driver_id: selectedDriverId };
+
+      await api.post("/deliveries/assign", payload);
       alert("Delivery assigned successfully!");
       setShowAssignModal(false);
       setSelectedOrderId("");
+      setSelectedOrderIds([]);
       setSelectedDriverId("");
       await fetchData();
     } catch (err: any) {
@@ -722,15 +729,73 @@ export default function DeliveriesPage() {
                       : "No missed delivery deadlines! Outstanding work."}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <div className="space-y-4">
+                    {selectedOrderIds.length > 0 && (
+                      <div className="bg-brand-sage/10 border border-brand-sage/30 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+                        <span className="text-xs font-bold text-brand-forest">
+                          Selected <strong className="font-extrabold">{selectedOrderIds.length}</strong> orders for bulk driver dispatch assignment
+                        </span>
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => {
+                              const activeOrders = dispatchSubtab === "new" ? newOrders : missedOrders;
+                              const allActiveIds = activeOrders.map(o => o.id);
+                              const allSelected = allActiveIds.every(id => selectedOrderIds.includes(id));
+                              if (allSelected) {
+                                setSelectedOrderIds(prev => prev.filter(id => !allActiveIds.includes(id)));
+                              } else {
+                                setSelectedOrderIds(prev => Array.from(new Set([...prev, ...allActiveIds])));
+                              }
+                            }}
+                            variant="outline"
+                            className="h-8.5 rounded-lg text-xs font-bold bg-white"
+                          >
+                            { (dispatchSubtab === "new" ? newOrders : missedOrders).map(o => o.id).every(id => selectedOrderIds.includes(id)) ? "Deselect All Tab" : "Select All Tab" }
+                          </Button>
+                          <Button 
+                            onClick={() => setSelectedOrderIds([])}
+                            variant="outline"
+                            className="h-8.5 rounded-lg text-xs font-bold bg-white"
+                          >
+                            Clear Selection
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              setSelectedOrderId(""); 
+                              setSelectedDriverId("");
+                              setShowAssignModal(true);
+                            }}
+                            className="h-8.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-lg text-xs font-bold cursor-pointer"
+                          >
+                            Assign Selected to Driver
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {dispatchSubtab === "new" ? (
                       newOrders.map((order) => (
                         <div key={order.id} className="bg-white rounded-2xl border border-brand-sage/25 p-5 shadow-sm space-y-4 hover:shadow-md transition-shadow relative">
                           {/* Badge Urgency */}
                           <div className="flex justify-between items-start">
-                            <div>
-                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
-                              <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                            <div className="flex items-center gap-3">
+                              <input 
+                                type="checkbox"
+                                checked={selectedOrderIds.includes(order.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedOrderIds(prev => [...prev, order.id]);
+                                  } else {
+                                    setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+                                  }
+                                }}
+                                className="h-4.5 w-4.5 rounded border-brand-sage text-brand-forest focus:ring-brand-forest cursor-pointer shrink-0"
+                              />
+                              <div>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
+                                <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                              </div>
                             </div>
                             <Badge className={`text-[9px] font-black uppercase px-2 py-0.5 border-none ${
                               order.urgency === 'critical' ? 'bg-red-100 text-red-700' :
@@ -785,9 +850,23 @@ export default function DeliveriesPage() {
                             <div className="space-y-4">
                               {/* Badge Urgency */}
                               <div className="flex justify-between items-start">
-                                <div>
-                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
-                                  <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                                <div className="flex items-center gap-3">
+                                  <input 
+                                    type="checkbox"
+                                    checked={selectedOrderIds.includes(order.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedOrderIds(prev => [...prev, order.id]);
+                                      } else {
+                                        setSelectedOrderIds(prev => prev.filter(id => id !== order.id));
+                                      }
+                                    }}
+                                    className="h-4.5 w-4.5 rounded border-red-200 text-brand-forest focus:ring-brand-forest cursor-pointer shrink-0"
+                                  />
+                                  <div>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Order Reference</span>
+                                    <h4 className="font-extrabold text-brand-forest text-sm mt-0.5">{order.order_number}</h4>
+                                  </div>
                                 </div>
                                 <div className="flex gap-1.5">
                                   <Badge className="text-[9px] font-black uppercase px-2 py-0.5 border-none bg-red-100 text-red-700">
@@ -919,6 +998,7 @@ export default function DeliveriesPage() {
                         ))}
                       </>
                     )}
+                  </div>
                   </div>
                 )}
               </div>
@@ -1376,8 +1456,8 @@ export default function DeliveriesPage() {
                     >
                       <option value="">-- Choose Driver --</option>
                       {drivers.map(d => (
-                        <option key={d.id} value={d.id} disabled={d.status === 'offline'}>
-                          {d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? '[Offline]' : ''}
+                        <option key={d.id} value={d.id} disabled={d.status === 'offline' || d.status === 'busy'}>
+                          {d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? ' [Offline]' : d.status === 'busy' ? ' [En Route - Locked]' : ''}
                         </option>
                       ))}
                     </select>

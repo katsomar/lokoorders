@@ -264,10 +264,10 @@ class DriverController extends Controller
             if ($driver->employment_status === 'inactive') {
                 $status = 'offline';
             } else {
-                $hasActiveDelivery = $driver->deliveries()
-                    ->whereIn('status', ['assigned', 'in_transit'])
+                $hasInTransit = $driver->deliveries()
+                    ->where('status', 'in_transit')
                     ->exists();
-                if ($hasActiveDelivery) {
+                if ($hasInTransit) {
                     $status = 'busy';
                 }
             }
