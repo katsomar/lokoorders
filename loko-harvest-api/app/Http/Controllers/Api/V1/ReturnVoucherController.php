@@ -65,9 +65,8 @@ class ReturnVoucherController extends Controller
         $validated['monetary_value'] = $validated['quantity'] * $validated['unit_price'];
         $validated['created_by'] = auth()->id() ?? User::first()?->id;
 
-        // Generate voucher sequence LHRV-YYYY-XXXX
-        $count = ReturnVoucher::whereYear('created_at', date('Y'))->count();
-        $validated['voucher_number'] = 'LHRV-' . date('Y') . '-' . str_pad($count + 1, 4, '0', STR_PAD_LEFT);
+        $seq = $this->getNextVoucherSequence();
+        $validated['voucher_number'] = 'LHRV-' . date('Y') . '-' . str_pad($seq, 4, '0', STR_PAD_LEFT);
         $validated['account_credit_posted'] = false;
 
         $voucher = ReturnVoucher::create($validated);
@@ -114,11 +113,11 @@ class ReturnVoucherController extends Controller
 
             $createdVouchers = [];
             $createdBy = auth()->id() ?? User::first()?->id;
+            $nextSeq = $this->getNextVoucherSequence();
 
             foreach ($validated['items'] as $item) {
-                // Generate voucher sequence LHRV-YYYY-XXXX
-                $count = ReturnVoucher::whereYear('created_at', date('Y'))->count();
-                $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($count + 1 + count($createdVouchers), 4, '0', STR_PAD_LEFT);
+                $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+                $nextSeq++;
                 
                 $monetaryValue = $item['quantity'] * $item['unit_price'];
 
@@ -245,5 +244,20 @@ class ReturnVoucherController extends Controller
 
             return $this->success($voucher->load(['customer', 'product']), 'Credit note posted successfully to customer ledger.');
         });
+    }
+
+    private function getNextVoucherSequence()
+    {
+        $year = date('Y');
+        $latestVoucher = ReturnVoucher::where('voucher_number', 'like', "LHRV-{$year}-%")
+            ->orderBy('voucher_number', 'desc')
+            ->first();
+
+        if ($latestVoucher) {
+            $parts = explode('-', $latestVoucher->voucher_number);
+            return (int) end($parts) + 1;
+        }
+
+        return 1;
     }
 }
