@@ -144,233 +144,25 @@ class OrderController extends Controller
             return $this->success($order, "Order status is already {$newStatus}");
         }
 
-        // Trigger stock deduction and invoice raising when moving to processing
-        if ($oldStatus === 'pending' && $newStatus === 'processing') {
-            return DB::transaction(function () use ($order, $newStatus, $request) {
-                // 1. Validate stock availability
-                foreach ($order->items as $item) {
-                    $prod = \App\Models\Product::findOrFail($item->product_id);
-                    $supportsBatch = $this->productSupportsBatch($prod);
-                    $batchRef = $supportsBatch ? ($item->batch_reference ?? null) : null;
+        // Trigger stock deduction and invoice raising when moving out of pending
+        if ($oldStatus === 'pending' && in_array($newStatus, ['processing', 'ready_for_dispatch', 'dispatched'])) {
+            try {
+                return DB::transaction(function () use ($order, $newStatus, $request) {
+                    $order->commitOrder($request->admin_override_reason);
 
-                    if ($supportsBatch && $batchRef) {
-                        $stock = \App\Models\SalesStoreStock::where('sales_store_id', $order->sales_store_id)
-                            ->where('product_id', $item->product_id)
-                            ->where('batch_reference', $batchRef)
-                            ->first();
-                        $available = $stock ? (float) $stock->current_quantity : 0.0;
-                    } else {
-                        $available = \App\Models\SalesStoreStock::where('sales_store_id', $order->sales_store_id)
-                            ->where('product_id', $item->product_id)
-                            ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
-                            ->sum('current_quantity');
-                    }
-                    
-                    $overrideReason = $request->admin_override_reason ?? $order->admin_override_reason;
-                    if ($available < (float) $item->quantity && empty($overrideReason)) {
-                        $productName = $prod->name;
-                        $batchStr = $batchRef ? " (Batch: {$batchRef})" : "";
-                        return $this->error("Insufficient stock for {$productName}{$batchStr} in the selected sales store (Available: {$available}). Admin override reason required.", 422);
-                    }
-                }
+                    // Transition status
+                    $order->update(['status' => $newStatus]);
+                    $order->statusHistory()->create([
+                        'status' => $newStatus,
+                        'changed_by' => auth()->id(),
+                        'notes' => $request->notes,
+                    ]);
 
-                if ($request->admin_override_reason) {
-                    $order->update(['admin_override_reason' => $request->admin_override_reason]);
-                }
-
-                // 2. Debit stock and log movements
-                foreach ($order->items as $item) {
-                    $prod = \App\Models\Product::findOrFail($item->product_id);
-                    $supportsBatch = $this->productSupportsBatch($prod);
-                    $batchRef = $supportsBatch ? ($item->batch_reference ?? null) : null;
-
-                    if ($supportsBatch && $batchRef) {
-                        $stock = \App\Models\SalesStoreStock::firstOrCreate(
-                            [
-                                'sales_store_id' => $order->sales_store_id,
-                                'product_id' => $item->product_id,
-                                'batch_reference' => $batchRef,
-                            ],
-                            ['current_quantity' => 0, 'updated_by' => auth()->id()]
-                        );
-                        $stock->decrement('current_quantity', $item->quantity);
-                        $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-
-                        \App\Models\SalesStoreMovement::create([
-                            'movement_date' => $order->order_date,
-                            'sales_store_id' => $order->sales_store_id,
-                            'product_id' => $item->product_id,
-                            'batch_reference' => $batchRef,
-                            'movement_type' => 'dispatch_out',
-                            'quantity' => $item->quantity,
-                            'reference_id' => $order->id,
-                            'created_by' => auth()->id(),
-                            'notes' => "Sold for Order: " . $order->order_number,
-                        ]);
-                    } else {
-                        $remainingToDebit = $item->quantity;
-                        $stocks = \App\Models\SalesStoreStock::where('sales_store_id', $order->sales_store_id)
-                            ->where('product_id', $item->product_id)
-                            ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
-                            ->where('current_quantity', '>', 0)
-                            ->orderBy('created_at', 'asc')
-                            ->get();
-
-                        if ($stocks->isEmpty()) {
-                            $stock = \App\Models\SalesStoreStock::firstOrCreate(
-                                [
-                                    'sales_store_id' => $order->sales_store_id,
-                                    'product_id' => $item->product_id,
-                                    'batch_reference' => null,
-                                ],
-                                ['current_quantity' => 0, 'updated_by' => auth()->id()]
-                            );
-                            $stock->decrement('current_quantity', $remainingToDebit);
-                            $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-
-                            $item->update(['batch_reference' => null]);
-
-                            \App\Models\SalesStoreMovement::create([
-                                'movement_date' => $order->order_date,
-                                'sales_store_id' => $order->sales_store_id,
-                                'product_id' => $item->product_id,
-                                'batch_reference' => null,
-                                'movement_type' => 'dispatch_out',
-                                'quantity' => $remainingToDebit,
-                                'reference_id' => $order->id,
-                                'created_by' => auth()->id(),
-                                'notes' => "Sold for Order: " . $order->order_number . " (Stock Override)",
-                            ]);
-                        } else {
-                            $first = true;
-                            $itemUnitPrice = $item->unit_price;
-
-                            foreach ($stocks as $stock) {
-                                if ($remainingToDebit <= 0) break;
-
-                                $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                                $stock->decrement('current_quantity', $debitAmount);
-                                $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-
-                                $segmentBatch = $stock->batch_reference;
-
-                                if ($first) {
-                                    $item->update([
-                                        'batch_reference' => $segmentBatch,
-                                        'quantity' => $debitAmount,
-                                        'line_total' => $debitAmount * $itemUnitPrice
-                                    ]);
-                                    $first = false;
-                                } else {
-                                    OrderItem::create([
-                                        'order_id' => $order->id,
-                                        'product_id' => $item->product_id,
-                                        'batch_reference' => $segmentBatch,
-                                        'quantity' => $debitAmount,
-                                        'unit_price' => $itemUnitPrice,
-                                        'line_total' => $debitAmount * $itemUnitPrice,
-                                    ]);
-                                }
-
-                                \App\Models\SalesStoreMovement::create([
-                                    'movement_date' => $order->order_date,
-                                    'sales_store_id' => $order->sales_store_id,
-                                    'product_id' => $item->product_id,
-                                    'batch_reference' => $segmentBatch,
-                                    'movement_type' => 'dispatch_out',
-                                    'quantity' => $debitAmount,
-                                    'reference_id' => $order->id,
-                                    'created_by' => auth()->id(),
-                                    'notes' => "Sold for Order: " . $order->order_number . ($segmentBatch ? " (FIFO Batch: {$segmentBatch})" : ""),
-                                ]);
-
-                                $remainingToDebit -= $debitAmount;
-                            }
-
-                            if ($remainingToDebit > 0) {
-                                $lastStock = $stocks->last();
-                                $lastStock->decrement('current_quantity', $remainingToDebit);
-                                $lastStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-
-                                if ($first) {
-                                    $item->update([
-                                        'batch_reference' => $lastStock->batch_reference,
-                                        'quantity' => $remainingToDebit,
-                                        'line_total' => $remainingToDebit * $itemUnitPrice
-                                    ]);
-                                } else {
-                                    OrderItem::create([
-                                        'order_id' => $order->id,
-                                        'product_id' => $item->product_id,
-                                        'batch_reference' => $lastStock->batch_reference,
-                                        'quantity' => $remainingToDebit,
-                                        'unit_price' => $itemUnitPrice,
-                                        'line_total' => $remainingToDebit * $itemUnitPrice,
-                                    ]);
-                                }
-
-                                \App\Models\SalesStoreMovement::create([
-                                    'movement_date' => $order->order_date,
-                                    'sales_store_id' => $order->sales_store_id,
-                                    'product_id' => $item->product_id,
-                                    'batch_reference' => $lastStock->batch_reference,
-                                    'movement_type' => 'dispatch_out',
-                                    'quantity' => $remainingToDebit,
-                                    'reference_id' => $order->id,
-                                    'created_by' => auth()->id(),
-                                    'notes' => "Sold for Order: " . $order->order_number . " (FIFO Override Spill)",
-                                ]);
-                            }
-                        }
-                    }
-                }
-
-                // 3. Generate invoice
-                $invoiceNumber = 'LHI-' . date('Y') . '-' . str_pad(Invoice::whereYear('created_at', date('Y'))->count() + 1, 4, '0', STR_PAD_LEFT);
-                Invoice::create([
-                    'invoice_number' => $invoiceNumber,
-                    'order_id' => $order->id,
-                    'customer_id' => $order->customer_id,
-                    'issue_date' => now(),
-                    'due_date' => now()->addDays(7),
-                    'subtotal' => $order->total_amount,
-                    'tax_amount' => 0,
-                    'total_amount' => $order->total_amount,
-                    'payment_method' => 'cash',
-                    'status' => 'unpaid',
-                    'created_by' => auth()->id(),
-                ]);
-
-                // 4. Update Customer Account Balance
-                $account = \App\Models\CustomerAccount::firstOrCreate(
-                    ['customer_id' => $order->customer_id],
-                    ['current_balance' => 0, 'total_invoiced' => 0, 'total_paid' => 0]
-                );
-                $account->increment('current_balance', $order->total_amount);
-                $account->increment('total_invoiced', $order->total_amount);
-
-                // 5. Log Account Transaction
-                \App\Models\AccountTransaction::create([
-                    'customer_id' => $order->customer_id,
-                    'type' => 'invoice_raised',
-                    'reference_number' => $invoiceNumber,
-                    'description' => "Invoice raised for Order: " . $order->order_number,
-                    'debit_amount' => $order->total_amount,
-                    'running_balance' => $account->current_balance,
-                    'transaction_date' => now()->toDateString(),
-                    'created_by' => auth()->id(),
-                ]);
-
-                // 6. Transition status
-                $order->update(['status' => $newStatus]);
-                $order->statusHistory()->create([
-                    'status' => $newStatus,
-                    'changed_by' => auth()->id(),
-                    'notes' => $request->notes,
-                ]);
-
-                return $this->success($order, "Order status updated to {$newStatus}");
-            });
+                    return $this->success($order, "Order status updated to {$newStatus}");
+                });
+            } catch (\Exception $e) {
+                return $this->error($e->getMessage(), 422);
+            }
         }
 
         // Standard status updates (e.g. processing -> ready_for_dispatch)

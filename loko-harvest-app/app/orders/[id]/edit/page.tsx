@@ -491,7 +491,7 @@ export default function EditOrderPage() {
               <CardContent className="pt-6 p-5">
                 <div className="flex items-start gap-2.5 text-xs text-gray-500 font-body leading-normal">
                   <Calculator size={16} className="text-brand-forest mt-0.5 flex-shrink-0" />
-                  <p>Saving these updates recalculates warehouse stock balances, adjusts the customer's outstanding invoices, and logs ledger updates automatically.</p>
+                  <p>Saving these updates recalculates stock and ledger allocations for active orders. Pending orders will only deduct stock and post to the ledger once processed.</p>
                 </div>
               </CardContent>
             </Card>

@@ -55,39 +55,48 @@ class DeliveryController extends Controller
         $orderIds = isset($validated['order_ids']) ? $validated['order_ids'] : [$validated['order_id']];
         $preventStatusUpdate = $request->input('prevent_status_update', false);
 
-        return DB::transaction(function () use ($orderIds, $driverId, $preventStatusUpdate) {
-            $deliveries = [];
-            foreach ($orderIds as $orderId) {
-                // Prevent duplicate assignment if active delivery already exists for this order
-                $exists = Delivery::where('order_id', $orderId)
-                    ->whereIn('status', ['assigned', 'in_transit'])
-                    ->exists();
-                if ($exists) {
-                    continue;
+        try {
+            return DB::transaction(function () use ($orderIds, $driverId, $preventStatusUpdate) {
+                $deliveries = [];
+                foreach ($orderIds as $orderId) {
+                    // Prevent duplicate assignment if active delivery already exists for this order
+                    $exists = Delivery::where('order_id', $orderId)
+                        ->whereIn('status', ['assigned', 'in_transit'])
+                        ->exists();
+                    if ($exists) {
+                        continue;
+                    }
+
+                    $order = Order::findOrFail($orderId);
+                    
+                    $delivery = Delivery::create([
+                        'order_id' => $order->id,
+                        'driver_id' => $driverId,
+                        'assigned_by' => auth()->id() ?? \App\Models\User::first()->id,
+                        'status' => 'assigned',
+                        'dispatched_at' => now(),
+                    ]);
+
+                    if (!$preventStatusUpdate && $order->status !== 'pending') {
+                        $order->update(['status' => 'dispatched']);
+                        $order->statusHistory()->create([
+                            'status' => 'dispatched',
+                            'changed_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? 1),
+                            'notes' => 'Driver assigned and dispatched',
+                        ]);
+                    }
+                    
+                    $deliveries[] = $delivery;
                 }
 
-                $order = Order::findOrFail($orderId);
-                
-                $delivery = Delivery::create([
-                    'order_id' => $order->id,
-                    'driver_id' => $driverId,
-                    'assigned_by' => auth()->id() ?? \App\Models\User::first()->id,
-                    'status' => 'assigned',
-                    'dispatched_at' => now(),
-                ]);
-
-                if (!$preventStatusUpdate) {
-                    $order->update(['status' => 'dispatched']);
-                }
-                
-                $deliveries[] = $delivery;
-            }
-
-            return $this->success(
-                count($deliveries) === 1 ? $deliveries[0] : $deliveries,
-                'Deliveries assigned successfully'
-            );
-        });
+                return $this->success(
+                    count($deliveries) === 1 ? $deliveries[0] : $deliveries,
+                    'Deliveries assigned successfully'
+                );
+            });
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), 422);
+        }
     }
 
     public function confirm(Request $request, $id)

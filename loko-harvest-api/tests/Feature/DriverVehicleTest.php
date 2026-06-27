@@ -507,7 +507,7 @@ class DriverVehicleTest extends TestCase
             'required_delivery_date' => '2026-06-19',
             'urgency' => 'normal',
             'total_amount' => 50000,
-            'status' => 'pending',
+            'status' => 'ready_for_dispatch',
             'created_by' => $this->user->id,
         ]);
 

@@ -440,7 +440,7 @@ export default function NewOrderPage() {
               <CardContent className="pt-6 p-5">
                 <div className="flex items-start gap-2.5 text-xs text-gray-500 font-body leading-normal">
                   <Calculator size={16} className="text-brand-forest mt-0.5 flex-shrink-0" />
-                  <p>Committing this form schedules warehouse stock deductions, drafts delivery fulfillment sheets and posts pending ledger balances immediately.</p>
+                  <p>Committing this form saves the order as pending. Stock deduction and ledger billing will occur only after the order transitions to the processing status.</p>
                 </div>
               </CardContent>
             </Card>
