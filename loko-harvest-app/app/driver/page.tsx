@@ -78,6 +78,7 @@ export default function DriverDashboard() {
   interface AssignedDelivery {
     id: string;
     order: string;
+    order_status?: string;
     customer: string;
     zone: string;
     status: string;
@@ -127,6 +128,7 @@ export default function DriverDashboard() {
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showNotReadyModal, setShowNotReadyModal] = useState(false);
 
   useEffect(() => {
     async function fetchStats() {
@@ -515,15 +517,26 @@ export default function DriverDashboard() {
                         );
                       }
 
-                      return routesToShow.map((delivery, index) => (
-                        <motion.div
-                          key={delivery.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                        >
-                          <Link href={`/driver/deliveries/${delivery.id}`}>
-                            <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
+                      return routesToShow.map((delivery, index) => {
+                        const isReady = delivery.order_status === 'dispatched' || delivery.status === 'in_transit' || delivery.status === 'delivered';
+
+                        return (
+                          <motion.div
+                            key={delivery.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                          >
+                            <div
+                              onClick={() => {
+                                if (!isReady) {
+                                  setShowNotReadyModal(true);
+                                } else {
+                                  router.push(`/driver/deliveries/${delivery.id}`);
+                                }
+                              }}
+                              className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all cursor-pointer"
+                            >
                               <div className="flex gap-3.5">
                                 <div className="h-11 w-11 rounded-xl bg-brand-sage/20 border border-brand-sage/30 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage/40 transition-colors">
                                   <Package size={22} />
@@ -547,14 +560,20 @@ export default function DriverDashboard() {
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1 text-brand-forest">
-                                <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Start</span>
-                                <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
+                              <div className={`flex items-center gap-1.5 ${isReady ? 'text-brand-forest' : 'text-gray-400'}`}>
+                                <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {isReady ? 'Start' : 'Locked'}
+                                </span>
+                                {isReady ? (
+                                  <ChevronRight size={18} className="text-gray-300 group-hover:text-brand-forest transition-colors transform group-hover:translate-x-1 duration-200" />
+                                ) : (
+                                  <Lock size={13} className="text-gray-400 shrink-0" />
+                                )}
                               </div>
                             </div>
-                          </Link>
-                        </motion.div>
-                      ));
+                          </motion.div>
+                        );
+                      });
                     })()
                   ) : (
                     <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
@@ -1195,6 +1214,30 @@ export default function DriverDashboard() {
         </button>
 
       </nav>
+
+      {showNotReadyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0B1E14] border border-[#1C3E2B] text-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center"
+          >
+            <div className="mx-auto w-16 h-16 rounded-full bg-[#132A1C] border border-[#234E37] flex items-center justify-center text-brand-yellow mb-4">
+              <Lock size={28} className="animate-bounce" />
+            </div>
+            <h3 className="text-lg font-black tracking-wide text-brand-yellow uppercase">Not Ready for Delivery</h3>
+            <p className="text-xs text-gray-300 font-medium leading-relaxed mt-2.5">
+              This order has not yet been processed and dispatched from the warehouse. You can only start delivery once the order status is updated to Dispatched.
+            </p>
+            <Button
+              onClick={() => setShowNotReadyModal(false)}
+              className="w-full bg-brand-yellow text-[#0B1E14] hover:bg-[#E08C00] border-none font-bold h-11 text-xs rounded-xl shadow-md mt-6 cursor-pointer"
+            >
+              Acknowledge & Close
+            </Button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

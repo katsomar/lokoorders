@@ -81,6 +81,7 @@ class DriverController extends Controller
             return [
                 'id' => $delivery->id,
                 'order' => $delivery->order ? $delivery->order->order_number : 'N/A',
+                'order_status' => $delivery->order ? $delivery->order->status : 'N/A',
                 'customer' => $delivery->order && $delivery->order->customer ? $delivery->order->customer->name : 'N/A',
                 'zone' => $delivery->order && $delivery->order->customer && $delivery->order->customer->zone ? $delivery->order->customer->zone->name : 'N/A',
                 'status' => $delivery->status,

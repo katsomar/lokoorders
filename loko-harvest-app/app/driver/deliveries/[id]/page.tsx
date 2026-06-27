@@ -20,7 +20,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Loader2,
-  RefreshCcw
+  RefreshCcw,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,6 +71,7 @@ export default function DeliveryConfirmationPage() {
   interface DeliveryDetails {
     id: string;
     order: string;
+    order_status: string;
     customer: string;
     contact: string;
     phone: string;
@@ -91,6 +93,7 @@ export default function DeliveryConfirmationPage() {
   const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showDelayModal, setShowDelayModal] = useState(false);
+  const [showNotReadyModal, setShowNotReadyModal] = useState(false);
   const [delayReason, setDelayReason] = useState("");
   const [customReason, setCustomReason] = useState("");
 
@@ -180,6 +183,7 @@ export default function DeliveryConfirmationPage() {
           setDelivery({
             id: d.id,
             order: d.order?.order_number || "N/A",
+            order_status: d.order?.status || "N/A",
             customer: d.order?.customer?.name || "N/A",
             contact: d.order?.customer?.contact_person || "N/A",
             phone: d.order?.customer?.phone_primary || "",
@@ -278,6 +282,12 @@ export default function DeliveryConfirmationPage() {
   };
 
   const onStartDispatchClick = () => {
+    const isOrderReady = delivery?.order_status === 'dispatched' || delivery?.status === 'in_transit' || delivery?.status === 'delivered';
+    if (!isOrderReady) {
+      setShowNotReadyModal(true);
+      return;
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
     const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
     if (isMissed) {
@@ -693,6 +703,18 @@ export default function DeliveryConfirmationPage() {
       </header>
 
       <main className="p-4 space-y-6 max-w-md mx-auto">
+        {delivery && delivery.order_status !== 'dispatched' && delivery.status !== 'in_transit' && delivery.status !== 'delivered' && (
+          <div className="bg-amber-500/20 border border-amber-500/30 text-amber-400 rounded-2xl p-4 flex gap-3 items-start animate-pulse">
+            <Lock className="text-amber-400 shrink-0 mt-0.5" size={16} />
+            <div>
+              <p className="text-xs font-black text-amber-400 uppercase tracking-wider">Order Not Ready</p>
+              <p className="text-[11px] text-gray-300 font-semibold mt-1">
+                This order has not been processed and dispatched from the warehouse. You cannot start transit yet.
+              </p>
+            </div>
+          </div>
+        )}
+
         {isMissed && (
           <div className="bg-red-500/20 border border-red-500/30 text-red-400 rounded-2xl p-4 flex gap-3 items-start animate-pulse">
             <AlertCircle className="text-red-400 shrink-0 mt-0.5" size={16} />
@@ -775,14 +797,27 @@ export default function DeliveryConfirmationPage() {
               </Card>
 
               {/* Big Start Delivery Button */}
-              <Button 
-                className="w-full h-14 bg-brand-yellow text-brand-forest hover:bg-brand-yellow/90 font-black text-sm rounded-2xl tracking-widest gap-2.5 shadow-lg border border-brand-yellow/30"
-                onClick={onStartDispatchClick}
-                isLoading={isLoading}
-              >
-                <Play size={16} className="fill-brand-forest" />
-                START DISPATCH / DEPART DEPOT
-              </Button>
+              {(() => {
+                const isOrderReady = delivery?.order_status === 'dispatched' || delivery?.status === 'in_transit' || delivery?.status === 'delivered';
+                return (
+                  <Button 
+                    className={`w-full h-14 font-black text-sm rounded-2xl tracking-widest gap-2.5 shadow-lg border transition-all ${
+                      isOrderReady 
+                        ? "bg-brand-yellow text-brand-forest hover:bg-brand-yellow/90 border-brand-yellow/30" 
+                        : "bg-gray-700 text-gray-400 border-gray-700/40 cursor-not-allowed hover:bg-gray-700/90"
+                    }`}
+                    onClick={onStartDispatchClick}
+                    isLoading={isLoading}
+                  >
+                    {isOrderReady ? (
+                      <Play size={16} className="fill-brand-forest" />
+                    ) : (
+                      <Lock size={16} className="text-gray-400" />
+                    )}
+                    {isOrderReady ? "START DISPATCH / DEPART DEPOT" : "ORDER NOT YET READY"}
+                  </Button>
+                );
+              })()}
             </motion.div>
           )}
 
@@ -1568,6 +1603,29 @@ export default function DeliveryConfirmationPage() {
         </div>
       )}
 
+      {showNotReadyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0B1E14] border border-[#1C3E2B] text-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center font-body"
+          >
+            <div className="mx-auto w-16 h-16 rounded-full bg-[#132A1C] border border-[#234E37] flex items-center justify-center text-brand-yellow mb-4">
+              <Lock size={28} className="animate-bounce" />
+            </div>
+            <h3 className="text-lg font-black tracking-wide text-brand-yellow uppercase">Not Ready for Delivery</h3>
+            <p className="text-xs text-gray-300 font-medium leading-relaxed mt-2.5">
+              This order has not yet been processed and dispatched from the warehouse. You can only start delivery once the order status is updated to Dispatched.
+            </p>
+            <Button
+              onClick={() => setShowNotReadyModal(false)}
+              className="w-full bg-brand-yellow text-[#0B1E14] hover:bg-[#E08C00] border-none font-bold h-11 text-xs rounded-xl shadow-md mt-6 cursor-pointer"
+            >
+              Acknowledge & Close
+            </Button>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
