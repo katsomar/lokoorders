@@ -116,6 +116,8 @@ export default function DeliveryConfirmationPage() {
   const [selectedPastOrder, setSelectedPastOrder] = useState<any>(null);
   const [pastOrderItems, setPastOrderItems] = useState<any[]>([]);
   const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
+  const [hasCheckedReplacements, setHasCheckedReplacements] = useState(false);
+  const [checkingReplacements, setCheckingReplacements] = useState(false);
   
   // Return Form inputs
   const [formReasonCode, setFormReasonCode] = useState("broken_cracked");
@@ -225,6 +227,31 @@ export default function DeliveryConfirmationPage() {
       fetchDelivery();
     }
   }, [params.id]);
+
+  useEffect(() => {
+    if (step === 4 && delivery?.customer_id && !hasCheckedReplacements) {
+      setHasCheckedReplacements(true);
+      setCheckingReplacements(true);
+      api.get('/returns', {
+        params: {
+          customer_id: delivery.customer_id,
+          pending_replacements: true,
+        }
+      }).then(res => {
+        if (res.data?.success) {
+          const mapped = res.data.data.data.map((item: any) => ({
+            ...item,
+            replacedToday: "",
+          }));
+          setPendingReplacements(mapped);
+        }
+      }).catch(err => {
+        console.error("Failed to prefetch pending replacements:", err);
+      }).finally(() => {
+        setCheckingReplacements(false);
+      });
+    }
+  }, [step, delivery, hasCheckedReplacements]);
 
   const formatTimer = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -1062,9 +1089,9 @@ export default function DeliveryConfirmationPage() {
               key="step4"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="flex flex-col items-center justify-center py-20 space-y-6"
+              className="flex flex-col items-center justify-center py-12 space-y-6"
             >
-              <div className="h-20 w-20 rounded-full bg-green-500/10 border border-green-400/30 flex items-center justify-center text-green-400">
+              <div className="h-20 w-20 rounded-full bg-green-500/10 border border-green-400/30 flex items-center justify-center text-green-400 animate-pulse">
                 <CheckCircle2 size={48} className="animate-bounce" />
               </div>
               <div className="text-center space-y-2">
@@ -1072,6 +1099,31 @@ export default function DeliveryConfirmationPage() {
                 <p className="text-xs text-gray-400 font-medium max-w-xs mx-auto">
                   Excellent work. The cargo has been logged as delivered and the depot account transaction ledger has been updated.
                 </p>
+              </div>
+
+              {pendingReplacements.length > 0 && (
+                <div className="w-full pt-4 border-t border-brand-forest/20">
+                  <p className="text-center text-[10px] text-brand-yellow font-black uppercase tracking-wider mb-2">
+                    ⚠️ Outstanding Customer Returns
+                  </p>
+                  <Button 
+                    className="w-full bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest border border-brand-yellow/30 font-black text-xs uppercase tracking-widest rounded-2xl gap-2 h-12 flex items-center justify-center cursor-pointer"
+                    onClick={() => setShowPendingReplacementsModal(true)}
+                  >
+                    <RefreshCcw size={16} className="animate-spin" style={{ animationDuration: '6s' }} />
+                    Deliver Replacements ({pendingReplacements.length})
+                  </Button>
+                </div>
+              )}
+
+              <div className="w-full">
+                <Button 
+                  variant="ghost" 
+                  className="w-full text-xs font-bold text-gray-400 hover:text-white mt-2 cursor-pointer h-10 border border-brand-forest/30 rounded-xl" 
+                  onClick={() => router.push("/driver")}
+                >
+                  Back to Dashboard
+                </Button>
               </div>
             </motion.div>
           )}

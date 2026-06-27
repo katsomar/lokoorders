@@ -230,6 +230,28 @@ class DriverController extends Controller
             $leagueClass = 'Bronze';
         }
 
+        $incompleteReturns = \App\Models\ReturnVoucher::where('return_type', 'physical_replacement')
+            ->whereColumn('replacement_quantity', '<', 'quantity')
+            ->whereHas('delivery', function($q) use ($driver) {
+                $q->where('driver_id', $driver->id);
+            })
+            ->with(['customer.zone', 'product'])
+            ->get()
+            ->map(function ($voucher) {
+                return [
+                    'id' => $voucher->id,
+                    'voucher_number' => $voucher->voucher_number,
+                    'customer' => $voucher->customer ? $voucher->customer->name : 'N/A',
+                    'zone' => $voucher->customer && $voucher->customer->zone ? $voucher->customer->zone->name : 'N/A',
+                    'product_name' => $voucher->product ? $voucher->product->name : 'N/A',
+                    'quantity' => (float)$voucher->quantity,
+                    'replacement_quantity' => (float)$voucher->replacement_quantity,
+                    'remaining_quantity' => (float)($voucher->quantity - $voucher->replacement_quantity),
+                    'delivery_id' => $voucher->delivery_id,
+                    'return_date' => $voucher->return_date,
+                ];
+            });
+
         return $this->success([
             'driver_id' => $driver->id,
             'driver_name' => $driver->full_name,
@@ -241,6 +263,7 @@ class DriverController extends Controller
             'pending_crates_sum' => (int)$pendingCratesSum,
             'vehicle' => $vehicleSpecs,
             'assigned_route' => $assignedRoute,
+            'incomplete_returns' => $incompleteReturns,
             'performance' => [
                 'fulfillment_rate' => round($fulfillmentRate, 1),
                 'fulfillment_trend' => $fulfillmentTrend,

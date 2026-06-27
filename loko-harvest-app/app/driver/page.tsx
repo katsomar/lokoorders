@@ -25,7 +25,8 @@ import {
   AlertTriangle,
   User,
   Coffee,
-  Lock
+  Lock,
+  RefreshCcw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -64,7 +65,7 @@ export default function DriverDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"home" | "history" | "alerts">("home");
-  const [routeTab, setRouteTab] = useState<"active" | "missed">("active");
+  const [routeTab, setRouteTab] = useState<"active" | "missed" | "incomplete_returns">("active");
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -110,6 +111,7 @@ export default function DriverDashboard() {
       added_fuel_per_shift: number;
     };
     assigned_route: AssignedDelivery[];
+    incomplete_returns: any[];
     performance: {
       fulfillment_rate: number;
       fulfillment_trend: string;
@@ -399,22 +401,22 @@ export default function DriverDashboard() {
                   </Badge>
                 </div>
 
-                {/* Sub-tabs for Active and Missed routes */}
-                {stats && stats.assigned_route.length > 0 && (
-                  <div className="flex bg-brand-sage/10 p-1 rounded-xl mb-4 border border-brand-sage/20">
+                {/* Sub-tabs for Active, Missed, and Incomplete Returns routes */}
+                {stats && (stats.assigned_route.length > 0 || (stats.incomplete_returns && stats.incomplete_returns.length > 0)) && (
+                  <div className="flex bg-brand-sage/10 p-1 rounded-xl mb-4 border border-brand-sage/20 gap-1 overflow-x-auto">
                     <button 
                       onClick={() => setRouteTab("active")}
-                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all min-w-[70px] ${
                         routeTab === "active" 
                           ? "bg-brand-forest text-white shadow-sm" 
                           : "text-brand-forest hover:bg-brand-sage/20"
                       }`}
                     >
-                      Active Routes ({stats.assigned_route.filter(r => !r.required_delivery_date || r.required_delivery_date >= new Date().toISOString().split('T')[0]).length})
+                      Active ({stats.assigned_route.filter(r => !r.required_delivery_date || r.required_delivery_date >= new Date().toISOString().split('T')[0]).length})
                     </button>
                     <button 
                       onClick={() => setRouteTab("missed")}
-                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 ${
+                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 min-w-[80px] ${
                         routeTab === "missed" 
                           ? "bg-red-700 text-white shadow-sm" 
                           : "text-red-700 hover:bg-red-500/10"
@@ -423,7 +425,20 @@ export default function DriverDashboard() {
                       {stats.assigned_route.some(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]) && (
                         <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
                       )}
-                      Missed Routes ({stats.assigned_route.filter(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]).length})
+                      Missed ({stats.assigned_route.filter(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]).length})
+                    </button>
+                    <button 
+                      onClick={() => setRouteTab("incomplete_returns")}
+                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all flex items-center justify-center gap-1 min-w-[90px] ${
+                        routeTab === "incomplete_returns" 
+                          ? "bg-amber-600 text-white shadow-sm" 
+                          : "text-amber-600 hover:bg-amber-500/10"
+                      }`}
+                    >
+                      {stats.incomplete_returns && stats.incomplete_returns.length > 0 && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      )}
+                      Returns ({stats.incomplete_returns?.length || 0})
                     </button>
                   </div>
                 )}
@@ -434,6 +449,53 @@ export default function DriverDashboard() {
                       <Truck size={32} className="mx-auto mb-2 text-gray-300" />
                       <p className="text-xs font-bold text-gray-500">Loading Active Route...</p>
                     </div>
+                  ) : routeTab === "incomplete_returns" ? (
+                    stats && stats.incomplete_returns && stats.incomplete_returns.length > 0 ? (
+                      stats.incomplete_returns.map((voucher: any, index: number) => (
+                        <motion.div
+                          key={voucher.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <Link href={`/driver/deliveries/${voucher.delivery_id}`}>
+                            <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
+                              <div className="flex gap-3.5">
+                                <div className="h-11 w-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 group-hover:bg-amber-500/20 transition-colors shrink-0">
+                                  <RefreshCcw size={22} />
+                                </div>
+                                <div>
+                                  <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{voucher.customer}</h4>
+                                  <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
+                                    <MapPin size={11} className="text-brand-mid" />
+                                    {voucher.zone}
+                                  </div>
+                                  <div className="flex flex-col gap-1 mt-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="bg-amber-500/15 text-amber-700 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/20">{voucher.voucher_number}</span>
+                                      <span className="text-[10px] text-gray-400 font-semibold">{voucher.return_date}</span>
+                                    </div>
+                                    <p className="text-[11px] font-bold text-gray-600 leading-snug">
+                                      {voucher.product_name}: <span className="text-red-600 font-black">{voucher.remaining_quantity} trays remaining</span> <span className="text-gray-400 font-semibold">(Returned: {voucher.quantity} / Replaced: {voucher.replacement_quantity})</span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 text-amber-600">
+                                <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Replace</span>
+                                <ChevronRight size={18} className="text-gray-300 group-hover:text-amber-600 transition-colors transform group-hover:translate-x-1 duration-200" />
+                              </div>
+                            </div>
+                          </Link>
+                        </motion.div>
+                      ))
+                    ) : (
+                      <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
+                        <RefreshCcw size={32} className="mx-auto mb-2 text-gray-300" />
+                        <p className="text-xs font-bold text-gray-500">No Incomplete Returns Found</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">All customer return replacements are completed.</p>
+                      </div>
+                    )
                   ) : stats && stats.assigned_route.length > 0 ? (
                     (() => {
                       const todayStr = new Date().toISOString().split('T')[0];
