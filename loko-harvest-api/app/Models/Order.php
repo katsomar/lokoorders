@@ -279,4 +279,37 @@ class Order extends Model
             ]);
         });
     }
+
+    public function deductStockForRedispatch()
+    {
+        \Illuminate\Support\Facades\DB::transaction(function () {
+            $userId = auth()->id() ?? 1;
+
+            foreach ($this->items as $item) {
+                $stock = \App\Models\SalesStoreStock::firstOrCreate(
+                    [
+                        'sales_store_id' => $this->sales_store_id,
+                        'product_id' => $item->product_id,
+                        'batch_reference' => $item->batch_reference,
+                    ],
+                    ['current_quantity' => 0, 'updated_by' => $userId]
+                );
+
+                $stock->decrement('current_quantity', $item->quantity);
+                $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+
+                \App\Models\SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
+                    'sales_store_id' => $this->sales_store_id,
+                    'product_id' => $item->product_id,
+                    'batch_reference' => $item->batch_reference,
+                    'movement_type' => 'dispatch_out',
+                    'quantity' => $item->quantity,
+                    'reference_id' => $this->id,
+                    'created_by' => $userId,
+                    'notes' => "Re-dispatch for Order: " . $this->order_number,
+                ]);
+            }
+        });
+    }
 }

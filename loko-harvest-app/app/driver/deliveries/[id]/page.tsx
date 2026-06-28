@@ -132,6 +132,26 @@ export default function DeliveryConfirmationPage() {
   const [replaceRepName, setReplaceRepName] = useState("");
   const [replaceSignature, setReplaceSignature] = useState("");
 
+  // Undone states
+  const [showUndoneModal, setShowUndoneModal] = useState(false);
+  const [undoneReason, setUndoneReason] = useState("");
+  const [returnSalesStoreId, setReturnSalesStoreId] = useState("");
+  const [salesStoresList, setSalesStoresList] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function fetchSalesStores() {
+      try {
+        const response = await api.get("/sales-stores");
+        if (response.data?.success) {
+          setSalesStoresList(response.data.data?.data || response.data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch sales stores:", err);
+      }
+    }
+    fetchSalesStores();
+  }, []);
+
   // Tracking states
   const latestCoordsRef = useRef<{lat: number, lng: number} | null>(null);
   const latestDistanceRef = useRef<number>(0);
@@ -327,6 +347,34 @@ export default function DeliveryConfirmationPage() {
       alert("Failed to cancel dispatch. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeclareUndone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!undoneReason) {
+      alert("Please select a reason.");
+      return;
+    }
+    if (!returnSalesStoreId) {
+      alert("Please select a return sales store.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await api.post(`/deliveries/${params.id}/undone`, {
+        undone_reason: undoneReason,
+        return_sales_store_id: returnSalesStoreId,
+      });
+      alert("Delivery marked as undone successfully. Physical inventory returned.");
+      router.push("/driver");
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to mark delivery as undone.");
+    } finally {
+      setIsLoading(false);
+      setShowUndoneModal(false);
     }
   };
 
@@ -983,24 +1031,38 @@ export default function DeliveryConfirmationPage() {
                 </CardContent>
               </Card>
 
-              {/* Split Action Buttons (Cancel / Complete) */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              {/* Split Action Buttons (Cancel / Complete / Undone) */}
+              <div className="space-y-3.5 pt-2">
                 <Button 
-                  className="h-14 bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-500/30 font-black text-xs uppercase tracking-widest rounded-2xl gap-2"
-                  onClick={handleCancelDispatch}
-                  isLoading={isLoading}
-                >
-                  <XCircle size={16} />
-                  Cancel Trip
-                </Button>
-                
-                <Button 
-                  className="h-14 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest border border-brand-yellow/30 font-black text-xs uppercase tracking-widest rounded-2xl gap-2"
+                  className="w-full h-14 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest border border-brand-yellow/30 font-black text-xs uppercase tracking-widest rounded-2xl gap-2 shadow-md"
                   onClick={() => setStep(3)} // Move to capture proof
                 >
                   Complete Order
                   <ArrowRight size={16} />
                 </Button>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Button 
+                    className="h-12 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-black text-[10px] uppercase tracking-widest rounded-2xl gap-1.5 shadow-sm"
+                    onClick={() => {
+                      setUndoneReason("");
+                      setReturnSalesStoreId("");
+                      setShowUndoneModal(true);
+                    }}
+                  >
+                    <AlertCircle size={14} />
+                    Declare Undone
+                  </Button>
+
+                  <Button 
+                    className="h-12 bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-500/30 font-black text-[10px] uppercase tracking-widest rounded-2xl gap-1.5 shadow-sm"
+                    onClick={handleCancelDispatch}
+                    isLoading={isLoading}
+                  >
+                    <XCircle size={14} />
+                    Cancel Trip
+                  </Button>
+                </div>
               </div>
 
             </motion.div>
@@ -1600,6 +1662,94 @@ export default function DeliveryConfirmationPage() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {showUndoneModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#132A1C] border border-brand-forest/40 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col text-xs font-body text-white"
+          >
+            <div className="bg-[#0B1510] px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="text-brand-yellow animate-pulse" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Declare Delivery Undone</h3>
+              </div>
+              <button 
+                onClick={() => setShowUndoneModal(false)} 
+                className="text-gray-400 hover:text-white"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleDeclareUndone} className="p-5 space-y-4">
+              <p className="text-gray-300 font-semibold leading-relaxed">
+                If you were unable to complete this delivery, declare it undone to return products back to inventory.
+              </p>
+
+              {/* Select Reason */}
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">
+                  Reason for incomplete delivery *
+                </label>
+                <select
+                  required
+                  value={undoneReason}
+                  onChange={(e) => setUndoneReason(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                >
+                  <option value="">-- Choose Reason --</option>
+                  <option value="traffic">Traffic jam / Heavy traffic (Exempted)</option>
+                  <option value="late_dispatch">Late Dispatch from depot (Exempted)</option>
+                  <option value="customer_closed">Customer closed / Unavailable</option>
+                  <option value="vehicle_breakdown">Vehicle breakdown</option>
+                  <option value="bad_weather">Bad weather / Heavy rains</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              {/* Select Sales Store to return to */}
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">
+                  Sales Store returned to *
+                </label>
+                <select
+                  required
+                  value={returnSalesStoreId}
+                  onChange={(e) => setReturnSalesStoreId(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                >
+                  <option value="">-- Choose Sales Store --</option>
+                  {salesStoresList.map(store => (
+                    <option key={store.id} value={store.id}>
+                      {store.name} ({store.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-3 border-t border-brand-forest/20">
+                <Button 
+                  type="button" 
+                  onClick={() => setShowUndoneModal(false)} 
+                  className="flex-1 bg-[#132A1C] hover:bg-white/5 text-gray-400 hover:text-white border border-brand-forest/30 text-xs font-bold rounded-xl h-11"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit"
+                  disabled={isLoading || !undoneReason || !returnSalesStoreId}
+                  className="flex-1 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest text-xs font-black rounded-xl h-11 border-none shadow-md"
+                >
+                  {isLoading ? "Processing..." : "Declare Undone"}
+                </Button>
+              </div>
+            </form>
+          </motion.div>
         </div>
       )}
 

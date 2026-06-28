@@ -153,6 +153,8 @@ export default function OrdersPage() {
         return <Badge className="bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Dispatched</Badge>;
       case "delivered":
         return <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Delivered</Badge>;
+      case "undone":
+        return <Badge className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Undone Claim</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700 text-[10px] font-bold py-0.5 px-2 rounded-lg">{status}</Badge>;
     }
@@ -375,10 +377,20 @@ export default function OrdersPage() {
                                        name.toLowerCase().includes("mega") ? "M" :
                                        name.charAt(0).toUpperCase();
 
+                    const hasUndone = order.deliveries?.some((d: any) => d.status === 'undone');
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const isMissed = (order.status || "").toLowerCase() !== "delivered" && order.required_delivery_date && order.required_delivery_date.split(' ')[0] < todayStr;
+                    const hasIssues = hasUndone || isMissed;
+
                     return (
                       <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
                         <TableCell className="pl-6 font-mono text-xs font-bold text-brand-forest">
-                          {order.order_number}
+                          <div className="flex items-center gap-1.5">
+                            {order.order_number}
+                            {hasIssues && (
+                              <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse inline-block" title="Order has issues (missed deadline or undone delivery attempt)" />
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">

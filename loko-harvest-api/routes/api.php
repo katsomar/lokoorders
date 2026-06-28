@@ -54,6 +54,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('/deliveries/assign', [App\Http\Controllers\Api\V1\DeliveryController::class, 'assign']);
         Route::post('/deliveries/{id}/confirm', [App\Http\Controllers\Api\V1\DeliveryController::class, 'confirm']);
         Route::post('/deliveries/{id}/transit', [App\Http\Controllers\Api\V1\DeliveryController::class, 'transit']);
+        Route::post('/deliveries/{id}/undone', [App\Http\Controllers\Api\V1\DeliveryController::class, 'undone']);
         Route::post('/deliveries/{id}/cancel', [App\Http\Controllers\Api\V1\DeliveryController::class, 'cancel']);
         Route::post('/deliveries/{id}/track', [App\Http\Controllers\Api\V1\DeliveryController::class, 'track']);
         

@@ -54,6 +54,50 @@ export default function OrderDetailPage() {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxScale, setLightboxScale] = useState<number>(1);
 
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [showRedispatchModal, setShowRedispatchModal] = useState(false);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [isRedispatching, setIsRedispatching] = useState(false);
+
+  useEffect(() => {
+    async function fetchDrivers() {
+      try {
+        const res = await api.get("/drivers");
+        if (res.data?.success) {
+          setDrivers(res.data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch drivers:", err);
+      }
+    }
+    fetchDrivers();
+  }, []);
+
+  const handleRedispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDriverId) {
+      alert("Please select a driver.");
+      return;
+    }
+
+    setIsRedispatching(true);
+    try {
+      await api.post("/deliveries/assign", {
+        order_id: orderId,
+        driver_id: selectedDriverId,
+      });
+      alert("Order re-dispatched successfully!");
+      setShowRedispatchModal(false);
+      setSelectedDriverId("");
+      await fetchOrderDetails();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to re-dispatch order.");
+    } finally {
+      setIsRedispatching(false);
+    }
+  };
+
   const fetchOrderDetails = async () => {
     setIsLoading(true);
     try {
@@ -102,6 +146,8 @@ export default function OrderDetailPage() {
         return <Badge className="bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Dispatched</Badge>;
       case "delivered":
         return <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Delivered</Badge>;
+      case "undone":
+        return <Badge className="bg-red-100 text-red-700 border border-red-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Undone Claim</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-700 text-[10px] font-extrabold py-0.5 px-2.5 rounded-lg shrink-0">{status}</Badge>;
     }
@@ -335,6 +381,18 @@ export default function OrderDetailPage() {
                     <ArrowRight size={14} />
                   </>
                 )}
+              </Button>
+            )}
+            {order.status === "undone" && (
+              <Button 
+                onClick={() => {
+                  setSelectedDriverId("");
+                  setShowRedispatchModal(true);
+                }}
+                className="h-9.5 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs gap-1.5"
+              >
+                Re-dispatch Order
+                <ArrowRight size={14} />
               </Button>
             )}
           </div>
@@ -618,6 +676,69 @@ export default function OrderDetailPage() {
               </Card>
             )}
 
+            {/* Undone Delivery Claims Card */}
+            {order.deliveries?.some((d: any) => d.status === 'undone') && (
+              <Card className="border border-red-200 shadow-sm rounded-xl overflow-hidden bg-white">
+                <CardHeader className="bg-red-50/50 border-b border-red-200 py-3.5 px-5 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-red-900 font-heading flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-red-600" />
+                    Undone Delivery Claims History
+                  </CardTitle>
+                  <Badge className="bg-red-100 text-red-700 border-none text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg">
+                    Incomplete Attempts
+                  </Badge>
+                </CardHeader>
+                <CardContent className="p-5 space-y-4">
+                  {order.deliveries
+                    .filter((d: any) => d.status === 'undone')
+                    .map((d: any, idx: number) => {
+                      const isExempted = d.undone_reason === 'traffic' || d.undone_reason === 'late_dispatch';
+                      return (
+                        <div key={d.id} className="border border-red-100 bg-red-50/20 p-4 rounded-xl space-y-3 last:mb-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-red-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-red-900 text-xs">Trip #{idx + 1} Attempt</span>
+                              <Badge className={`text-[9px] font-black uppercase px-2 py-0.25 border-none ${
+                                isExempted ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              }`}>
+                                {isExempted ? "Exempted from Penalty" : "Penalized Claim"}
+                              </Badge>
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-bold">
+                              Claimed: {formatDeliveredAt(d.undone_at)}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Driver</p>
+                              <p className="font-bold text-gray-800 mt-0.5">{d.driver?.full_name || "N/A"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Dispatched Time</p>
+                              <p className="font-bold text-gray-700 mt-0.5">{formatDeliveredAt(d.dispatched_at)}</p>
+                            </div>
+                            <div>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Returned To Sales Store</p>
+                              <p className="font-bold text-brand-forest mt-0.5">
+                                {d.return_sales_store?.name ? `${d.return_sales_store.name} (${d.return_sales_store.code})` : "N/A"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-lg border border-red-100">
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Driver Claimed Reason</p>
+                            <p className="text-xs text-red-800 font-semibold mt-1">
+                              "{d.undone_reason ? d.undone_reason.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'No reason specified'}"
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Items Table Card */}
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
@@ -871,6 +992,60 @@ export default function OrderDetailPage() {
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {showRedispatchModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-brand-sage/40 shadow-2xl max-w-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-brand-forest px-5 py-3.5 flex justify-between items-center text-white">
+              <div>
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Re-dispatch Order</h3>
+                <p className="text-[10px] text-brand-sage font-medium mt-0.5">Assign this undone order to an active driver</p>
+              </div>
+              <button 
+                onClick={() => setShowRedispatchModal(false)}
+                className="text-brand-sage hover:text-white"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={handleRedispatch} className="p-5 space-y-4 text-xs">
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Driver *</label>
+                <select
+                  required
+                  value={selectedDriverId}
+                  onChange={(e) => setSelectedDriverId(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                >
+                  <option value="">-- Choose Driver --</option>
+                  {drivers.map((d: any) => (
+                    <option key={d.id} value={d.id} disabled={d.status === 'offline' || d.status === 'busy'}>
+                      {d.full_name || d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? ' [Offline]' : d.status === 'busy' ? ' [En Route - Locked]' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-brand-sage/20">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRedispatchModal(false)}
+                  className="h-9.5 px-4 text-xs font-bold border-brand-sage bg-white text-gray-600 rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isRedispatching || !selectedDriverId}
+                  className="h-9.5 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-xl text-xs"
+                >
+                  {isRedispatching ? "Dispatching..." : "Assign & Dispatch"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

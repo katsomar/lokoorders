@@ -68,6 +68,7 @@ class DeliveryController extends Controller
                     }
 
                     $order = Order::findOrFail($orderId);
+                    $wasUndone = ($order->status === 'undone');
                     
                     $delivery = Delivery::create([
                         'order_id' => $order->id,
@@ -77,12 +78,16 @@ class DeliveryController extends Controller
                         'dispatched_at' => now(),
                     ]);
 
+                    if ($wasUndone) {
+                        $order->deductStockForRedispatch();
+                    }
+
                     if (!$preventStatusUpdate && $order->status !== 'pending') {
                         $order->update(['status' => 'dispatched']);
                         $order->statusHistory()->create([
                             'status' => 'dispatched',
                             'changed_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? 1),
-                            'notes' => 'Driver assigned and dispatched',
+                            'notes' => $wasUndone ? 'Driver assigned and re-dispatched after undone delivery' : 'Driver assigned and dispatched',
                         ]);
                     }
                     
@@ -311,5 +316,75 @@ class DeliveryController extends Controller
         }
 
         return $this->success($delivery, 'Tracking location updated successfully');
+    }
+
+    public function undone(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'undone_reason' => 'required|string',
+            'return_sales_store_id' => 'required|string|exists:sales_stores,id',
+        ]);
+
+        $delivery = Delivery::findOrFail($id);
+
+        if ($delivery->status !== 'in_transit') {
+            return $this->error('Only in transit deliveries can be marked as undone.', 422);
+        }
+
+        return DB::transaction(function () use ($delivery, $validated) {
+            $reason = $validated['undone_reason'];
+            $returnSalesStoreId = $validated['return_sales_store_id'];
+
+            // Traffic and late dispatch are exempted from penalties
+            $isPenalized = !in_array($reason, ['traffic', 'late_dispatch']);
+
+            $delivery->update([
+                'status' => 'undone',
+                'undone_reason' => $reason,
+                'undone_at' => now(),
+                'undone_by' => auth()->id() ?? \App\Models\User::first()->id,
+                'return_sales_store_id' => $returnSalesStoreId,
+                'is_penalized' => $isPenalized,
+            ]);
+
+            $order = $delivery->order;
+            $order->update(['status' => 'undone']);
+            
+            $order->statusHistory()->create([
+                'status' => 'undone',
+                'changed_by' => auth()->id() ?? \App\Models\User::first()->id,
+                'notes' => 'Delivery marked as undone. Reason: ' . str_replace('_', ' ', $reason),
+            ]);
+
+            // Return stock to the selected sales store
+            $userId = auth()->id() ?? 1;
+            foreach ($order->items as $item) {
+                $stock = \App\Models\SalesStoreStock::firstOrCreate(
+                    [
+                        'sales_store_id' => $returnSalesStoreId,
+                        'product_id' => $item->product_id,
+                        'batch_reference' => $item->batch_reference,
+                    ],
+                    ['current_quantity' => 0, 'updated_by' => $userId]
+                );
+
+                $stock->increment('current_quantity', $item->quantity);
+                $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+
+                \App\Models\SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
+                    'sales_store_id' => $returnSalesStoreId,
+                    'product_id' => $item->product_id,
+                    'batch_reference' => $item->batch_reference,
+                    'movement_type' => 'return_in',
+                    'quantity' => $item->quantity,
+                    'reference_id' => $delivery->id,
+                    'created_by' => $userId,
+                    'notes' => "Returned from Undone Order: " . $order->order_number . " (Originally from " . ($order->salesStore?->code ?? 'MAIN') . ")",
+                ]);
+            }
+
+            return $this->success($delivery, 'Delivery successfully marked as undone and stock returned.');
+        });
     }
 }

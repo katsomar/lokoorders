@@ -123,7 +123,18 @@ class OrderController extends Controller
 
     public function show($id)
     {
-        $order = Order::with(['customer.zone', 'customer.parent', 'salesStore', 'items.product', 'invoice', 'deliveries.proofs', 'deliveries.driver', 'statusHistory.user'])->findOrFail($id);
+        $order = Order::with([
+            'customer.zone', 
+            'customer.parent', 
+            'salesStore', 
+            'items.product', 
+            'invoice', 
+            'deliveries.proofs', 
+            'deliveries.driver', 
+            'deliveries.returnSalesStore',
+            'deliveries.undoneBy',
+            'statusHistory.user'
+        ])->findOrFail($id);
         return $this->success($order);
     }
 
