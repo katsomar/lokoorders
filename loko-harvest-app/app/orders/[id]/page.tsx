@@ -491,7 +491,7 @@ export default function OrderDetailPage() {
                             <div>
                               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Delivered By (Driver)</p>
                               <p className="text-xs font-bold text-gray-800 mt-0.5">
-                                {deliveryWithProof?.driver?.name || "N/A"}
+                                {deliveryWithProof?.driver?.full_name || deliveryWithProof?.driver?.name || "N/A"}
                               </p>
                               {deliveryWithProof?.delivered_at && (
                                 <p className="text-[10px] text-gray-400 font-bold mt-0.5 uppercase tracking-wide">

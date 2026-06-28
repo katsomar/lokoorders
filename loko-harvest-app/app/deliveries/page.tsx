@@ -1421,29 +1421,53 @@ export default function DeliveriesPage() {
               <form onSubmit={handleAssignDelivery} className="p-6 space-y-5">
                 <div className="space-y-4">
                   {/* Select Order */}
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Pending Order *</label>
-                    {assignableOrders.length === 0 ? (
-                      <div className="text-xs text-red-500 font-bold py-2.5 bg-red-50/50 border border-red-100 rounded-xl px-3 flex items-center gap-1.5">
-                        <AlertTriangle size={14} />
-                        No pending orders available for dispatch.
+                  {selectedOrderId ? (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Selected Order</label>
+                      <div className="bg-brand-sage/10 text-brand-forest font-bold text-xs px-3.5 py-2.5 rounded-xl border border-brand-sage/30 flex items-center justify-between">
+                        <span>{assignableOrders.find(o => o.id === selectedOrderId)?.order_number || "Selected Order"}</span>
+                        <span className="text-[10px] text-gray-500 font-medium truncate max-w-[200px]">
+                          {assignableOrders.find(o => o.id === selectedOrderId)?.customer?.name}
+                        </span>
                       </div>
-                    ) : (
-                      <select
-                        required
-                        value={selectedOrderId}
-                        onChange={(e) => setSelectedOrderId(e.target.value)}
-                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      >
-                        <option value="">-- Choose Order --</option>
-                        {assignableOrders.map(o => (
-                          <option key={o.id} value={o.id}>
-                            {o.order_number} - {o.customer?.name || "Client"}
-                          </option>
+                    </div>
+                  ) : selectedOrderIds.length > 0 ? (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Selected Orders ({selectedOrderIds.length})</label>
+                      <div className="max-h-36 overflow-y-auto space-y-2 border border-brand-sage/40 rounded-xl p-3 bg-gray-50/50">
+                        {assignableOrders.filter(o => selectedOrderIds.includes(o.id)).map(o => (
+                          <div key={o.id} className="flex justify-between items-center text-xs bg-white p-2.5 rounded-lg border border-brand-sage/20 shadow-sm">
+                            <span className="font-extrabold text-brand-forest">{o.order_number}</span>
+                            <span className="text-[10px] text-gray-500 font-medium truncate max-w-[200px]">{o.customer?.name}</span>
+                          </div>
                         ))}
-                      </select>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Select Pending Order *</label>
+                      {assignableOrders.length === 0 ? (
+                        <div className="text-xs text-red-500 font-bold py-2.5 bg-red-50/50 border border-red-100 rounded-xl px-3 flex items-center gap-1.5">
+                          <AlertTriangle size={14} />
+                          No pending orders available for dispatch.
+                        </div>
+                      ) : (
+                        <select
+                          required
+                          value={selectedOrderId}
+                          onChange={(e) => setSelectedOrderId(e.target.value)}
+                          className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                        >
+                          <option value="">-- Choose Order --</option>
+                          {assignableOrders.map(o => (
+                            <option key={o.id} value={o.id}>
+                              {o.order_number} - {o.customer?.name || "Client"}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
 
                   {/* Select Driver */}
                   <div>
@@ -1475,7 +1499,7 @@ export default function DeliveriesPage() {
                   </Button>
                   <Button 
                     type="submit" 
-                    disabled={isAssigning || assignableOrders.length === 0}
+                    disabled={isAssigning || (!selectedOrderId && selectedOrderIds.length === 0)}
                     className="bg-brand-forest hover:bg-brand-forest/90 text-white text-xs font-bold rounded-xl h-10 px-4 cursor-pointer flex items-center gap-1.5"
                   >
                     {isAssigning && <Loader2 className="animate-spin" size={13} />}
