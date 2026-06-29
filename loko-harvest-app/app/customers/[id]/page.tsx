@@ -967,6 +967,7 @@ export default function CustomerDetailPage() {
                         <TableRow>
                           <TableHead className="text-xs font-bold text-brand-forest pl-6">Date</TableHead>
                           <TableHead className="text-xs font-bold text-brand-forest">Ref / Invoice</TableHead>
+                          <TableHead className="text-xs font-bold text-brand-forest">FDN</TableHead>
                           {customer.isParent && <TableHead className="text-xs font-bold text-brand-forest">Branch</TableHead>}
                           <TableHead className="text-xs font-bold text-brand-forest">Description</TableHead>
                           <TableHead className="text-xs font-bold text-brand-forest">Ledger Entry Type</TableHead>
@@ -981,7 +982,7 @@ export default function CustomerDetailPage() {
                       <TableBody>
                         {isLedgerLoading ? (
                           <TableRow>
-                            <TableCell colSpan={customer.isParent ? 11 : 10} className="text-center py-12">
+                            <TableCell colSpan={customer.isParent ? 12 : 11} className="text-center py-12">
                               <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500 font-bold">
                                 <Loader2 className="animate-spin text-brand-forest" size={16} />
                                 Loading transaction ledger history...
@@ -990,7 +991,7 @@ export default function CustomerDetailPage() {
                           </TableRow>
                         ) : displayLedger.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={customer.isParent ? 11 : 10} className="text-center py-12 text-gray-500 font-body text-xs">
+                            <TableCell colSpan={customer.isParent ? 12 : 11} className="text-center py-12 text-gray-500 font-body text-xs">
                               No transaction logs found.
                             </TableCell>
                           </TableRow>
@@ -1000,11 +1001,9 @@ export default function CustomerDetailPage() {
                               <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
                               <TableCell className="text-xs">
                                 <div className="font-mono font-bold text-brand-forest">{tx.ref}</div>
-                                {tx.fdn && (
-                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5" title="Fiscal Document Number">
-                                    FDN: {tx.fdn}
-                                  </div>
-                                )}
+                              </TableCell>
+                              <TableCell className="text-xs font-mono font-bold text-gray-700">
+                                {tx.fdn || "—"}
                               </TableCell>
                               {customer.isParent && (
                                 <TableCell>

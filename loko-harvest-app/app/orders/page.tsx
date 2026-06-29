@@ -377,6 +377,7 @@ export default function OrdersPage() {
               <TableHeader className="bg-gray-50/70 border-b border-brand-sage/30">
                 <TableRow>
                   <TableHead className="text-xs font-bold text-brand-forest pl-6">Order #</TableHead>
+                  <TableHead className="text-xs font-bold text-brand-forest">FDN</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Customer Details</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Fulfillment Store</TableHead>
                   <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
@@ -391,7 +392,7 @@ export default function OrdersPage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12">
+                    <TableCell colSpan={11} className="text-center py-12">
                       <div className="flex flex-col items-center justify-center gap-2 text-xs text-gray-500 font-bold">
                         <Loader2 className="animate-spin text-brand-forest" size={24} />
                         Loading orders pipeline...
@@ -400,7 +401,7 @@ export default function OrdersPage() {
                   </TableRow>
                 ) : orders.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-gray-500 font-body text-xs">
+                    <TableCell colSpan={11} className="text-center py-12 text-gray-500 font-body text-xs">
                       No orders found matching the filter criteria.
                     </TableCell>
                   </TableRow>
@@ -438,11 +439,9 @@ export default function OrdersPage() {
                               )}
                             </div>
                           </div>
-                          {order.fiscal_document_number && (
-                            <p className="text-[10px] text-gray-500 font-mono mt-0.5" title="Fiscal Document Number">
-                              FDN: {order.fiscal_document_number}
-                            </p>
-                          )}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs font-bold text-gray-700">
+                          {order.fiscal_document_number || "—"}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">
