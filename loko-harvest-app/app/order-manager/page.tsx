@@ -41,7 +41,7 @@ export default function OrderManagerDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "alerts">("orders");
-  const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "all">("pending");
+  const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -421,6 +421,7 @@ export default function OrderManagerDashboard() {
       case "ready_for_dispatch": return <Badge className="bg-purple-100 text-purple-700 border-none font-bold text-[9px] uppercase">Ready for Dispatch</Badge>;
       case "dispatched": return <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold text-[9px] uppercase">Dispatched</Badge>;
       case "delivered": return <Badge className="bg-green-600 text-white border-none font-bold text-[9px] uppercase">Delivered</Badge>;
+      case "undone": return <Badge className="bg-red-100 text-red-700 border border-red-200 font-bold text-[9px] uppercase">Undone Claim</Badge>;
       default: return <Badge className="bg-gray-100 text-gray-500 border-none font-bold text-[9px] uppercase">{status}</Badge>;
     }
   };
@@ -540,7 +541,7 @@ export default function OrderManagerDashboard() {
 
                 {/* Sub-tabs Filters */}
                 <div className="flex flex-wrap bg-brand-sage/10 p-1 rounded-xl border border-brand-sage/20 gap-0.5">
-                  {(["pending", "processing", "ready_for_dispatch", "dispatched", "all"] as const).map(tab => (
+                  {(["pending", "processing", "ready_for_dispatch", "dispatched", "undone", "all"] as const).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setOrderFilter(tab)}
@@ -703,7 +704,7 @@ export default function OrderManagerDashboard() {
                               )}
                             </div>
                           );
-                        } else if (["pending", "processing", "ready_for_dispatch"].includes(order.status)) {
+                        } else if (["pending", "processing", "ready_for_dispatch", "undone"].includes(order.status)) {
                           return (
                             <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
                               <span className="text-gray-400 font-semibold italic">No driver assigned</span>
@@ -764,6 +765,22 @@ export default function OrderManagerDashboard() {
                           >
                             <Truck size={14} />
                             Set Off (Dispatched)
+                          </button>
+                        )}
+
+                        {order.status === "undone" && (
+                          <button
+                            onClick={() => {
+                              setDriverModalOrder(order);
+                              setDriverModalOrders([]);
+                              setSelectedDriverIdForAssign("");
+                              setIsDriverModalForDispatch(false);
+                              setShowDriverModal(true);
+                            }}
+                            className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                          >
+                            <Truck size={14} />
+                            Re-dispatch Order
                           </button>
                         )}
                       </div>

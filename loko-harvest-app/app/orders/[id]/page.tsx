@@ -311,6 +311,13 @@ export default function OrderDetailPage() {
     }
   };
 
+  const returnVouchers = order?.return_vouchers || [];
+  const physicalReplacements = returnVouchers.filter((v: any) => v.return_type === 'physical_replacement');
+  const totalReplacementValue = physicalReplacements.reduce(
+    (sum: number, v: any) => sum + (parseFloat(v.replacement_quantity) * parseFloat(v.unit_price)),
+    0
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
@@ -397,6 +404,52 @@ export default function OrderDetailPage() {
             )}
           </div>
         </div>
+
+        {/* Missed Deadline Alert Box */}
+        {(() => {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const isMissed = (order.status || "").toLowerCase() !== "delivered" && order.required_delivery_date && order.required_delivery_date.split(' ')[0] < todayStr;
+          if (isMissed) {
+            return (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+                <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <h4 className="text-xs font-black text-red-950 uppercase tracking-wider">Missed Delivery Deadline Warning</h4>
+                  <p className="text-xs text-red-700 font-semibold mt-1">
+                    This order was expected for delivery on {format(new Date(order.required_delivery_date), "EEEE, dd MMMM yyyy")} but is currently marked as {order.status.replace(/_/g, ' ')}. Please follow up with the logistics manager or assigned driver immediately.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
+        {/* Active Undone Claim Alert Box */}
+        {order.deliveries?.some((d: any) => d.status === 'undone') && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+            <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+            <div>
+              <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">Active Undone Delivery Claim</h4>
+              <p className="text-xs text-amber-700 font-semibold mt-1">
+                A driver has declared this order undone/incomplete. The goods have been returned to inventory at the specified sales store. Please review the Undone Claims history below and click "Re-dispatch Order" to select a new driver if needed.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Returns Recorded Alert Box */}
+        {returnVouchers.length > 0 && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+            <FileCheck2 className="text-blue-500 shrink-0 mt-0.5" size={18} />
+            <div>
+              <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider">Returns and Replacements Registered</h4>
+              <p className="text-xs text-blue-700 font-semibold mt-1">
+                This order has {returnVouchers.length} return voucher(s) logged. Out of these, {physicalReplacements.length} are physical replacements. A total of UGX {totalReplacementValue.toLocaleString()} worth of replacements has been delivered to this customer.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
@@ -796,10 +849,81 @@ export default function OrderDetailPage() {
                         UGX {parseFloat(order.total_amount).toLocaleString()}
                       </TableCell>
                     </TableRow>
+                    {totalReplacementValue > 0 && (
+                      <TableRow className="hover:bg-transparent bg-blue-50/35 border-t border-blue-200">
+                        <TableCell colSpan={2} />
+                        <TableCell className="text-right text-xs font-extrabold text-blue-900 uppercase tracking-wider">Replacements Given</TableCell>
+                        <TableCell className="text-right text-sm font-black text-blue-900 font-heading pr-6">
+                          UGX {totalReplacementValue.toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
+
+            {/* Returns & Replacements Registry Card */}
+            {returnVouchers.length > 0 && (
+              <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white mt-8">
+                <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                  <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                    Returns & Physical Replacements Registry
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
+                      <TableRow>
+                        <TableHead className="text-xs font-bold text-brand-forest pl-6">Returned Product</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Return Type</TableHead>
+                        <TableHead className="text-center text-xs font-bold text-brand-forest">Qty Returned</TableHead>
+                        <TableHead className="text-center text-xs font-bold text-brand-forest">Qty Replaced</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Replacement Source Store</TableHead>
+                        <TableHead className="text-xs font-bold text-brand-forest">Replacement Batch</TableHead>
+                        <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Replacement Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {returnVouchers.map((voucher: any) => {
+                        const replacedQty = parseFloat(voucher.replacement_quantity) || 0;
+                        const val = replacedQty * parseFloat(voucher.unit_price);
+                        return (
+                          <TableRow key={voucher.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0 text-xs">
+                            <TableCell className="pl-6 py-4 font-semibold text-gray-800">
+                              {voucher.product?.name || "Product"}
+                              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono mt-1">
+                                {voucher.voucher_number} • Returned: {voucher.return_date}
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-bold text-gray-600">
+                              {voucher.return_type === 'physical_replacement' ? 'Physical Replacement' : 'Account Credit'}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-gray-800">
+                              {parseFloat(voucher.quantity).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-center font-bold text-gray-800">
+                              {replacedQty.toLocaleString()}
+                            </TableCell>
+                            <TableCell className="font-semibold text-gray-600">
+                              {voucher.replacement_sales_store?.name 
+                                ? `${voucher.replacement_sales_store.name} (${voucher.replacement_sales_store.code})`
+                                : voucher.return_type === 'physical_replacement' ? 'Pending' : 'N/A'}
+                            </TableCell>
+                            <TableCell className="font-mono text-gray-600">
+                              {voucher.replacement_batch_reference || (voucher.return_type === 'physical_replacement' ? 'Pending' : 'N/A')}
+                            </TableCell>
+                            <TableCell className="text-right font-extrabold text-blue-900 pr-6">
+                              UGX {val.toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           <div className="space-y-8">

@@ -590,6 +590,18 @@ export default function DeliveryConfirmationPage() {
     }));
   };
 
+  const handleReplacementFieldChange = (voucherId: string, field: string, val: string) => {
+    setPendingReplacements(prev => prev.map(item => {
+      if (item.id === voucherId) {
+        return {
+          ...item,
+          [field]: val
+        };
+      }
+      return item;
+    }));
+  };
+
   const handleSubmitReplacements = async () => {
     if (!replaceRepName.trim()) {
       alert("Please enter the name of the acknowledging client representative.");
@@ -600,11 +612,23 @@ export default function DeliveryConfirmationPage() {
       return;
     }
 
+    // Validate store & batch for all items with qty > 0
+    const invalidItem = pendingReplacements.find((item: any) => {
+      const qty = parseFloat(item.replacedToday) || 0;
+      return qty > 0 && (!item.salesStoreId || !item.batchRef?.trim());
+    });
+    if (invalidItem) {
+      alert("Please select a source store and enter a batch number for all replacement items being delivered.");
+      return;
+    }
+
     const replacementsToSubmit = pendingReplacements
       .filter((item: any) => parseFloat(item.replacedToday) > 0)
       .map((item: any) => ({
         return_voucher_id: item.id,
         replacement_quantity: parseFloat(item.replacedToday),
+        sales_store_id: item.salesStoreId,
+        batch_reference: item.batchRef
       }));
 
     if (replacementsToSubmit.length === 0) {
@@ -1609,9 +1633,41 @@ export default function DeliveryConfirmationPage() {
                             placeholder="0.00"
                             value={item.replacedToday}
                             onChange={(e) => handleReplacementQtyChange(item.id, e.target.value)}
-                            className="w-2/3 h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                            className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                           />
                         </div>
+
+                        {parseFloat(item.replacedToday) > 0 && (
+                          <div className="pt-2 grid grid-cols-2 gap-3 border-t border-brand-forest/10 mt-2">
+                            <div>
+                              <label className="text-[8px] text-gray-400 font-bold uppercase block mb-1">Source Store *</label>
+                              <select
+                                required
+                                value={item.salesStoreId || ""}
+                                onChange={(e) => handleReplacementFieldChange(item.id, 'salesStoreId', e.target.value)}
+                                className="w-full h-8 px-2 text-[10px] font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                              >
+                                <option value="">-- Choose Store --</option>
+                                {salesStoresList.map((store: any) => (
+                                  <option key={store.id} value={store.id}>
+                                    {store.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[8px] text-gray-400 font-bold uppercase block mb-1">Batch Number *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Batch Ref"
+                                value={item.batchRef || ""}
+                                onChange={(e) => handleReplacementFieldChange(item.id, 'batchRef', e.target.value)}
+                                className="w-full h-8 px-2 text-[10px] font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}

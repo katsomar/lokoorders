@@ -23,18 +23,27 @@ class OrderController extends Controller
         $totalDelivered = Order::where('status', 'delivered')->count();
         $totalUndelivered = Order::where('status', '!=', 'delivered')->count();
 
+        $totalReplacementValue = \App\Models\ReturnVoucher::where('return_type', 'physical_replacement')
+            ->selectRaw('SUM(replacement_quantity * unit_price) as total')
+            ->value('total') ?? 0;
+
+        $totalOrdersValue = Order::sum('total_amount');
+        $netExpectedValue = $totalOrdersValue - $totalReplacementValue;
+
         return $this->success([
             'totalUrgent' => $totalUrgent,
             'totalPending' => $totalPending,
             'totalDispatched' => $totalDispatched,
             'totalDelivered' => $totalDelivered,
             'totalUndelivered' => $totalUndelivered,
+            'totalReplacementValue' => (float)$totalReplacementValue,
+            'netExpectedValue' => (float)$netExpectedValue,
         ]);
     }
 
     public function index(Request $request)
     {
-        $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries.driver'])
+        $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries.driver', 'deliveries.returnSalesStore', 'returnVouchers'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('order_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {
@@ -80,7 +89,23 @@ class OrderController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            $orderNumber = 'LHO-' . date('Y') . '-' . str_pad(Order::whereYear('created_at', date('Y'))->count() + 1, 4, '0', STR_PAD_LEFT);
+            $year = date('Y');
+            $maxOrder = Order::whereYear('created_at', $year)
+                ->where('order_number', 'like', "LHO-{$year}-%")
+                ->orderBy('order_number', 'desc')
+                ->first();
+
+            $nextSequence = 1;
+            if ($maxOrder) {
+                $parts = explode('-', $maxOrder->order_number);
+                $lastSequence = (int)end($parts);
+                $nextSequence = $lastSequence + 1;
+            }
+
+            do {
+                $orderNumber = 'LHO-' . $year . '-' . str_pad($nextSequence, 4, '0', STR_PAD_LEFT);
+                $nextSequence++;
+            } while (Order::where('order_number', $orderNumber)->exists());
 
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -133,7 +158,9 @@ class OrderController extends Controller
             'deliveries.driver', 
             'deliveries.returnSalesStore',
             'deliveries.undoneBy',
-            'statusHistory.user'
+            'statusHistory.user',
+            'returnVouchers.product',
+            'returnVouchers.replacementSalesStore'
         ])->findOrFail($id);
         return $this->success($order);
     }

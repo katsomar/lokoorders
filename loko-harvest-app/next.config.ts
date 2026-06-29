@@ -12,7 +12,7 @@ const withPWA = withPWAInit({
 const nextConfig: NextConfig = {
   /* config options here */
   // @ts-ignore
-  allowedDevOrigins: ['192.168.100.51', '192.168.100.51:3000'],
+  allowedDevOrigins: ['192.168.100.51', '192.168.100.51:3000', '10.1.1.19', '10.1.1.19:3000'],
 };
 
 export default withPWA(nextConfig);

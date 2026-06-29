@@ -158,6 +158,8 @@ class ReturnVoucherController extends Controller
             'replacements' => 'required|array|min:1',
             'replacements.*.return_voucher_id' => 'required|uuid|exists:return_vouchers,id',
             'replacements.*.replacement_quantity' => 'required|numeric|min:0.01',
+            'replacements.*.sales_store_id' => 'required|uuid|exists:sales_stores,id',
+            'replacements.*.batch_reference' => 'required|string',
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
@@ -189,11 +191,38 @@ class ReturnVoucherController extends Controller
                 $replacing = min($item['replacement_quantity'], $remaining);
 
                 if ($replacing > 0) {
+                    // Deduct from Sales Store Stock
+                    $stock = \App\Models\SalesStoreStock::where('sales_store_id', $item['sales_store_id'])
+                        ->where('product_id', $voucher->product_id)
+                        ->where('batch_reference', $item['batch_reference'])
+                        ->first();
+
+                    if (!$stock || $stock->current_quantity < $replacing) {
+                        throw new \Exception("Insufficient stock in the selected sales store for product: " . ($voucher->product->name ?? 'Product') . " (Batch: " . $item['batch_reference'] . ")");
+                    }
+
+                    $stock->decrement('current_quantity', $replacing);
+
+                    // Create movement log for the deduction
+                    \App\Models\SalesStoreMovement::create([
+                        'sales_store_id' => $item['sales_store_id'],
+                        'product_id' => $voucher->product_id,
+                        'batch_reference' => $item['batch_reference'],
+                        'quantity' => $replacing,
+                        'movement_type' => 'dispatch_out',
+                        'movement_date' => now()->toDateString(),
+                        'reference_id' => $voucher->id,
+                        'notes' => 'Replacement for return voucher ' . $voucher->voucher_number,
+                        'created_by' => auth()->id() ?? User::first()?->id ?? $voucher->created_by,
+                    ]);
+
                     $voucher->increment('replacement_quantity', $replacing);
                     $voucher->update([
                         'date_replaced' => now()->toDateString(),
                         'acknowledged_by' => $validated['acknowledged_by'],
                         'signature_path' => $signaturePath,
+                        'replacement_sales_store_id' => $item['sales_store_id'],
+                        'replacement_batch_reference' => $item['batch_reference'],
                     ]);
                 }
                 

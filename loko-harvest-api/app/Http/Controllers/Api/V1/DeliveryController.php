@@ -82,7 +82,7 @@ class DeliveryController extends Controller
                         $order->deductStockForRedispatch();
                     }
 
-                    if (!$preventStatusUpdate && $order->status !== 'pending') {
+                    if ((!$preventStatusUpdate || $wasUndone) && $order->status !== 'pending') {
                         $order->update(['status' => 'dispatched']);
                         $order->statusHistory()->create([
                             'status' => 'dispatched',

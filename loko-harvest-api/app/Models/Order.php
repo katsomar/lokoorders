@@ -34,6 +34,11 @@ class Order extends Model
         return $this->hasMany(Delivery::class);
     }
 
+    public function returnVouchers()
+    {
+        return $this->hasMany(ReturnVoucher::class);
+    }
+
     public function statusHistory()
     {
         return $this->hasMany(OrderStatusHistory::class);

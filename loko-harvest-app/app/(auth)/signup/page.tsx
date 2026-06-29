@@ -150,210 +150,139 @@ export default function SignupPage() {
         </div>
 
         <div className="my-auto mx-auto w-full max-w-lg py-8">
-          {mounted ? (
-            <AnimatePresence mode="wait">
-              {!isSuccess ? (
-                <motion.div
-                  key="signup-form"
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -15 }}
-                  transition={{ duration: 0.3 }}
-                  className="space-y-6"
-                >
-                  <div className="space-y-1">
-                    <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Staff Account</h2>
-                    <p className="text-sm text-gray-500 font-medium leading-relaxed">
-                      Submit your registration details below. All signup requests require manual authorization from an existing admin before login.
-                    </p>
-                  </div>
+          <AnimatePresence mode="wait">
+            {!isSuccess ? (
+              <motion.div
+                key="signup-form"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -15 }}
+                transition={{ duration: 0.3 }}
+                className="space-y-6"
+              >
+                <div className="space-y-1">
+                  <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Staff Account</h2>
+                  <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                    Submit your registration details below. All signup requests require manual authorization from an existing admin before login.
+                  </p>
+                </div>
 
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    {error && (
-                      <div className="rounded-xl bg-red-50 p-3.5 text-xs text-red-600 border border-red-100 font-bold animate-pulse-gentle">
-                        {error}
-                      </div>
-                    )}
-                    
-                    <div className="space-y-3.5">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                  {error && (
+                    <div className="rounded-xl bg-red-50 p-3.5 text-xs text-red-600 border border-red-100 font-bold animate-pulse-gentle">
+                      {error}
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3.5">
+                    <Input
+                      label="Full Name"
+                      placeholder="Omar Muammar"
+                      {...register("name")}
+                      error={errors.name?.message}
+                      required
+                      className="h-11 text-sm rounded-xl"
+                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <Input
-                        label="Full Name"
-                        placeholder="Omar Muammar"
-                        {...register("name")}
-                        error={errors.name?.message}
+                        label="Email Address"
+                        type="email"
+                        placeholder="name@company.com"
+                        {...register("email")}
+                        error={errors.email?.message}
                         required
                         className="h-11 text-sm rounded-xl"
                       />
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <Input
-                          label="Email Address"
-                          type="email"
-                          placeholder="name@company.com"
-                          {...register("email")}
-                          error={errors.email?.message}
-                          required
-                          className="h-11 text-sm rounded-xl"
-                        />
-
-                        <Input
-                          label="Phone Number"
-                          type="tel"
-                          placeholder="e.g., 0712345678"
-                          {...register("phone")}
-                          error={errors.phone?.message}
-                          required
-                          className="h-11 text-sm rounded-xl"
-                        />
-                      </div>
-
-                      <Select
-                        label="Desired Operational Role"
-                        options={[
-                          { label: "System Administrator", value: "admin" },
-                          { label: "Order Manager", value: "order_manager" },
-                        ]}
-                        {...register("role")}
-                        error={errors.role?.message}
+                      <Input
+                        label="Phone Number"
+                        type="tel"
+                        placeholder="e.g., 0712345678"
+                        {...register("phone")}
+                        error={errors.phone?.message}
                         required
                         className="h-11 text-sm rounded-xl"
                       />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        <Input
-                          label="Password"
-                          type="password"
-                          placeholder="••••••••"
-                          {...register("password")}
-                          error={errors.password?.message}
-                          required
-                          className="h-11 text-sm rounded-xl"
-                        />
-
-                        <Input
-                          label="Confirm Password"
-                          type="password"
-                          placeholder="••••••••"
-                          {...register("password_confirmation")}
-                          error={errors.password_confirmation?.message}
-                          required
-                          className="h-11 text-sm rounded-xl"
-                        />
-                      </div>
                     </div>
 
-                    <Button 
-                      type="submit" 
-                      className="w-full font-bold text-sm rounded-xl h-11.5 cursor-pointer mt-2" 
-                      isLoading={isLoading}
-                    >
-                      Submit Request
-                    </Button>
-                  </form>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="signup-success"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                  className="text-center space-y-6 py-4 flex flex-col items-center"
-                >
-                  <div className="h-14 w-14 rounded-full bg-green-50 flex items-center justify-center text-green-600 border border-green-100 shadow-inner">
-                    <CheckCircle2 size={32} />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="text-xl font-bold text-brand-forest font-heading">Request Submitted!</h3>
-                    <p className="text-xs text-gray-500 max-w-sm leading-relaxed font-medium mx-auto">
-                      Your staff account has been registered successfully and is now **pending approval**.
-                    </p>
-                    <div className="bg-brand-sage/35 border border-brand-sage/50 p-3 rounded-xl mt-3 max-w-sm mx-auto">
-                      <p className="text-[11px] text-brand-forest font-semibold leading-relaxed">
-                        An existing system administrator must approve your account request before you can log in.
-                      </p>
+                    <Select
+                      label="Desired Operational Role"
+                      options={[
+                        { label: "System Administrator", value: "admin" },
+                        { label: "Order Manager", value: "order_manager" },
+                      ]}
+                      {...register("role")}
+                      error={errors.role?.message}
+                      required
+                      className="h-11 text-sm rounded-xl"
+                    />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <Input
+                        label="Password"
+                        type="password"
+                        placeholder="••••••••"
+                        {...register("password")}
+                        error={errors.password?.message}
+                        required
+                        className="h-11 text-sm rounded-xl"
+                      />
+
+                      <Input
+                        label="Confirm Password"
+                        type="password"
+                        placeholder="••••••••"
+                        {...register("password_confirmation")}
+                        error={errors.password_confirmation?.message}
+                        required
+                        className="h-11 text-sm rounded-xl"
+                      />
                     </div>
                   </div>
 
                   <Button 
-                    onClick={() => router.push("/login")} 
-                    className="w-full max-w-xs font-bold text-xs rounded-xl h-10.5 cursor-pointer"
+                    type="submit" 
+                    className="w-full font-bold text-sm rounded-xl h-11.5 cursor-pointer mt-2" 
+                    isLoading={isLoading}
                   >
-                    Return to Login
+                    Submit Request
                   </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          ) : (
-            <div className="space-y-6 opacity-0">
-              <div className="space-y-1">
-                <h2 className="text-3xl font-black font-heading text-brand-forest tracking-tight">Create Admin Request</h2>
-                <p className="text-sm text-gray-500 font-medium leading-relaxed">
-                  Submit your registration details below. All signup requests require manual authorization from an existing admin before login.
-                </p>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-3.5">
-                  <Input
-                    label="Full Name"
-                    placeholder="Omar Muammar"
-                    required
-                    className="h-11 text-sm rounded-xl"
-                    disabled
-                  />
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <Input
-                      label="Email Address"
-                      type="email"
-                      placeholder="name@company.com"
-                      required
-                      className="h-11 text-sm rounded-xl"
-                      disabled
-                    />
-
-                    <Input
-                      label="Phone Number"
-                      type="tel"
-                      placeholder="e.g., 0712345678"
-                      required
-                      className="h-11 text-sm rounded-xl"
-                      disabled
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <Input
-                      label="Password"
-                      type="password"
-                      placeholder="••••••••"
-                      required
-                      className="h-11 text-sm rounded-xl"
-                      disabled
-                    />
-
-                    <Input
-                      label="Confirm Password"
-                      type="password"
-                      placeholder="••••••••"
-                      required
-                      className="h-11 text-sm rounded-xl"
-                      disabled
-                    />
+                </form>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="signup-success"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="text-center space-y-6 py-4 flex flex-col items-center"
+              >
+                <div className="h-14 w-14 rounded-full bg-green-50 flex items-center justify-center text-green-600 border border-green-100 shadow-inner">
+                  <CheckCircle2 size={32} />
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-brand-forest font-heading">Request Submitted!</h3>
+                  <p className="text-xs text-gray-500 max-w-sm leading-relaxed font-medium mx-auto">
+                    Your staff account has been registered successfully and is now **pending approval**.
+                  </p>
+                  <div className="bg-brand-sage/35 border border-brand-sage/50 p-3 rounded-xl mt-3 max-w-sm mx-auto">
+                    <p className="text-[11px] text-brand-forest font-semibold leading-relaxed">
+                      An existing system administrator must approve your account request before you can log in.
+                    </p>
                   </div>
                 </div>
 
                 <Button 
-                  type="button" 
-                  className="w-full font-bold text-sm rounded-xl h-11.5 mt-2" 
-                  disabled
+                  onClick={() => router.push("/login")} 
+                  className="w-full max-w-xs font-bold text-xs rounded-xl h-10.5 cursor-pointer"
                 >
-                  Submit Request
+                  Return to Login
                 </Button>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="text-center text-[10px] text-gray-400 font-medium lg:hidden mt-6 pb-4">

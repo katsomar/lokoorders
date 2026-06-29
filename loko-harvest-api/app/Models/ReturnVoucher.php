@@ -33,4 +33,9 @@ class ReturnVoucher extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function replacementSalesStore()
+    {
+        return $this->belongsTo(SalesStore::class, 'replacement_sales_store_id');
+    }
 }

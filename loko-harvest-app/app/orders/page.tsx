@@ -45,7 +45,9 @@ export default function OrdersPage() {
     totalPending: 0,
     totalDispatched: 0,
     totalDelivered: 0,
-    totalUndelivered: 0
+    totalUndelivered: 0,
+    totalReplacementValue: 0,
+    netExpectedValue: 0
   });
 
   // Debounce search term to prevent duplicate API hits
@@ -95,6 +97,8 @@ export default function OrdersPage() {
           totalDispatched: data.totalDispatched || 0,
           totalDelivered: data.totalDelivered || 0,
           totalUndelivered: data.totalUndelivered || 0,
+          totalReplacementValue: data.totalReplacementValue || 0,
+          netExpectedValue: data.netExpectedValue || 0
         });
       }
     } catch (err) {
@@ -214,7 +218,7 @@ export default function OrdersPage() {
         </div>
 
         {/* Dynamic Orders Summary Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           
           {/* Card 1: Urgent / Critical */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
@@ -265,7 +269,7 @@ export default function OrdersPage() {
           </div>
 
           {/* Card 5: Total Undelivered */}
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200 col-span-2 lg:col-span-1">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-brand-sage/40 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Undelivered Pipeline</span>
               <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
@@ -273,6 +277,22 @@ export default function OrdersPage() {
             <div className="mt-3">
               <h3 className="text-2xl font-black text-brand-forest font-heading leading-none">{metrics.totalUndelivered}</h3>
               <p className="text-[10px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">Active Operations</p>
+            </div>
+          </div>
+
+          {/* Card 6: Expected Value (Adjusted) */}
+          <div className="bg-brand-yellow/10 p-4 rounded-xl shadow-sm border border-brand-yellow/30 flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-brand-forest font-bold uppercase tracking-wider">Net Expected Value</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-brand-forest" />
+            </div>
+            <div className="mt-3">
+              <h3 className="text-[13px] font-black text-brand-forest font-heading leading-none">
+                UGX {metrics.netExpectedValue.toLocaleString()}
+              </h3>
+              <p className="text-[8px] text-gray-500 font-bold mt-1.5 uppercase tracking-tight">
+                Replacements: -UGX {metrics.totalReplacementValue.toLocaleString()}
+              </p>
             </div>
           </div>
 
@@ -333,6 +353,23 @@ export default function OrdersPage() {
           </div>
         </div>
 
+        {/* Legend Key */}
+        <div className="flex flex-wrap items-center gap-6 bg-white px-5 py-3 rounded-xl border border-brand-sage/40 shadow-sm text-xs font-bold text-gray-600">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider">Indicator Legend:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse inline-block" />
+            <span>Missed Deadline / Undone Attempt</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 inline-block" />
+            <span>Returns Recorded</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-500 inline-block" />
+            <span>Replacements Delivered</span>
+          </div>
+        </div>
+
         {/* Improved Orders Table */}
         <div className="bg-white rounded-xl shadow-sm border border-brand-sage/40 overflow-hidden min-h-[200px] flex flex-col justify-between">
           <div className="overflow-x-auto">
@@ -381,15 +418,25 @@ export default function OrdersPage() {
                     const todayStr = new Date().toISOString().split('T')[0];
                     const isMissed = (order.status || "").toLowerCase() !== "delivered" && order.required_delivery_date && order.required_delivery_date.split(' ')[0] < todayStr;
                     const hasIssues = hasUndone || isMissed;
+                    const hasReturns = Array.isArray(order.return_vouchers) && order.return_vouchers.length > 0;
+                    const hasReplacements = Array.isArray(order.return_vouchers) && order.return_vouchers.some((v: any) => parseFloat(v.replacement_quantity) > 0);
 
                     return (
                       <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
                         <TableCell className="pl-6 font-mono text-xs font-bold text-brand-forest">
                           <div className="flex items-center gap-1.5">
                             {order.order_number}
-                            {hasIssues && (
-                              <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse inline-block" title="Order has issues (missed deadline or undone delivery attempt)" />
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {hasIssues && (
+                                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse inline-block" title="Order has issues (missed deadline or undone delivery attempt)" />
+                              )}
+                              {hasReturns && (
+                                <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" title="Order has return items recorded" />
+                              )}
+                              {hasReplacements && (
+                                <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" title="Order has physical replacements delivered" />
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell>

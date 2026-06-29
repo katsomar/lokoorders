@@ -378,6 +378,16 @@ class ReturnVoucherTest extends TestCase
 
     public function test_can_deliver_replacements_for_pending_vouchers()
     {
+        $store = $this->order->salesStore;
+
+        \App\Models\SalesStoreStock::create([
+            'sales_store_id' => $store->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'B-EG-25',
+            'current_quantity' => 10.00,
+            'updated_by' => $this->user->id,
+        ]);
+
         $voucher = ReturnVoucher::create([
             'voucher_number' => 'LHRV-2026-0001',
             'customer_id' => $this->customer->id,
@@ -404,6 +414,8 @@ class ReturnVoucherTest extends TestCase
                     [
                         'return_voucher_id' => $voucher->id,
                         'replacement_quantity' => 2,
+                        'sales_store_id' => $store->id,
+                        'batch_reference' => 'B-EG-25',
                     ]
                 ]
             ]);
@@ -413,6 +425,24 @@ class ReturnVoucherTest extends TestCase
 
         $this->assertEquals(4, $voucher->fresh()->replacement_quantity);
         $this->assertEquals('Sarah Acknowledged', $voucher->fresh()->acknowledged_by);
+        $this->assertEquals($store->id, $voucher->fresh()->replacement_sales_store_id);
+        $this->assertEquals('B-EG-25', $voucher->fresh()->replacement_batch_reference);
         $this->assertNotNull($voucher->fresh()->signature_path);
+
+        // Verify inventory deduction
+        $this->assertEquals(8.00, \App\Models\SalesStoreStock::where('sales_store_id', $store->id)
+            ->where('product_id', $this->product->id)
+            ->where('batch_reference', 'B-EG-25')
+            ->value('current_quantity'));
+
+        // Verify movement log
+        $this->assertDatabaseHas('sales_store_movements', [
+            'sales_store_id' => $store->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'B-EG-25',
+            'quantity' => 2.00,
+            'movement_type' => 'dispatch_out',
+            'reference_id' => $voucher->id,
+        ]);
     }
 }

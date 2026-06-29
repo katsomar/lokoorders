@@ -62,7 +62,7 @@ export default function DeliveriesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedTab, setSelectedTab] = useState("registry"); // "registry", "dispatch", "fleet"
+  const [selectedTab, setSelectedTab] = useState<"registry" | "dispatch" | "undone" | "fleet">("registry");
   const [dispatchSubtab, setDispatchSubtab] = useState<"new" | "missed">("new");
   
   const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
@@ -123,7 +123,7 @@ export default function DeliveriesPage() {
       const [deliveriesRes, driversRes, ordersRes, vehiclesRes] = await Promise.all([
         api.get("/deliveries"),
         api.get("/drivers"),
-        api.get("/orders", { params: { status: "pending,processing,ready_for_dispatch", per_page: 100 } }),
+        api.get("/orders", { params: { status: "pending,processing,ready_for_dispatch,undone", per_page: 100 } }),
         api.get("/vehicles")
       ]);
       
@@ -520,6 +520,21 @@ export default function DeliveriesPage() {
             {metrics.pendingAssign > 0 && (
               <span className="bg-brand-yellow text-brand-forest px-2 py-0.2 text-[10px] font-black rounded-full">
                 {metrics.pendingAssign}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setSelectedTab("undone")}
+            className={`pb-3 text-xs font-bold transition-all border-b-2 uppercase tracking-wider cursor-pointer flex items-center gap-1.5 ${
+              selectedTab === "undone" 
+                ? "border-brand-forest text-brand-forest" 
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Undone Claims
+            {Array.isArray(orders) && orders.filter((o: any) => o.status === "undone").length > 0 && (
+              <span className="bg-red-500 text-white px-2 py-0.2 text-[10px] font-black rounded-full">
+                {orders.filter((o: any) => o.status === "undone").length}
               </span>
             )}
           </button>
@@ -1002,6 +1017,86 @@ export default function DeliveriesPage() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* 4. UNDONE CLAIMS WORKSPACE */}
+            {selectedTab === "undone" && (
+              (() => {
+                const undoneOrders = Array.isArray(orders) ? orders.filter((o: any) => o.status === "undone") : [];
+                if (undoneOrders.length === 0) {
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm border border-brand-sage/30 p-16 text-center text-gray-500 font-medium text-xs">
+                      No orders with active undone claims awaiting re-dispatch.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-white rounded-2xl border border-brand-sage/30 overflow-hidden shadow-sm">
+                    <Table>
+                      <TableHeader className="bg-red-50/50">
+                        <TableRow>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4 pl-6">Order Ref</TableHead>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4">Customer Details</TableHead>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4">Return Location</TableHead>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4">Last Driver</TableHead>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4">Undone Reason</TableHead>
+                          <TableHead className="font-extrabold text-red-950 text-xs py-4">Claimed Time</TableHead>
+                          <TableHead className="text-right font-extrabold text-red-950 text-xs py-4 pr-6">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {undoneOrders.map((order: any) => {
+                          const lastUndoneDelivery = order.deliveries
+                            ?.filter((d: any) => d.status === "undone")
+                            .sort((a: any, b: any) => new Date(b.undone_at).getTime() - new Date(a.undone_at).getTime())[0];
+
+                          return (
+                            <TableRow key={order.id} className="hover:bg-red-50/5 border-b border-gray-100 last:border-b-0">
+                              <TableCell className="font-extrabold text-brand-forest text-xs pl-6">
+                                {order.order_number}
+                              </TableCell>
+                              <TableCell className="font-bold text-gray-800 text-xs">
+                                {order.customer?.name || "N/A"}
+                              </TableCell>
+                              <TableCell className="font-semibold text-gray-700 text-xs">
+                                {lastUndoneDelivery?.return_sales_store?.name 
+                                  ? `${lastUndoneDelivery.return_sales_store.name} (${lastUndoneDelivery.return_sales_store.code})`
+                                  : "N/A"
+                                }
+                              </TableCell>
+                              <TableCell className="font-bold text-gray-800 text-xs">
+                                {lastUndoneDelivery?.driver?.full_name || lastUndoneDelivery?.driver?.name || "N/A"}
+                              </TableCell>
+                              <TableCell className="font-semibold text-red-700 text-xs">
+                                {lastUndoneDelivery?.undone_reason 
+                                  ? lastUndoneDelivery.undone_reason.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                                  : "N/A"
+                                }
+                              </TableCell>
+                              <TableCell className="text-gray-500 text-xs font-semibold">
+                                {lastUndoneDelivery?.undone_at ? formatDateTime(lastUndoneDelivery.undone_at) : "N/A"}
+                              </TableCell>
+                              <TableCell className="text-right pr-6 py-3">
+                                <Button
+                                  onClick={() => {
+                                    setSelectedOrderId(order.id);
+                                    setSelectedDriverId("");
+                                    setShowAssignModal(true);
+                                  }}
+                                  className="h-8 px-3 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm rounded-lg text-xs"
+                                >
+                                  Re-dispatch
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                );
+              })()
             )}
 
             {/* 3. FLEET STATUS WORKSPACE */}
