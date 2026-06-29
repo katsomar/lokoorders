@@ -104,6 +104,7 @@ export default function CustomerDetailPage() {
 
   const [activeTab, setActiveTab] = useState<"ledger" | "branches" | "consumption">("ledger");
   const [ledgerFilter, setLedgerFilter] = useState<string>("all");
+  const [ledgerSearch, setLedgerSearch] = useState<string>("");
   const [consumptionData, setConsumptionData] = useState<any>(null);
   const [isConsumptionLoading, setIsConsumptionLoading] = useState(false);
   const [generalTrendFilter, setGeneralTrendFilter] = useState<string>("consolidated");
@@ -217,7 +218,9 @@ export default function CustomerDetailPage() {
           receivedBy: tx.user?.name || "System",
           proofDoc: tx.type === "invoice_raised" ? (firstProof?.document_proof_url || "/proof_inv.jpg") : "/proof_rcpt.jpg",
           signatureUrl: firstProof?.signature_proof_url || null,
-          items: mappedItems
+          items: mappedItems,
+          fdn: tx.invoice?.order?.fiscal_document_number || "",
+          orderNumber: tx.invoice?.order?.order_number || ""
         };
       });
 
@@ -371,9 +374,20 @@ export default function CustomerDetailPage() {
   const currentLimit = activeBranch ? activeBranch.credit_limit : (customer ? customer.credit_limit : 0);
   const currentTerms = activeBranch ? activeBranch.credit_terms : (customer ? customer.credit_terms : "");
 
-  const displayLedger = activeBranch
+  const baseLedger = activeBranch
     ? ledger.filter((tx: any) => tx.branchId === activeBranch.id)
     : getFilteredLedger();
+
+  const displayLedger = baseLedger.filter((tx: any) => {
+    if (!ledgerSearch) return true;
+    const term = ledgerSearch.toLowerCase();
+    return (
+      tx.ref?.toLowerCase().includes(term) ||
+      tx.description?.toLowerCase().includes(term) ||
+      tx.fdn?.toLowerCase().includes(term) ||
+      tx.orderNumber?.toLowerCase().includes(term)
+    );
+  });
 
   // 1. General Order Trend Data & Dynamic Metrics calculations
   const convertToTrays = (nameOrCode: string, quantityInput: any): number => {
@@ -915,22 +929,35 @@ export default function CustomerDetailPage() {
                     <CardDescription className="text-xs">Audit ledger of in-store delivery debits and receipt credits</CardDescription>
                   </div>
                   
-                  {/* Branch filter for parents (only show on consolidated tab) */}
-                  {customer.isParent && !activeBranch && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-gray-400">Filter:</span>
-                      <select 
-                        value={ledgerFilter} 
-                        onChange={(e) => setLedgerFilter(e.target.value)}
-                        className="text-xs font-bold text-brand-forest border border-brand-sage/60 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-8"
-                      >
-                        <option value="all">All Branches Ledger</option>
-                        {customer.branches.map((b: any) => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Search by FDN or Reference */}
+                    <div className="relative">
+                      <input 
+                        type="text"
+                        placeholder="Search FDN, Ref, Desc..."
+                        value={ledgerSearch}
+                        onChange={(e) => setLedgerSearch(e.target.value)}
+                        className="text-xs font-medium text-brand-forest border border-brand-sage/60 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-8 w-44 placeholder:text-gray-400"
+                      />
                     </div>
-                  )}
+
+                    {/* Branch filter for parents (only show on consolidated tab) */}
+                    {customer.isParent && !activeBranch && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-400">Filter:</span>
+                        <select 
+                          value={ledgerFilter} 
+                          onChange={(e) => setLedgerFilter(e.target.value)}
+                          className="text-xs font-bold text-brand-forest border border-brand-sage/60 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-8"
+                        >
+                          <option value="all">All Branches Ledger</option>
+                          {customer.branches.map((b: any) => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
                 </CardHeader>
                 
                 <CardContent className="p-0">
@@ -973,6 +1000,11 @@ export default function CustomerDetailPage() {
                               <TableCell className="text-xs pl-6 whitespace-nowrap">{format(new Date(tx.date), "dd/MM/yyyy")}</TableCell>
                               <TableCell className="text-xs">
                                 <div className="font-mono font-bold text-brand-forest">{tx.ref}</div>
+                                {tx.fdn && (
+                                  <div className="text-[10px] text-gray-500 font-mono mt-0.5" title="Fiscal Document Number">
+                                    FDN: {tx.fdn}
+                                  </div>
+                                )}
                               </TableCell>
                               {customer.isParent && (
                                 <TableCell>

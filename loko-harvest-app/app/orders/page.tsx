@@ -423,8 +423,8 @@ export default function OrdersPage() {
 
                     return (
                       <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                        <TableCell className="pl-6 font-mono text-xs font-bold text-brand-forest">
-                          <div className="flex items-center gap-1.5">
+                        <TableCell className="pl-6 py-3.5">
+                          <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-brand-forest">
                             {order.order_number}
                             <div className="flex items-center gap-1 shrink-0">
                               {hasIssues && (
@@ -438,6 +438,11 @@ export default function OrdersPage() {
                               )}
                             </div>
                           </div>
+                          {order.fiscal_document_number && (
+                            <p className="text-[10px] text-gray-500 font-mono mt-0.5" title="Fiscal Document Number">
+                              FDN: {order.fiscal_document_number}
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-3">

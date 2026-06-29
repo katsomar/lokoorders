@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -53,6 +54,10 @@ export default function OrderDetailPage() {
   const [pendingStatusToRetry, setPendingStatusToRetry] = useState("");
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [lightboxScale, setLightboxScale] = useState<number>(1);
+
+  const [isEditingFdn, setIsEditingFdn] = useState(false);
+  const [fdnValue, setFdnValue] = useState("");
+  const [isSavingFdn, setIsSavingFdn] = useState(false);
 
   const [drivers, setDrivers] = useState<any[]>([]);
   const [showRedispatchModal, setShowRedispatchModal] = useState(false);
@@ -104,11 +109,29 @@ export default function OrderDetailPage() {
       const res = await api.get(`/orders/${orderId}`);
       if (res.data.data) {
         setOrder(res.data.data);
+        setFdnValue(res.data.data.fiscal_document_number || "");
       }
     } catch (err) {
       console.error("Failed to load order details:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveFdn = async () => {
+    setIsSavingFdn(true);
+    try {
+      await api.put(`/orders/${orderId}/fdn`, {
+        fiscal_document_number: fdnValue || null
+      });
+      alert("Fiscal Document Number updated successfully!");
+      setIsEditingFdn(false);
+      await fetchOrderDetails();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to update Fiscal Document Number.");
+    } finally {
+      setIsSavingFdn(false);
     }
   };
 
@@ -338,8 +361,56 @@ export default function OrderDetailPage() {
                 {getStatusBadge(order.status, order.required_delivery_date)}
                 {getUrgencyBadge(order.urgency)}
               </div>
-              <p className="text-gray-500 font-body text-xs mt-1.5">
-                Order Placed: <strong className="text-gray-700">{format(new Date(order.order_date), "dd MMMM yyyy")}</strong>
+              <p className="text-gray-500 font-body text-xs mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>Order Placed: <strong className="text-gray-700">{format(new Date(order.order_date), "dd MMMM yyyy")}</strong></span>
+                <span className="text-gray-300">•</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="font-semibold text-gray-500">FDN:</span>
+                  {isEditingFdn ? (
+                    <span className="flex items-center gap-1">
+                      <input 
+                        value={fdnValue}
+                        onChange={(e) => setFdnValue(e.target.value)}
+                        placeholder="Enter FDN..."
+                        className="h-6 py-0 px-2 text-xs w-28 bg-white border border-brand-sage focus:outline-none focus:ring-1 focus:ring-brand-forest text-brand-forest font-mono rounded"
+                        disabled={isSavingFdn}
+                      />
+                      <Button 
+                        size="sm"
+                        onClick={handleSaveFdn}
+                        disabled={isSavingFdn}
+                        className="h-6 px-2 bg-brand-forest hover:bg-brand-forest/90 text-brand-yellow font-extrabold text-[9px] rounded"
+                      >
+                        {isSavingFdn ? "..." : "Save"}
+                      </Button>
+                      <Button 
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFdnValue(order.fiscal_document_number || "");
+                          setIsEditingFdn(false);
+                        }}
+                        className="h-6 px-1.5 text-gray-500 font-bold text-[9px] rounded hover:bg-gray-150"
+                        disabled={isSavingFdn}
+                      >
+                        Cancel
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <strong className="text-gray-800 font-mono text-xs">
+                        {order.fiscal_document_number || "Not entered"}
+                      </strong>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setIsEditingFdn(true)}
+                        className="h-5 w-5 p-0 text-brand-forest hover:bg-brand-sage/20 hover:text-brand-forest rounded flex items-center justify-center shrink-0 border border-brand-sage/20"
+                      >
+                        <Pencil size={9} />
+                      </Button>
+                    </span>
+                  )}
+                </span>
               </p>
             </div>
           </div>

@@ -36,6 +36,17 @@ class CustomerAccountController extends Controller
             'customer'
         ])
         ->whereIn('customer_id', $customerIds)
+        ->when($request->search, function ($q) use ($request) {
+            $term = $request->search;
+            $q->where(function ($query) use ($term) {
+                $query->where('reference_number', 'like', "%{$term}%")
+                      ->orWhere('description', 'like', "%{$term}%")
+                      ->orWhereHas('invoice.order', function ($orderQ) use ($term) {
+                          $orderQ->where('fiscal_document_number', 'like', "%{$term}%")
+                                 ->orWhere('order_number', 'like', "%{$term}%");
+                      });
+            });
+        })
         ->latest('transaction_date')
         ->latest('id')
         ->paginate($request->per_page ?? 20);

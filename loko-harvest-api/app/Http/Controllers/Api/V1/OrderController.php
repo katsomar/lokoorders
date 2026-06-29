@@ -46,6 +46,7 @@ class OrderController extends Controller
         $orders = Order::with(['customer.parent', 'salesStore', 'items.product', 'deliveries.driver', 'deliveries.returnSalesStore', 'returnVouchers'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('order_number', 'like', "%{$request->search}%")
+                  ->orWhere('fiscal_document_number', 'like', "%{$request->search}%")
                   ->orWhereHas('customer', function($c) use ($request) {
                       $c->where('name', 'like', "%{$request->search}%");
                   });
@@ -74,6 +75,7 @@ class OrderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'fiscal_document_number' => 'nullable|string|max:255',
             'customer_id' => 'required|exists:customers,id',
             'sales_store_id' => 'required|exists:sales_stores,id',
             'order_date' => 'required|date',
@@ -109,6 +111,7 @@ class OrderController extends Controller
 
             $order = Order::create([
                 'order_number' => $orderNumber,
+                'fiscal_document_number' => $validated['fiscal_document_number'] ?? null,
                 'customer_id' => $validated['customer_id'],
                 'sales_store_id' => $validated['sales_store_id'],
                 'order_date' => $validated['order_date'],
@@ -223,6 +226,7 @@ class OrderController extends Controller
         }
 
         $validated = $request->validate([
+            'fiscal_document_number' => 'nullable|string|max:255',
             'customer_id' => 'required|exists:customers,id',
             'sales_store_id' => 'required|exists:sales_stores,id',
             'order_date' => 'required|date',
@@ -301,6 +305,7 @@ class OrderController extends Controller
 
             // 5. Update order details
             $order->update([
+                'fiscal_document_number' => $validated['fiscal_document_number'] ?? null,
                 'customer_id' => $validated['customer_id'],
                 'sales_store_id' => $validated['sales_store_id'],
                 'order_date' => $validated['order_date'],
@@ -557,6 +562,20 @@ class OrderController extends Controller
 
             return $this->success(null, 'Order deleted successfully');
         });
+    }
+
+    public function updateFdn(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'fiscal_document_number' => 'nullable|string|max:255',
+        ]);
+
+        $order = Order::findOrFail($id);
+        $order->update([
+            'fiscal_document_number' => $validated['fiscal_document_number'] ?? null,
+        ]);
+
+        return $this->success($order, 'Fiscal Document Number updated successfully');
     }
 
     private function productSupportsBatch($product)

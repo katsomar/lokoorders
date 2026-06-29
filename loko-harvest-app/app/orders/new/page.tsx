@@ -39,6 +39,7 @@ const orderSchema = z.object({
   order_date: z.string(),
   required_delivery_date: z.string(),
   urgency: z.enum(["normal", "urgent", "critical"]),
+  fiscal_document_number: z.string().optional(),
   order_notes: z.string().optional(),
   admin_override_reason: z.string().optional(),
   items: z.array(z.object({
@@ -257,6 +258,7 @@ export default function NewOrderPage() {
         order_date: data.order_date,
         required_delivery_date: data.required_delivery_date,
         urgency: data.urgency,
+        fiscal_document_number: data.fiscal_document_number || null,
         order_notes: data.order_notes || null,
         admin_override_reason: data.admin_override_reason || null,
         items: data.items.map(item => ({
@@ -358,7 +360,7 @@ export default function NewOrderPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
                     label="Order Date"
                     type="date"
@@ -372,6 +374,12 @@ export default function NewOrderPage() {
                     {...register("required_delivery_date")}
                     error={errors.required_delivery_date?.message}
                     required
+                  />
+                  <Input
+                    label="Fiscal Document Number (FDN)"
+                    placeholder="e.g. FDN-9821"
+                    {...register("fiscal_document_number")}
+                    error={errors.fiscal_document_number?.message}
                   />
                 </div>
 

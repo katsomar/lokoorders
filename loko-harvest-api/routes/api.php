@@ -25,6 +25,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('/orders', [App\Http\Controllers\Api\V1\OrderController::class, 'store']);
         Route::get('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'show']);
         Route::put('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'update']);
+        Route::put('/orders/{id}/fdn', [App\Http\Controllers\Api\V1\OrderController::class, 'updateFdn']);
         Route::delete('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'destroy']);
         Route::post('/orders/{id}/status', [App\Http\Controllers\Api\V1\OrderController::class, 'updateStatus']);
 

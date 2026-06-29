@@ -40,6 +40,7 @@ const orderSchema = z.object({
   order_date: z.string(),
   required_delivery_date: z.string(),
   urgency: z.enum(["normal", "urgent", "critical"]),
+  fiscal_document_number: z.string().optional(),
   order_notes: z.string().optional(),
   admin_override_reason: z.string().optional(),
   items: z.array(z.object({
@@ -89,6 +90,7 @@ export default function EditOrderPage() {
       order_date: new Date().toISOString().split("T")[0],
       required_delivery_date: new Date(Date.now() + 86400000 * 2).toISOString().split("T")[0],
       urgency: "normal",
+      fiscal_document_number: "",
       items: [{ product_id: "", batch_reference: "", quantity: 1, unit_price: 0 }],
       admin_override_reason: "",
     },
@@ -147,6 +149,7 @@ export default function EditOrderPage() {
             order_date: orderData.order_date,
             required_delivery_date: orderData.required_delivery_date,
             urgency: orderData.urgency,
+            fiscal_document_number: orderData.fiscal_document_number || "",
             order_notes: orderData.order_notes || "",
             admin_override_reason: orderData.admin_override_reason || "",
             items: orderData.items.map((item: any) => ({
@@ -297,6 +300,7 @@ export default function EditOrderPage() {
         order_date: data.order_date,
         required_delivery_date: data.required_delivery_date,
         urgency: data.urgency,
+        fiscal_document_number: data.fiscal_document_number || null,
         order_notes: data.order_notes || null,
         admin_override_reason: data.admin_override_reason || null,
         items: data.items.map(item => ({
@@ -409,7 +413,7 @@ export default function EditOrderPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
                     label="Order Date"
                     type="date"
@@ -423,6 +427,12 @@ export default function EditOrderPage() {
                     {...register("required_delivery_date")}
                     error={errors.required_delivery_date?.message}
                     required
+                  />
+                  <Input
+                    label="Fiscal Document Number (FDN)"
+                    placeholder="e.g. FDN-9821"
+                    {...register("fiscal_document_number")}
+                    error={errors.fiscal_document_number?.message}
                   />
                 </div>
 
