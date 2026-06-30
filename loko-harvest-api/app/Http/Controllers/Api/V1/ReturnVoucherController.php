@@ -158,8 +158,8 @@ class ReturnVoucherController extends Controller
             'replacements' => 'required|array|min:1',
             'replacements.*.return_voucher_id' => 'required|uuid|exists:return_vouchers,id',
             'replacements.*.replacement_quantity' => 'required|numeric|min:0.01',
-            'replacements.*.sales_store_id' => 'required|uuid|exists:sales_stores,id',
-            'replacements.*.batch_reference' => 'required|string',
+            'replacements.*.sales_store_id' => 'nullable|uuid|exists:sales_stores,id',
+            'replacements.*.batch_reference' => 'nullable|string',
         ]);
 
         return DB::transaction(function () use ($validated, $request) {
@@ -186,43 +186,43 @@ class ReturnVoucherController extends Controller
             foreach ($validated['replacements'] as $item) {
                 $voucher = ReturnVoucher::findOrFail($item['return_voucher_id']);
                 
-                // Ensure we don't replace more than the remaining quantity
-                $remaining = $voucher->quantity - $voucher->replacement_quantity;
-                $replacing = min($item['replacement_quantity'], $remaining);
+                // Find matching replacement allocation
+                $allocation = \App\Models\OrderReplacementAllocation::where('order_id', $voucher->order_id)
+                    ->where('product_id', $voucher->product_id)
+                    ->first();
+
+                if (!$allocation) {
+                    throw new \Exception("No replacement allocation was pre-assigned by the manager/admin for product: " . ($voucher->product->name ?? 'Product') . " on Order: " . ($voucher->order->order_number ?? 'Order'));
+                }
+
+                // Ensure we don't replace more than the remaining quantity on the voucher
+                $remainingVoucher = $voucher->quantity - $voucher->replacement_quantity;
+                
+                // Ensure we don't replace more than the remaining allocated quantity
+                $remainingAllocated = $allocation->allocated_quantity - $allocation->delivered_quantity;
+                
+                $maxAllowed = min($remainingVoucher, $remainingAllocated);
+                $replacing = min($item['replacement_quantity'], $maxAllowed);
+
+                if ((float)$item['replacement_quantity'] > (float)$remainingAllocated) {
+                    throw new \Exception("Cannot deliver {$item['replacement_quantity']} replacements. Maximum allowed under assigned allocation is {$remainingAllocated} for product: " . ($voucher->product->name ?? 'Product'));
+                }
 
                 if ($replacing > 0) {
-                    // Deduct from Sales Store Stock
-                    $stock = \App\Models\SalesStoreStock::where('sales_store_id', $item['sales_store_id'])
-                        ->where('product_id', $voucher->product_id)
-                        ->where('batch_reference', $item['batch_reference'])
-                        ->first();
-
-                    if (!$stock || $stock->current_quantity < $replacing) {
-                        throw new \Exception("Insufficient stock in the selected sales store for product: " . ($voucher->product->name ?? 'Product') . " (Batch: " . $item['batch_reference'] . ")");
+                    // Update Allocation Delivered Quantity & Status
+                    $allocation->increment('delivered_quantity', $replacing);
+                    if ((float)$allocation->delivered_quantity >= (float)$allocation->allocated_quantity) {
+                        $allocation->update(['status' => 'delivered']);
                     }
 
-                    $stock->decrement('current_quantity', $replacing);
-
-                    // Create movement log for the deduction
-                    \App\Models\SalesStoreMovement::create([
-                        'sales_store_id' => $item['sales_store_id'],
-                        'product_id' => $voucher->product_id,
-                        'batch_reference' => $item['batch_reference'],
-                        'quantity' => $replacing,
-                        'movement_type' => 'dispatch_out',
-                        'movement_date' => now()->toDateString(),
-                        'reference_id' => $voucher->id,
-                        'notes' => 'Replacement for return voucher ' . $voucher->voucher_number,
-                        'created_by' => auth()->id() ?? User::first()?->id ?? $voucher->created_by,
-                    ]);
-
+                    // Increment voucher replacement quantity
                     $voucher->increment('replacement_quantity', $replacing);
                     $voucher->update([
                         'date_replaced' => now()->toDateString(),
                         'acknowledged_by' => $validated['acknowledged_by'],
                         'signature_path' => $signaturePath,
-                        'replacement_sales_store_id' => $item['sales_store_id'],
-                        'replacement_batch_reference' => $item['batch_reference'],
+                        'replacement_sales_store_id' => $allocation->sales_store_id,
+                        'replacement_batch_reference' => $allocation->batch_reference,
                     ]);
                 }
                 

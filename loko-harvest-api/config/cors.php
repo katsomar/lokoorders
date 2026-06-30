@@ -22,7 +22,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => explode(',', env('ALLOWED_ORIGINS', '*')),
+    'allowed_origins' => (function() {
+        $allowed = explode(',', env('ALLOWED_ORIGINS', ''));
+        if (env('APP_ENV') === 'local' && isset($_SERVER['HTTP_ORIGIN'])) {
+            $allowed[] = $_SERVER['HTTP_ORIGIN'];
+        }
+        return array_unique(array_filter($allowed));
+    })() ?: ['*'],
 
     'allowed_origins_patterns' => [],
 

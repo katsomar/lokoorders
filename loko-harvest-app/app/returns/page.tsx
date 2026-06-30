@@ -78,11 +78,53 @@ const reasonColors: Record<string, string> = {
 };
 
 export default function ReturnsPage() {
+  const [activeTab, setActiveTab] = useState<"vouchers" | "replacements">("vouchers");
   const [returns, setReturns] = useState<ReturnVoucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [reasonFilter, setReasonFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+
+  // Replacements tab states
+  const [allocations, setAllocations] = useState<any[]>([]);
+  const [loadingAllocations, setLoadingAllocations] = useState(false);
+  const [allocOrder, setAllocOrder] = useState("");
+  const [allocProduct, setAllocProduct] = useState("");
+  const [allocQty, setAllocQty] = useState("");
+  const [allocStore, setAllocStore] = useState("");
+  const [allocBatch, setAllocBatch] = useState("");
+  const [allocOrderItems, setAllocOrderItems] = useState<any[]>([]);
+  const [allocMetrics, setAllocMetrics] = useState({ total_count: 0, total_quantity: 0, total_value: 0 });
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedAllocationToReturn, setSelectedAllocationToReturn] = useState<any | null>(null);
+  const [returnStore, setReturnStore] = useState("");
+  const [returnBatch, setReturnBatch] = useState("");
+  const [returnQty, setReturnQty] = useState("");
+  const [isSubmittingAllocation, setIsSubmittingAllocation] = useState(false);
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+  const [salesStores, setSalesStores] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [availableBatches, setAvailableBatches] = useState<any[]>([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [returnStoreBatches, setReturnStoreBatches] = useState<string[]>([]);
+  const [loadingReturnBatches, setLoadingReturnBatches] = useState(false);
+  const [isCustomReturnBatch, setIsCustomReturnBatch] = useState(false);
+  const [allocDriver, setAllocDriver] = useState("");
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
+  const [orderSearchText, setOrderSearchText] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const filteredOrderOptions = orders
+    .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
+    .filter(o => {
+      if (!orderSearchText.trim()) return false;
+      const q = orderSearchText.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const orderNumClean = o.order_number.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const numMatch = orderNumClean.includes(q);
+      const custMatch = o.customer?.name.toLowerCase().includes(orderSearchText.toLowerCase()) || false;
+      return numMatch || custMatch;
+    });
 
   // Modals state
   const [selectedReturn, setSelectedReturn] = useState<ReturnVoucher | null>(null);
@@ -174,13 +216,209 @@ export default function ReturnsPage() {
     }
   };
 
+  const fetchOrders = async () => {
+    try {
+      const res = await api.get("/orders", { params: { per_page: 200 } });
+      setOrders(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load orders:", err);
+    }
+  };
+
+  const fetchSalesStores = async () => {
+    try {
+      const res = await api.get("/sales-stores");
+      setSalesStores(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load sales stores:", err);
+    }
+  };
+
+  const fetchDrivers = async () => {
+    setLoadingDrivers(true);
+    try {
+      const res = await api.get("/drivers");
+      setDrivers(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load drivers:", err);
+    } finally {
+      setLoadingDrivers(false);
+    }
+  };
+
+  const fetchAllocations = async () => {
+    setLoadingAllocations(true);
+    try {
+      const res = await api.get("/replacement-allocations", { params: { per_page: 100 } });
+      if (res.data?.success) {
+        const payload = res.data.data;
+        const list = payload?.data?.data || payload?.data || [];
+        setAllocations(Array.isArray(list) ? list : []);
+        setAllocMetrics(payload?.metrics || { total_count: 0, total_quantity: 0, total_value: 0 });
+      }
+    } catch (err) {
+      console.error("Failed to fetch allocations:", err);
+    } finally {
+      setLoadingAllocations(false);
+    }
+  };
+
+  useEffect(() => {
+    const fetchAvailableBatches = async () => {
+      setAllocBatch("");
+      if (!allocStore || !allocProduct) {
+        setAvailableBatches([]);
+        return;
+      }
+      setLoadingBatches(true);
+      try {
+        const res = await api.get("/sales-stock", {
+          params: { sales_store_id: allocStore }
+        });
+        const stocks = res.data?.data || [];
+        const filtered = stocks.filter((s: any) => s.product_id === allocProduct && parseFloat(s.current_quantity) > 0);
+        setAvailableBatches(filtered);
+      } catch (err) {
+        console.error("Failed to load available batches:", err);
+        setAvailableBatches([]);
+      } finally {
+        setLoadingBatches(false);
+      }
+    };
+    fetchAvailableBatches();
+  }, [allocStore, allocProduct]);
+
+  const handleAllocOrderChange = (orderId: string) => {
+    setAllocOrder(orderId);
+    setAllocProduct("");
+    if (!orderId) {
+      setAllocOrderItems([]);
+      return;
+    }
+    const matched = orders.find(o => o.id === orderId);
+    if (matched) {
+      setAllocOrderItems(matched.items || []);
+    }
+  };
+
+  const handleAssignReplacement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!allocOrder || !allocProduct || !allocStore || !allocQty || !allocDriver) {
+      alert("Please fill all required allocation fields.");
+      return;
+    }
+    setIsSubmittingAllocation(true);
+    try {
+      const res = await api.post("/replacement-allocations", {
+        order_id: allocOrder,
+        product_id: allocProduct,
+        sales_store_id: allocStore,
+        batch_reference: allocBatch || null,
+        allocated_quantity: parseFloat(allocQty),
+        driver_id: allocDriver
+      });
+      if (res.data?.success) {
+        alert("Replacement pre-allocated successfully!");
+        setAllocQty("");
+        setAllocBatch("");
+        setAllocDriver("");
+        fetchAllocations();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to allocate replacement. Check store stock levels.");
+    } finally {
+      setIsSubmittingAllocation(false);
+    }
+  };
+
+  const handleReturnStoreChange = (storeId: string) => {
+    setReturnStore(storeId);
+    if (selectedAllocationToReturn) {
+      if (storeId === selectedAllocationToReturn.sales_store_id) {
+        setReturnBatch(selectedAllocationToReturn.batch_reference || "");
+        setIsCustomReturnBatch(false);
+      } else {
+        setReturnBatch(selectedAllocationToReturn.batch_reference || "");
+        setIsCustomReturnBatch(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const fetchReturnBatches = async () => {
+      if (!returnStore || !selectedAllocationToReturn) {
+        setReturnStoreBatches([]);
+        return;
+      }
+      setLoadingReturnBatches(true);
+      try {
+        const res = await api.get("/sales-stock", {
+          params: { sales_store_id: returnStore }
+        });
+        const stocks = res.data?.data || [];
+        const filtered = stocks.filter((s: any) => s.product_id === selectedAllocationToReturn.product_id);
+        const batchRefs = Array.from(new Set(filtered.map((s: any) => s.batch_reference).filter(Boolean))) as string[];
+        
+        const origBatch = selectedAllocationToReturn.batch_reference;
+        if (origBatch && !batchRefs.includes(origBatch)) {
+          batchRefs.push(origBatch);
+        }
+        
+        setReturnStoreBatches(batchRefs);
+      } catch (err) {
+        console.error("Failed to load return batches:", err);
+        setReturnStoreBatches([]);
+      } finally {
+        setLoadingReturnBatches(false);
+      }
+    };
+    fetchReturnBatches();
+  }, [returnStore, selectedAllocationToReturn]);
+
+  const handleReturnAllocationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAllocationToReturn || !returnStore || !returnQty) {
+      alert("Please fill all required return fields.");
+      return;
+    }
+    setIsSubmittingReturn(true);
+    try {
+      const res = await api.post(`/replacement-allocations/${selectedAllocationToReturn.id}/return`, {
+        sales_store_id: returnStore,
+        batch_reference: returnBatch || null,
+        quantity: parseFloat(returnQty)
+      });
+      if (res.data?.success) {
+        alert("Leftover replacements returned to store successfully!");
+        setShowReturnModal(false);
+        setSelectedAllocationToReturn(null);
+        setReturnQty("");
+        setReturnBatch("");
+        fetchAllocations();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to return replacements.");
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  };
+
   useEffect(() => {
     fetchDependencies();
   }, []);
 
   useEffect(() => {
-    fetchReturns();
-  }, [searchTerm, reasonFilter, typeFilter]);
+    if (activeTab === "vouchers") {
+      fetchReturns();
+    } else {
+      fetchAllocations();
+      fetchOrders();
+      fetchSalesStores();
+      fetchDrivers();
+    }
+  }, [activeTab, searchTerm, reasonFilter, typeFilter]);
 
   const handleCustomerChange = async (customerId: string) => {
     setFormCustomer(customerId);
@@ -337,17 +575,45 @@ export default function ReturnsPage() {
             <h1 className="text-2xl font-bold text-brand-forest font-heading">Returns & Replacements</h1>
             <p className="text-gray-500 font-body">Manage customer return vouchers, replacements and credit postings</p>
           </div>
-          <Button 
-            onClick={() => setIsNewModalOpen(true)}
-            className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold shadow-md hover:scale-[1.02] transition-all duration-200"
-          >
-            <Plus size={18} />
-            Record Return Voucher
-          </Button>
+          {activeTab === "vouchers" && (
+            <Button 
+              onClick={() => setIsNewModalOpen(true)}
+              className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold shadow-md hover:scale-[1.02] transition-all duration-200"
+            >
+              <Plus size={18} />
+              Record Return Voucher
+            </Button>
+          )}
         </div>
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Tab Switcher */}
+        <div className="flex border-b border-gray-250 gap-6">
+          <button
+            onClick={() => setActiveTab("vouchers")}
+            className={`pb-2.5 text-sm font-bold border-b-2 transition-all ${
+              activeTab === "vouchers"
+                ? "border-brand-forest text-brand-forest"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Return Vouchers
+          </button>
+          <button
+            onClick={() => setActiveTab("replacements")}
+            className={`pb-2.5 text-sm font-bold border-b-2 transition-all ${
+              activeTab === "replacements"
+                ? "border-brand-forest text-brand-forest"
+                : "border-transparent text-gray-400 hover:text-gray-600"
+            }`}
+          >
+            Replacement Allocations
+          </button>
+        </div>
+
+        {/* Metric Cards & Views */}
+        {activeTab === "vouchers" ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="border-none shadow-sm bg-gradient-to-br from-rose-500 to-rose-600 text-white overflow-hidden relative">
             <CardContent className="pt-6">
               <div className="absolute right-4 top-4 bg-white/10 p-2 rounded-lg text-white/80">
@@ -918,6 +1184,435 @@ export default function ReturnsPage() {
                 </div>
               </form>
 
+            </div>
+          </div>
+        )}
+
+          </>
+        ) : (
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* Allocations Metrics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="border-none shadow-sm bg-gradient-to-br from-brand-forest to-emerald-800 text-white overflow-hidden relative">
+                <CardContent className="pt-6">
+                  <div className="absolute right-4 top-4 bg-white/10 p-2 rounded-lg text-white/80">
+                    <TrendingDown size={24} />
+                  </div>
+                  <p className="text-white/70 text-xs font-bold uppercase tracking-wider">Total Allocations</p>
+                  <h3 className="text-3xl font-bold font-heading mt-1">{allocMetrics.total_count}</h3>
+                  <p className="text-[10px] text-white/90 font-medium mt-2">Active replacement logs</p>
+                </CardContent>
+              </Card>
+              <Card className="border-none shadow-sm bg-white overflow-hidden relative border-l-4 border-brand-yellow">
+                <CardContent className="pt-6">
+                  <div className="absolute right-4 top-4 bg-amber-50 p-2 rounded-lg text-brand-amber">
+                    <RefreshCcw size={24} />
+                  </div>
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Allocated Quantity</p>
+                  <h3 className="text-2xl font-bold text-brand-forest font-heading mt-1">{allocMetrics.total_quantity} Trays</h3>
+                  <p className="text-[10px] text-brand-amber font-medium mt-2">Currently checked out on trips</p>
+                </CardContent>
+              </Card>
+              <Card className="border-none shadow-sm bg-white border-l-4 border-rose-600 overflow-hidden relative">
+                <CardContent className="pt-6">
+                  <div className="absolute right-4 top-4 bg-red-50 p-2 rounded-lg text-rose-600">
+                    <Coins size={24} />
+                  </div>
+                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Allocated Value</p>
+                  <h3 className="text-2xl font-bold text-rose-600 font-heading mt-1">UGX {allocMetrics.total_value.toLocaleString()}</h3>
+                  <p className="text-[10px] text-rose-600 font-medium mt-2">Estimated inventory monetary value</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Allocate form and list */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Form card */}
+              <div className="lg:col-span-1">
+                <Card className="border border-brand-sage/40 shadow-sm rounded-xl bg-white sticky top-20">
+                  <CardContent className="p-5 space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-gray-150">
+                      <span className="h-2.5 w-2.5 rounded-full bg-brand-yellow" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-brand-forest">Assign Replacements</h4>
+                    </div>
+                    <form onSubmit={handleAssignReplacement} className="space-y-4 text-xs">
+                       <div className="relative">
+                        <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Search Order (Alphanumeric / Last 4 Digits) *</label>
+                        <input
+                          type="text"
+                          placeholder="Type Order # (e.g. 0006, 2026-0006)..."
+                          value={orderSearchText}
+                          onChange={(e) => {
+                            setOrderSearchText(e.target.value);
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => setShowSuggestions(true)}
+                          className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                        />
+                        
+                        {showSuggestions && orderSearchText.trim() !== "" && (
+                          <div className="absolute left-0 right-0 mt-1 bg-white border border-brand-sage/35 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto text-xs divide-y divide-gray-100">
+                            {filteredOrderOptions.length === 0 ? (
+                              <div className="p-3 text-gray-400 text-center font-semibold">No orders matched</div>
+                            ) : (
+                              filteredOrderOptions.map(order => (
+                                <button
+                                  key={order.id}
+                                  type="button"
+                                  onClick={() => {
+                                    handleAllocOrderChange(order.id);
+                                    setOrderSearchText(order.order_number);
+                                    setShowSuggestions(false);
+                                  }}
+                                  className="w-full text-left p-3 hover:bg-brand-forest/5 hover:text-brand-forest transition-colors font-bold flex justify-between items-center"
+                                >
+                                  <span>{order.order_number}</span>
+                                  <span className="text-[10px] text-gray-400 font-normal">{order.customer?.name || "HQ"}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                        
+                        {allocOrder && (
+                          <div className="mt-2 p-2 bg-brand-forest/5 rounded-lg border border-brand-forest/15 text-[10px] text-brand-forest font-semibold flex justify-between items-center">
+                            <span>Selected: {orders.find(o => o.id === allocOrder)?.order_number} ({orders.find(o => o.id === allocOrder)?.customer?.name || "HQ"})</span>
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                handleAllocOrderChange("");
+                                setOrderSearchText("");
+                              }}
+                              className="text-red-500 hover:text-red-700 font-bold"
+                            >
+                              Clear Selection
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {allocOrder && allocOrderItems.length > 0 && (
+                        <>
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Product *</label>
+                            <select
+                              required
+                              value={allocProduct}
+                              onChange={(e) => setAllocProduct(e.target.value)}
+                              className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                            >
+                              <option value="">-- Choose Product --</option>
+                              {allocOrderItems.map(item => (
+                                <option key={item.product_id} value={item.product_id}>
+                                  {item.product?.name || "Product"}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Source Sales Store *</label>
+                            <select
+                              required
+                              value={allocStore}
+                              onChange={(e) => setAllocStore(e.target.value)}
+                              className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                            >
+                              <option value="">-- Choose Store --</option>
+                              {salesStores.map(store => (
+                                <option key={store.id} value={store.id}>
+                                  {store.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider block mb-1">Select Driver *</label>
+                            <select
+                              required
+                              value={allocDriver}
+                              onChange={(e) => setAllocDriver(e.target.value)}
+                              className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                            >
+                              <option value="">-- Choose Driver --</option>
+                              {drivers.map(d => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name || d.full_name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No Vehicle'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">Quantity (Trays) *</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                required
+                                placeholder="0.00"
+                                value={allocQty}
+                                onChange={(e) => setAllocQty(e.target.value)}
+                                className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">Select Batch *</label>
+                              <select
+                                required
+                                value={allocBatch}
+                                onChange={(e) => setAllocBatch(e.target.value)}
+                                className="w-full h-11 px-3 text-xs font-semibold rounded-lg border border-gray-250 bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                                disabled={loadingBatches || !allocStore}
+                              >
+                                <option value="">{loadingBatches ? "Loading batches..." : "-- Select Batch --"}</option>
+                                {availableBatches.map((b: any) => (
+                                  <option key={b.batch_reference || 'unbatched'} value={b.batch_reference || ""}>
+                                    {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
+                                  </option>
+                                ))}
+                              </select>
+                              {availableBatches.length === 0 && allocStore && allocProduct && !loadingBatches && (
+                                <p className="text-[9px] text-red-500 font-bold mt-1">⚠️ No available stock in this sales store.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <Button
+                            type="submit"
+                            isLoading={isSubmittingAllocation}
+                            className="w-full h-11 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-black tracking-widest text-xs uppercase rounded-lg border-none shadow-md mt-2 cursor-pointer"
+                          >
+                            Allocate replacements
+                          </Button>
+                        </>
+                      )}
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Table card */}
+              <div className="lg:col-span-2">
+                <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+                  <div className="p-5 border-b border-gray-150">
+                    <h4 className="text-sm font-black uppercase tracking-wider text-brand-forest">Active Allocations Registry</h4>
+                  </div>
+                  <div className="overflow-x-auto">
+                    {loadingAllocations ? (
+                      <div className="py-20 text-center text-xs text-gray-400">Loading allocations...</div>
+                    ) : allocations.length === 0 ? (
+                      <div className="py-20 text-center text-xs text-gray-400">No allocations recorded.</div>
+                    ) : (
+                      <Table>
+                        <TableHeader className="bg-gray-50/55">
+                          <TableRow>
+                            <TableHead className="font-semibold text-brand-forest">Order #</TableHead>
+                            <TableHead className="font-semibold text-brand-forest">Product Details</TableHead>
+                            <TableHead className="font-semibold text-brand-forest">Allocated Store / Batch</TableHead>
+                            <TableHead className="font-semibold text-brand-forest text-center">Allocated</TableHead>
+                            <TableHead className="font-semibold text-brand-forest text-center">Delivered</TableHead>
+                            <TableHead className="font-semibold text-brand-forest text-center">Returned</TableHead>
+                            <TableHead className="font-semibold text-brand-forest text-center">Leftover</TableHead>
+                            <TableHead className="font-semibold text-brand-forest">Status</TableHead>
+                            <TableHead className="font-semibold text-brand-forest text-right">Action</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {allocations.map(alloc => {
+                            const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
+                            return (
+                              <TableRow key={alloc.id} className="hover:bg-gray-50/40 transition-colors">
+                                <TableCell className="font-mono font-bold text-brand-forest text-xs">{alloc.order?.order_number || "N/A"}</TableCell>
+                                <TableCell className="text-xs font-semibold text-gray-800">{alloc.product?.name}</TableCell>
+                                <TableCell className="text-xs text-gray-500">
+                                  <div className="font-semibold">{alloc.sales_store?.name}</div>
+                                  {alloc.batch_reference && <div className="text-[10px] font-mono">Batch: {alloc.batch_reference}</div>}
+                                  {alloc.driver && (
+                                    <div className="text-[10px] font-bold text-brand-mid mt-0.5">🚚 {alloc.driver.full_name || alloc.driver.name}</div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center font-bold text-xs">{alloc.allocated_quantity}</TableCell>
+                                <TableCell className="text-center font-bold text-xs text-green-600">{alloc.delivered_quantity}</TableCell>
+                                <TableCell className="text-center font-bold text-xs text-blue-600">{alloc.returned_quantity}</TableCell>
+                                <TableCell className="text-center font-bold text-xs text-red-500">{leftover}</TableCell>
+                                <TableCell>
+                                  <Badge className={`text-[9px] font-black uppercase tracking-wider ${
+                                    alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
+                                    alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
+                                    'bg-amber-50 text-amber-700'
+                                  }`}>
+                                    {alloc.status.replace('_', ' ')}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {leftover > 0 ? (
+                                    <Button
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedAllocationToReturn(alloc);
+                                        setReturnStore(alloc.sales_store_id);
+                                        setReturnQty(leftover.toString());
+                                        setReturnBatch(alloc.batch_reference || "");
+                                        setIsCustomReturnBatch(false);
+                                        setShowReturnModal(true);
+                                      }}
+                                      className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold text-[10px] uppercase cursor-pointer h-8 border-none"
+                                    >
+                                      Return Leftover
+                                    </Button>
+                                  ) : "—"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 🔄 RETURN LEFTOVER MODAL */}
+        {showReturnModal && selectedAllocationToReturn && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div className="bg-white border border-brand-sage/40 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-xs text-gray-800">
+              {/* Header */}
+              <div className="bg-brand-forest text-white px-5 py-4 flex justify-between items-center border-b border-brand-sage/30">
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Return Leftovers to Store</h3>
+                <button 
+                  onClick={() => {
+                    setShowReturnModal(false);
+                    setSelectedAllocationToReturn(null);
+                  }} 
+                  className="text-white hover:text-red-300 p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleReturnAllocationSubmit} className="p-5 space-y-4">
+                <p className="text-gray-650 leading-normal font-medium">
+                  Reconcile leftovers of <span className="font-bold text-brand-forest">{selectedAllocationToReturn.product?.name}</span> back to inventory.
+                </p>
+
+                <div>
+                  <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Target Sales Store *</label>
+                  <select
+                    required
+                    value={returnStore}
+                    onChange={(e) => handleReturnStoreChange(e.target.value)}
+                    className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                  >
+                    <option value="">-- Choose Store --</option>
+                    {salesStores.map(store => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Quantity to Return *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      max={selectedAllocationToReturn.allocated_quantity - selectedAllocationToReturn.delivered_quantity - selectedAllocationToReturn.returned_quantity}
+                      value={returnQty}
+                      onChange={(e) => setReturnQty(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Batch Number *</label>
+                    {isCustomReturnBatch ? (
+                      <div className="space-y-1">
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Batch #102"
+                          value={returnBatch}
+                          onChange={(e) => setReturnBatch(e.target.value)}
+                          className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                        />
+                        {returnStore === selectedAllocationToReturn.sales_store_id && (
+                          <button
+                            type="button"
+                            onClick={() => setIsCustomReturnBatch(false)}
+                            className="text-[8px] text-brand-forest font-bold hover:underline bg-transparent border-none p-0 cursor-pointer block mt-0.5"
+                          >
+                            ← Choose existing batch
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <select
+                          required
+                          value={returnBatch}
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setIsCustomReturnBatch(true);
+                              setReturnBatch("");
+                            } else {
+                              setReturnBatch(e.target.value);
+                            }
+                          }}
+                          className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+                          disabled={loadingReturnBatches}
+                        >
+                          <option value="">{loadingReturnBatches ? "Loading..." : "-- Select Batch --"}</option>
+                          {returnStoreBatches.map(batch => (
+                            <option key={batch} value={batch}>
+                              {batch} {batch === selectedAllocationToReturn.batch_reference ? " (Original)" : ""}
+                            </option>
+                          ))}
+                          <option value="__custom__">➕ Enter Custom...</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomReturnBatch(true);
+                            setReturnBatch("");
+                          }}
+                          className="text-[8px] text-brand-forest font-bold hover:underline bg-transparent border-none p-0 cursor-pointer block mt-0.5 text-left"
+                        >
+                          Or enter new batch reference →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/20">
+                  <Button 
+                    type="button" 
+                    onClick={() => {
+                      setShowReturnModal(false);
+                      setSelectedAllocationToReturn(null);
+                    }} 
+                    className="bg-transparent hover:bg-gray-50 text-gray-500 text-xs font-bold rounded-xl h-9 px-4 border border-brand-sage/60"
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    isLoading={isSubmittingReturn}
+                    className="bg-brand-yellow hover:bg-[#E08C00] text-brand-forest text-xs font-black rounded-xl h-9 px-4 cursor-pointer"
+                  >
+                    Confirm Return
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

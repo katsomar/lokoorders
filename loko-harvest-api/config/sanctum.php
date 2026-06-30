@@ -18,12 +18,21 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
-        Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
-    ))),
+    'stateful' => (function() {
+        $domains = explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
+            '%s%s',
+            'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+            \Laravel\Sanctum\Sanctum::currentApplicationUrlWithPort()
+        )));
+        if (env('APP_ENV') === 'local' && isset($_SERVER['HTTP_ORIGIN'])) {
+            $parsed = parse_url($_SERVER['HTTP_ORIGIN']);
+            if (isset($parsed['host'])) {
+                $hostWithPort = $parsed['host'] . (isset($parsed['port']) ? ':' . $parsed['port'] : '');
+                $domains[] = $hostWithPort;
+            }
+        }
+        return array_unique(array_filter($domains));
+    })(),
 
     /*
     |--------------------------------------------------------------------------

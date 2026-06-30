@@ -9,10 +9,29 @@ const withPWA = withPWAInit({
   skipWaiting: true,
 });
 
+import os from "os";
+
+const getLocalIPs = () => {
+  const interfaces = os.networkInterfaces();
+  const origins: string[] = ["localhost", "localhost:3000", "127.0.0.1", "127.0.0.1:3000"];
+  for (const name of Object.keys(interfaces)) {
+    const netList = interfaces[name];
+    if (netList) {
+      for (const net of netList) {
+        if (net.family === "IPv4" && !net.internal) {
+          origins.push(net.address);
+          origins.push(`${net.address}:3000`);
+        }
+      }
+    }
+  }
+  return origins;
+};
+
 const nextConfig: NextConfig = {
   /* config options here */
   // @ts-ignore
-  allowedDevOrigins: ['192.168.100.51', '192.168.100.51:3000', '10.1.1.19', '10.1.1.19:3000'],
+  allowedDevOrigins: getLocalIPs(),
 };
 
 export default withPWA(nextConfig);

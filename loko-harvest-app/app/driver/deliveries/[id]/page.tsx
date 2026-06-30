@@ -253,24 +253,46 @@ export default function DeliveryConfirmationPage() {
   }, [params.id]);
 
   useEffect(() => {
-    if (step === 4 && delivery?.customer_id && !hasCheckedReplacements) {
+    if (step === 4 && delivery?.customer_id && delivery?.order_id && !hasCheckedReplacements) {
       setHasCheckedReplacements(true);
       setCheckingReplacements(true);
-      api.get('/returns', {
-        params: {
-          customer_id: delivery.customer_id,
-          pending_replacements: true,
-        }
-      }).then(res => {
-        if (res.data?.success) {
-          const mapped = res.data.data.data.map((item: any) => ({
-            ...item,
-            replacedToday: "",
-          }));
+      
+      Promise.all([
+        api.get('/returns', {
+          params: {
+            customer_id: delivery.customer_id,
+            pending_replacements: true,
+          }
+        }),
+        api.get('/replacement-allocations', {
+          params: {
+            order_id: delivery.order_id
+          }
+        })
+      ]).then(([returnsRes, allocsRes]) => {
+        if (returnsRes.data?.success && allocsRes.data?.success) {
+          const allocations = allocsRes.data.data?.data || allocsRes.data.data || [];
+          
+          const mapped = returnsRes.data.data.data.map((item: any) => {
+            const matchingAlloc = allocations.find((a: any) => a.product_id === item.product_id);
+            const remainingAlloc = matchingAlloc 
+              ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity)
+              : 0;
+
+            return {
+              ...item,
+              replacedToday: "",
+              allocation: matchingAlloc || null,
+              remainingAlloc: remainingAlloc,
+              salesStoreId: matchingAlloc ? matchingAlloc.sales_store_id : "",
+              batchRef: matchingAlloc ? matchingAlloc.batch_reference : "",
+            };
+          }).filter((item: any) => item.remainingAlloc > 0);
+
           setPendingReplacements(mapped);
         }
       }).catch(err => {
-        console.error("Failed to prefetch pending replacements:", err);
+        console.error("Failed to prefetch pending replacements & allocations:", err);
       }).finally(() => {
         setCheckingReplacements(false);
       });
@@ -579,8 +601,16 @@ export default function DeliveryConfirmationPage() {
     setPendingReplacements(prev => prev.map(item => {
       if (item.id === voucherId) {
         const remaining = item.quantity - item.replacement_quantity;
+        const remainingAlloc = item.remainingAlloc ?? 0;
+        const maxLimit = Math.min(remaining, remainingAlloc);
         const replaceVal = parseFloat(val) || 0;
-        const qty = Math.min(replaceVal, remaining);
+        
+        let qty = replaceVal;
+        if (qty > maxLimit) {
+          qty = maxLimit;
+          alert(`Quantity capped at maximum pre-assigned allocation limit of ${maxLimit} Trays.`);
+        }
+        
         return {
           ...item,
           replacedToday: val === "" ? "" : qty.toString()
@@ -612,13 +642,13 @@ export default function DeliveryConfirmationPage() {
       return;
     }
 
-    // Validate store & batch for all items with qty > 0
+    // Validate store for all items with qty > 0
     const invalidItem = pendingReplacements.find((item: any) => {
       const qty = parseFloat(item.replacedToday) || 0;
-      return qty > 0 && (!item.salesStoreId || !item.batchRef?.trim());
+      return qty > 0 && !item.salesStoreId;
     });
     if (invalidItem) {
-      alert("Please select a source store and enter a batch number for all replacement items being delivered.");
+      alert("No pre-allocated source store is assigned for some replacement items being delivered.");
       return;
     }
 
@@ -1637,35 +1667,20 @@ export default function DeliveryConfirmationPage() {
                           />
                         </div>
 
-                        {parseFloat(item.replacedToday) > 0 && (
-                          <div className="pt-2 grid grid-cols-2 gap-3 border-t border-brand-forest/10 mt-2">
-                            <div>
-                              <label className="text-[8px] text-gray-400 font-bold uppercase block mb-1">Source Store *</label>
-                              <select
-                                required
-                                value={item.salesStoreId || ""}
-                                onChange={(e) => handleReplacementFieldChange(item.id, 'salesStoreId', e.target.value)}
-                                className="w-full h-8 px-2 text-[10px] font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-                              >
-                                <option value="">-- Choose Store --</option>
-                                {salesStoresList.map((store: any) => (
-                                  <option key={store.id} value={store.id}>
-                                    {store.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[8px] text-gray-400 font-bold uppercase block mb-1">Batch Number *</label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="Batch Ref"
-                                value={item.batchRef || ""}
-                                onChange={(e) => handleReplacementFieldChange(item.id, 'batchRef', e.target.value)}
-                                className="w-full h-8 px-2 text-[10px] font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-                              />
-                            </div>
+                        {parseFloat(item.replacedToday) > 0 && item.allocation && (
+                          <div className="pt-2 mt-2 bg-[#070D0A] p-2.5 rounded-xl border border-brand-forest/20 text-[10px] text-gray-300 space-y-1">
+                            <p>
+                              <span className="font-bold text-brand-yellow">Source Store:</span>{" "}
+                              {item.allocation.sales_store?.name || "Main Sales Store"}
+                            </p>
+                            <p>
+                              <span className="font-bold text-brand-yellow">Batch reference:</span>{" "}
+                              {item.batchRef || "Unbatched"}
+                            </p>
+                            <p>
+                              <span className="font-bold text-brand-yellow">Allocated Limit:</span>{" "}
+                              {item.remainingAlloc} Trays (Max)
+                            </p>
                           </div>
                         )}
                       </div>
