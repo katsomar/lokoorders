@@ -152,7 +152,7 @@ export default function OrderManagerDashboard() {
   const fetchOrders = async () => {
     setLoadingOrders(true);
     try {
-      const res = await api.get("/orders", { params: { per_page: 100 } });
+      const res = await api.get("/orders", { params: { per_page: 300 } });
       const list = res.data?.data?.data || res.data?.data || [];
       setOrders(list);
 
@@ -1201,7 +1201,7 @@ export default function OrderManagerDashboard() {
               </div>
 
               {/* Assign Replacements Form */}
-              <Card className="border border-brand-sage/40 shadow-xl rounded-2xl overflow-hidden bg-white">
+              <Card className="border border-brand-sage/40 shadow-xl rounded-2xl bg-white">
 <CardContent className="p-4 space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-brand-sage/20">
                     <span className="h-2 w-2 rounded-full bg-brand-yellow" />
