@@ -64,7 +64,7 @@ const mockHistory = [
 export default function DriverDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"home" | "history" | "alerts">("home");
+  const [activeTab, setActiveTab] = useState<"home" | "history" | "alerts" | "replacements">("home");
   const [routeTab, setRouteTab] = useState<"active" | "missed" | "incomplete_returns">("active");
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
@@ -74,6 +74,9 @@ export default function DriverDashboard() {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const [driverAllocations, setDriverAllocations] = useState<any[]>([]);
+  const [loadingAllocations, setLoadingAllocations] = useState(false);
 
   interface AssignedDelivery {
     id: string;
@@ -145,6 +148,26 @@ export default function DriverDashboard() {
     }
     fetchStats();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "replacements" && stats?.driver_id) {
+      const fetchDriverAllocations = async () => {
+        setLoadingAllocations(true);
+        try {
+          const res = await api.get("/replacement-allocations", {
+            params: { driver_id: stats.driver_id, per_page: 100 }
+          });
+          const list = res.data?.data?.data || res.data?.data || [];
+          setDriverAllocations(Array.isArray(list) ? list : []);
+        } catch (err) {
+          console.error("Failed to load driver allocations:", err);
+        } finally {
+          setLoadingAllocations(false);
+        }
+      };
+      fetchDriverAllocations();
+    }
+  }, [activeTab, stats?.driver_id]);
 
   const handleLogout = () => {
     clearAuth();
@@ -719,6 +742,79 @@ export default function DriverDashboard() {
             </motion.div>
           )}
 
+          {/* TAB 4: REPLACEMENTS PANEL */}
+          {activeTab === "replacements" && (
+            <motion.div
+              key="replacements-tab"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -15 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-4"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <h3 className="text-sm font-black text-brand-forest font-heading uppercase tracking-wider">
+                  Assigned Replacements
+                </h3>
+                <span className="text-xs text-gray-400 font-bold">Loaded Inventory</span>
+              </div>
+
+              {loadingAllocations ? (
+                <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400 animate-pulse">
+                  <RefreshCcw size={24} className="animate-spin mx-auto mb-2 text-brand-mid" />
+                  <p className="text-xs font-bold text-gray-500">Loading Assigned Replacements...</p>
+                </div>
+              ) : driverAllocations.length === 0 ? (
+                <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
+                  <RefreshCcw size={32} className="mx-auto mb-2 text-gray-300" />
+                  <p className="text-xs font-bold text-gray-500">No Pre-assigned Replacements</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">No physical replacements have been pre-allocated to your truck for this shift.</p>
+                </div>
+              ) : (
+                driverAllocations.map((alloc) => {
+                  const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
+                  return (
+                    <div key={alloc.id} className="bg-white border border-brand-sage rounded-2xl p-4 shadow-sm space-y-3 text-xs">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-extrabold text-brand-forest text-sm leading-tight">{alloc.product?.name}</h4>
+                          <p className="text-[10px] font-semibold text-gray-400 mt-0.5">Order #: {alloc.order?.order_number || "N/A"}</p>
+                          <p className="text-[9px] text-gray-500 font-bold mt-1">Source Store: {alloc.sales_store?.name} {alloc.batch_reference && `(Batch: ${alloc.batch_reference})`}</p>
+                        </div>
+                        <Badge className={`text-[8px] font-black uppercase tracking-wider ${
+                          alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
+                          alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
+                          'bg-amber-50 text-amber-700'
+                        }`}>
+                          {alloc.status.replace('_', ' ')}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-gray-100 text-center text-[10px] font-semibold text-gray-500">
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Assigned</p>
+                          <p className="text-gray-900 mt-0.5 font-bold">{alloc.allocated_quantity}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Delivered</p>
+                          <p className="text-green-600 mt-0.5 font-bold">{alloc.delivered_quantity}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Returned</p>
+                          <p className="text-blue-600 mt-0.5 font-bold">{alloc.returned_quantity}</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Leftover</p>
+                          <p className="text-red-500 mt-0.5 font-black">{leftover}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </motion.div>
+          )}
+
           {/* TAB 2: HISTORY PANEL */}
           {activeTab === "history" && (
             <motion.div
@@ -1156,6 +1252,25 @@ export default function DriverDashboard() {
           <Truck size={20} className={activeTab === "home" ? "scale-110 text-brand-forest" : "text-gray-400"} />
           <span className="text-[9px] uppercase tracking-wider">Home</span>
           {activeTab === "home" && (
+            <motion.div 
+              layoutId="activeTabIndicator" 
+              className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-brand-yellow rounded-full"
+            />
+          )}
+        </button>
+
+        {/* TAB 4: REPLACEMENTS BUTTON */}
+        <button 
+          onClick={() => setActiveTab("replacements")}
+          className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all relative ${
+            activeTab === "replacements" 
+              ? "text-brand-forest font-black" 
+              : "text-gray-400 hover:text-brand-forest font-semibold"
+          }`}
+        >
+          <RefreshCcw size={20} className={activeTab === "replacements" ? "scale-110 text-brand-forest" : "text-gray-400"} />
+          <span className="text-[9px] uppercase tracking-wider">Replacements</span>
+          {activeTab === "replacements" && (
             <motion.div 
               layoutId="activeTabIndicator" 
               className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-1 bg-brand-yellow rounded-full"

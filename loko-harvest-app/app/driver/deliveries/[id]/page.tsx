@@ -39,6 +39,17 @@ const DriverTransitMap = dynamic(() => import("@/components/DriverTransitMap"), 
   ),
 });
 
+const generateQtyOptions = (maxQty: number) => {
+  const options: number[] = [0];
+  for (let q = 0.5; q <= maxQty; q += 0.5) {
+    options.push(q);
+  }
+  if (maxQty > 0 && !options.includes(maxQty)) {
+    options.push(maxQty);
+  }
+  return options;
+};
+
 export default function DeliveryConfirmationPage() {
   const params = useParams();
   const router = useRouter();
@@ -121,6 +132,7 @@ export default function DeliveryConfirmationPage() {
   const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
   const [hasCheckedReplacements, setHasCheckedReplacements] = useState(false);
   const [checkingReplacements, setCheckingReplacements] = useState(false);
+  const [allocationsList, setAllocationsList] = useState<any[]>([]);
   
   // Return Form inputs
   const [formReasonCode, setFormReasonCode] = useState("broken_cracked");
@@ -253,6 +265,26 @@ export default function DeliveryConfirmationPage() {
   }, [params.id]);
 
   useEffect(() => {
+    if (delivery?.order_id) {
+      const fetchAllocationsList = async () => {
+        try {
+          const res = await api.get('/replacement-allocations', {
+            params: { order_id: delivery.order_id }
+          });
+          if (res.data?.success) {
+            const payload = res.data.data;
+            const list = payload?.data?.data || payload?.data || [];
+            setAllocationsList(Array.isArray(list) ? list : []);
+          }
+        } catch (err) {
+          console.error("Failed to fetch allocations list:", err);
+        }
+      };
+      fetchAllocationsList();
+    }
+  }, [delivery?.order_id]);
+
+  useEffect(() => {
     if (step === 4 && delivery?.customer_id && delivery?.order_id && !hasCheckedReplacements) {
       setHasCheckedReplacements(true);
       setCheckingReplacements(true);
@@ -271,12 +303,14 @@ export default function DeliveryConfirmationPage() {
         })
       ]).then(([returnsRes, allocsRes]) => {
         if (returnsRes.data?.success && allocsRes.data?.success) {
-          const allocations = allocsRes.data.data?.data || allocsRes.data.data || [];
+          const payload = allocsRes.data.data;
+          const list = payload?.data?.data || payload?.data || [];
+          const allocations = Array.isArray(list) ? list : [];
           
           const mapped = returnsRes.data.data.data.map((item: any) => {
             const matchingAlloc = allocations.find((a: any) => a.product_id === item.product_id);
             const remainingAlloc = matchingAlloc 
-              ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity)
+              ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
               : 0;
 
             return {
@@ -287,7 +321,7 @@ export default function DeliveryConfirmationPage() {
               salesStoreId: matchingAlloc ? matchingAlloc.sales_store_id : "",
               batchRef: matchingAlloc ? matchingAlloc.batch_reference : "",
             };
-          }).filter((item: any) => item.remainingAlloc > 0);
+          }).filter((item: any) => (item.quantity - (item.replacement_quantity || 0)) > 0);
 
           setPendingReplacements(mapped);
         }
@@ -524,15 +558,26 @@ export default function DeliveryConfirmationPage() {
         if (field === 'returnQty') {
           const returnQtyVal = parseFloat(val) || 0;
           const qty = Math.min(returnQtyVal, item.quantity);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+          const remainingAlloc = matchingAlloc 
+            ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+            : 0;
+          const maxReplaceLimit = Math.min(qty, remainingAlloc);
+          
           return {
             ...item,
             returnQty: val === "" ? "" : qty.toString(),
-            replaceQty: item.replaceQty !== "" && parseFloat(item.replaceQty) > qty ? qty.toString() : item.replaceQty
+            replaceQty: item.replaceQty !== "" && parseFloat(item.replaceQty) > maxReplaceLimit ? maxReplaceLimit.toString() : item.replaceQty
           };
         } else {
           const returnQtyVal = parseFloat(item.returnQty) || 0;
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+          const remainingAlloc = matchingAlloc 
+            ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+            : 0;
+          const maxLimit = Math.min(returnQtyVal, remainingAlloc);
           const replaceQtyVal = parseFloat(val) || 0;
-          const qty = Math.min(replaceQtyVal, returnQtyVal);
+          const qty = Math.min(replaceQtyVal, maxLimit);
           return {
             ...item,
             replaceQty: val === "" ? "" : qty.toString()
@@ -1505,15 +1550,30 @@ export default function DeliveryConfirmationPage() {
                               </div>
                               <div>
                                 <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Replaced Today (Qty)</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  placeholder="0.00"
-                                  value={item.replaceQty}
-                                  disabled={!item.returnQty}
-                                  onChange={(e) => handleItemQtyChange(item.product_id, 'replaceQty', e.target.value)}
-                                  className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow disabled:opacity-40"
-                                />
+                                {(() => {
+                                  const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+                                  const remainingAlloc = matchingAlloc 
+                                    ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+                                    : 0;
+                                  const returnQtyVal = parseFloat(item.returnQty) || 0;
+                                  const maxLimit = Math.min(returnQtyVal, remainingAlloc);
+                                  const options = generateQtyOptions(maxLimit);
+                                  
+                                  return (
+                                    <select
+                                      value={item.replaceQty || "0"}
+                                      disabled={!item.returnQty || maxLimit === 0}
+                                      onChange={(e) => handleItemQtyChange(item.product_id, 'replaceQty', e.target.value)}
+                                      className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow disabled:opacity-40"
+                                    >
+                                      {options.map(qty => (
+                                        <option key={qty} value={qty}>
+                                          {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} trays`}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  );
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1657,14 +1717,17 @@ export default function DeliveryConfirmationPage() {
 
                         <div className="pt-1">
                           <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Deliver Today (Qty)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="0.00"
-                            value={item.replacedToday}
+                          <select
+                            value={item.replacedToday || "0"}
                             onChange={(e) => handleReplacementQtyChange(item.id, e.target.value)}
                             className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
-                          />
+                          >
+                            {generateQtyOptions(Math.min(remaining, item.remainingAlloc)).map(qty => (
+                              <option key={qty} value={qty}>
+                                {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} trays`}
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         {parseFloat(item.replacedToday) > 0 && item.allocation && (

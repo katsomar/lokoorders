@@ -36,6 +36,10 @@ class OrderReplacementAllocationController extends Controller
             $query->where('order_id', $request->order_id);
         }
 
+        if ($request->has('driver_id')) {
+            $query->where('driver_id', $request->driver_id);
+        }
+
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
