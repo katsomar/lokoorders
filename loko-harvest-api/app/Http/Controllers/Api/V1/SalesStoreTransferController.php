@@ -91,8 +91,11 @@ class SalesStoreTransferController extends Controller
                 ]);
             }
 
-            $sourceStock->decrement('current_quantity', $qty);
+            $product = \App\Models\Product::findOrFail($productId);
+            $price = $product->sales_unit_price ?? $product->default_unit_price;
+
             $sourceStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+            $sourceStock->updateStock('take', $qty, $price);
 
             // 2. Credit destination stock
             $destStock = SalesStoreStock::firstOrCreate(
@@ -105,8 +108,8 @@ class SalesStoreTransferController extends Controller
                     'updated_by' => auth()->id(),
                 ]
             );
-            $destStock->increment('current_quantity', $qty);
             $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+            $destStock->updateStock('add', $qty, $price);
 
             // 3. Record transfer log
             $transfer = SalesStoreTransfer::create([

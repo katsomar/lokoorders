@@ -380,12 +380,38 @@ class ReturnVoucherTest extends TestCase
     {
         $store = $this->order->salesStore;
 
-        \App\Models\SalesStoreStock::create([
+        $stock = \App\Models\SalesStoreStock::create([
             'sales_store_id' => $store->id,
             'product_id' => $this->product->id,
             'batch_reference' => 'B-EG-25',
             'current_quantity' => 10.00,
             'updated_by' => $this->user->id,
+        ]);
+        $stock->updateStock('replace', 2.00);
+
+        $allocation = \App\Models\OrderReplacementAllocation::create([
+            'order_id' => $this->order->id,
+            'driver_id' => $this->delivery->driver_id,
+            'product_id' => $this->product->id,
+            'sales_store_id' => $store->id,
+            'batch_reference' => 'B-EG-25',
+            'allocated_quantity' => 2.00,
+            'delivered_quantity' => 0.00,
+            'returned_quantity' => 0.00,
+            'status' => 'allocated',
+            'created_by' => $this->user->id
+        ]);
+
+        \App\Models\SalesStoreMovement::create([
+            'movement_date' => now()->toDateString(),
+            'sales_store_id' => $store->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'B-EG-25',
+            'movement_type' => 'dispatch_out',
+            'quantity' => 2.00,
+            'reference_id' => $allocation->id,
+            'created_by' => $this->user->id,
+            'notes' => 'Pre-allocated replacements'
         ]);
 
         $voucher = ReturnVoucher::create([
@@ -442,7 +468,7 @@ class ReturnVoucherTest extends TestCase
             'batch_reference' => 'B-EG-25',
             'quantity' => 2.00,
             'movement_type' => 'dispatch_out',
-            'reference_id' => $voucher->id,
+            'reference_id' => $allocation->id,
         ]);
     }
 }

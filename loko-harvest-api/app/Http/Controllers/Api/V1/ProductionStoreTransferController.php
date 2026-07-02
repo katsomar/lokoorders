@@ -66,8 +66,8 @@ class ProductionStoreTransferController extends Controller
                 }
 
                 // Debit source
-                $stock->decrement('current_quantity', $qty);
                 $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $stock->updateStock('take', $qty);
 
                 // Credit destination
                 $destStock = ProductionStoreStock::firstOrCreate(
@@ -82,8 +82,8 @@ class ProductionStoreTransferController extends Controller
                         'updated_by' => auth()->id(),
                     ]
                 );
-                $destStock->increment('current_quantity', $qty);
                 $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $destStock->updateStock('add', $qty, $stock->valuation_price);
 
                 // Record log
                 $transfer = ProductionStoreTransfer::create([
@@ -123,8 +123,8 @@ class ProductionStoreTransferController extends Controller
                     if ($remainingToDebit <= 0) break;
 
                     $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                    $stock->decrement('current_quantity', $debitAmount);
                     $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $stock->updateStock('take', $debitAmount);
 
                     // Determine destination batch reference: if to_batch_reference was provided, we rename all segments to it; otherwise preserve original segment batch
                     $destSegmentBatch = $validated['to_batch_reference'] ?? $stock->batch_reference;
@@ -142,8 +142,8 @@ class ProductionStoreTransferController extends Controller
                             'updated_by' => auth()->id(),
                         ]
                     );
-                    $destStock->increment('current_quantity', $debitAmount);
                     $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $destStock->updateStock('add', $debitAmount, $stock->valuation_price);
 
                     // Record log for this batch segment
                     $transfer = ProductionStoreTransfer::create([

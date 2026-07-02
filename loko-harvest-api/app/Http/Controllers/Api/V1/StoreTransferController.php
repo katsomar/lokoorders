@@ -136,8 +136,8 @@ class StoreTransferController extends Controller
             // 3. Debit production stock and credit sales stock
             if ($supportsBatch && $batchRef) {
                 // Move specific batch
-                $productionStock->decrement('current_quantity', $qty);
                 $productionStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $productionStock->updateStock('take', $qty);
 
                 // Create transfer record
                 $transfer = StoreTransfer::create([
@@ -161,8 +161,8 @@ class StoreTransferController extends Controller
                     ],
                     ['current_quantity' => 0, 'updated_by' => auth()->id()]
                 );
-                $salesStock->increment('current_quantity', $qty);
                 $salesStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $salesStock->updateStock('add', $qty, $transferPrice);
 
                 // Log movement in sales store
                 SalesStoreMovement::create([
@@ -193,8 +193,8 @@ class StoreTransferController extends Controller
                     if ($remainingToDebit <= 0) break;
 
                     $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                    $stock->decrement('current_quantity', $debitAmount);
                     $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $stock->updateStock('take', $debitAmount);
                     
                     $currentBatch = $stock->batch_reference; // null for unbatched
 
@@ -220,8 +220,8 @@ class StoreTransferController extends Controller
                         ],
                         ['current_quantity' => 0, 'updated_by' => auth()->id()]
                     );
-                    $salesStock->increment('current_quantity', $debitAmount);
                     $salesStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $salesStock->updateStock('add', $debitAmount, $stock->valuation_price ?: $transferPrice);
 
                     // Log movement in sales store
                     SalesStoreMovement::create([

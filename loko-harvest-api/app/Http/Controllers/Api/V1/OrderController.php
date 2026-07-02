@@ -253,8 +253,8 @@ class OrderController extends Controller
                         ->where('batch_reference', $item->batch_reference)
                         ->first();
                     if ($stock) {
-                        $stock->increment('current_quantity', $item->quantity);
                         $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                        $stock->updateStock('take', -$item->quantity, $item->product->sales_unit_price ?? $item->product->default_unit_price);
                     }
                 }
                 \App\Models\SalesStoreMovement::where('reference_id', $order->id)->delete();
@@ -344,8 +344,8 @@ class OrderController extends Controller
                             ],
                             ['current_quantity' => 0, 'updated_by' => auth()->id()]
                         );
-                        $stock->decrement('current_quantity', $item['quantity']);
                         $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                        $stock->updateStock('take', $item['quantity'], $prod->sales_unit_price ?? $prod->default_unit_price);
 
                         \App\Models\SalesStoreMovement::create([
                             'movement_date' => $validated['order_date'],
@@ -376,8 +376,8 @@ class OrderController extends Controller
                                 ],
                                 ['current_quantity' => 0, 'updated_by' => auth()->id()]
                             );
-                            $stock->decrement('current_quantity', $remainingToDebit);
                             $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                            $stock->updateStock('take', $remainingToDebit, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                             OrderItem::create([
                                 'order_id' => $order->id,
@@ -404,8 +404,8 @@ class OrderController extends Controller
                                 if ($remainingToDebit <= 0) break;
 
                                 $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                                $stock->decrement('current_quantity', $debitAmount);
                                 $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                                $stock->updateStock('take', $debitAmount, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                                 $segmentBatch = $stock->batch_reference;
                                 $segmentLineTotal = $debitAmount * $item['unit_price'];
@@ -436,8 +436,8 @@ class OrderController extends Controller
 
                             if ($remainingToDebit > 0) {
                                 $lastStock = $stocks->last();
-                                $lastStock->decrement('current_quantity', $remainingToDebit);
                                 $lastStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                                $lastStock->updateStock('take', $remainingToDebit, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                                 OrderItem::create([
                                     'order_id' => $order->id,
@@ -537,8 +537,8 @@ class OrderController extends Controller
                         ->where('batch_reference', $item->batch_reference)
                         ->first();
                     if ($stock) {
-                        $stock->increment('current_quantity', $item->quantity);
                         $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                        $stock->updateStock('take', -$item->quantity, $item->product->sales_unit_price ?? $item->product->default_unit_price);
                     }
                 }
                 \App\Models\SalesStoreMovement::where('reference_id', $order->id)->delete();

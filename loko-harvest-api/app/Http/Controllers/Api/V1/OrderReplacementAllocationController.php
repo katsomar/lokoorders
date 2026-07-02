@@ -125,11 +125,11 @@ class OrderReplacementAllocationController extends Controller
             }
 
             // Decrement Stock
-            $stock->decrement('current_quantity', $validated['allocated_quantity']);
             $stock->update([
                 'updated_by' => auth()->id(),
                 'last_updated' => now()
             ]);
+            $stock->updateStock('replace', $validated['allocated_quantity'], $product->sales_unit_price ?? $product->default_unit_price);
 
             // Create Allocation
             $allocation = OrderReplacementAllocation::create([
@@ -191,11 +191,11 @@ class OrderReplacementAllocationController extends Controller
                 ]
             );
 
-            $stock->increment('current_quantity', $validated['quantity']);
             $stock->update([
                 'updated_by' => auth()->id(),
                 'last_updated' => now()
             ]);
+            $stock->updateStock('replace', -$validated['quantity'], $allocation->product->sales_unit_price ?? $allocation->product->default_unit_price);
 
             // Increment returned quantity
             $allocation->increment('returned_quantity', $validated['quantity']);
@@ -258,11 +258,11 @@ class OrderReplacementAllocationController extends Controller
                     }
 
                     // Decrement Stock
-                    $stock->decrement('current_quantity', $item['allocated_quantity']);
                     $stock->update([
                         'updated_by' => auth()->id(),
                         'last_updated' => now()
                     ]);
+                    $stock->updateStock('replace', $item['allocated_quantity'], $product->sales_unit_price ?? $product->default_unit_price);
 
                     // Create Allocation
                     $allocation = OrderReplacementAllocation::create([

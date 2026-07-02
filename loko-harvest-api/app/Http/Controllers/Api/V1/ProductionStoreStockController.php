@@ -70,7 +70,12 @@ class ProductionStoreStockController extends Controller
 
         $stock = ProductionStoreStock::findOrFail($id);
         $stock->update([
+            'opening_stock' => $validated['current_quantity'],
+            'stock_taken' => 0,
+            'replacements' => 0,
+            'closing_stock' => $validated['current_quantity'],
             'current_quantity' => $validated['current_quantity'],
+            'unit_price' => $validated['valuation_price'],
             'valuation_price' => $validated['valuation_price'],
             'updated_by' => auth()->id(),
             'last_updated' => now(),

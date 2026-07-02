@@ -52,6 +52,11 @@ interface SalesStockItem {
   sales_store_id: string;
   sales_store_name: string;
   batch_reference?: string | null;
+  opening_stock: number;
+  stock_taken: number;
+  replacements: number;
+  closing_stock: number;
+  unit_price: number;
 }
 
 export default function SalesStorePage() {
@@ -146,7 +151,12 @@ export default function SalesStorePage() {
           capacity: cap,
           sales_store_id: item.sales_store_id,
           sales_store_name: item.sales_store?.name || 'N/A',
-          batch_reference: item.batch_reference || null
+          batch_reference: item.batch_reference || null,
+          opening_stock: parseFloat(item.opening_stock || 0),
+          stock_taken: parseFloat(item.stock_taken || 0),
+          replacements: parseFloat(item.replacements || 0),
+          closing_stock: parseFloat(item.closing_stock || 0),
+          unit_price: parseFloat(item.unit_price || item.product.sales_unit_price || item.product.default_unit_price),
         };
       });
       setStockItems(mappedStock);
@@ -219,7 +229,7 @@ export default function SalesStorePage() {
   };
 
   const calculateTotalValuation = () => {
-    return getFilteredStock().reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+    return getFilteredStock().reduce((acc, item) => acc + (item.closing_stock * item.unit_price), 0);
   };
 
   // Create Sales Store
@@ -499,7 +509,7 @@ export default function SalesStorePage() {
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
                 {getFilteredStock()
                   .filter(item => item.unit === "Packs")
-                  .reduce((acc, item) => acc + item.quantity, 0)
+                  .reduce((acc, item) => acc + item.closing_stock, 0)
                   .toLocaleString()} Units
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4 flex items-center gap-1">
@@ -515,7 +525,7 @@ export default function SalesStorePage() {
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
                 {getFilteredStock()
                   .filter(item => item.unit === "Trays")
-                  .reduce((acc, item) => acc + item.quantity, 0)
+                  .reduce((acc, item) => acc + item.closing_stock, 0)
                   .toLocaleString()} Trays
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4">
@@ -646,22 +656,26 @@ export default function SalesStorePage() {
                       <TableHead className="text-xs font-bold text-brand-forest">Packaged Product</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Stock Code</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Batch Reference</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Current Stock</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Sales Price</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Total Dues Value</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Opening Stock</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Stock Taken</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Replacements</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Closing Stock</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Unit Price</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Value Taken</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest pr-6">Value Closing</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {getFilteredStock().length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-10 text-gray-450 font-medium">
+                        <TableCell colSpan={11} className="text-center py-10 text-gray-450 font-medium">
                           No stock records found matching filters.
                         </TableCell>
                       </TableRow>
                     ) : getFilteredStock().map((item) => {
-                      const itemValue = item.quantity * item.unitPrice;
-                      const percent = Math.min((item.quantity / item.capacity) * 100, 100);
-                      const isLow = item.status === 'low' || item.quantity < 50;
+                      const worthTaken = item.stock_taken * item.unit_price;
+                      const worthClosing = item.closing_stock * item.unit_price;
+                      const isLow = item.status === 'low' || item.closing_stock < 50;
 
                       return (
                         <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
@@ -682,28 +696,30 @@ export default function SalesStorePage() {
                               {item.batch_reference || "—"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-bold text-brand-forest">
-                            <div>
-                              {item.quantity.toLocaleString()}{" "}
-                              <span className="text-xs text-gray-400 font-medium">{item.unit}</span>
-                            </div>
-                            
-                            <div className="bg-gray-205 h-1 rounded-full overflow-hidden mt-1.5 ml-auto" style={{ width: "96px" }}>
-                              <div 
-                                className={`h-full rounded-full transition-all ${
-                                  isLow 
-                                    ? 'bg-red-500 animate-pulse' 
-                                    : 'bg-brand-mid'
-                                }`} 
-                                style={{ width: `${percent}%` }}
-                              />
-                            </div>
+                          <TableCell className="text-right font-semibold text-brand-forest text-xs">
+                            {item.opening_stock.toLocaleString()}{" "}
+                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-amber-600 text-xs">
+                            {item.stock_taken.toLocaleString()}{" "}
+                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-blue-600 text-xs">
+                            {item.replacements.toLocaleString()}{" "}
+                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                          </TableCell>
+                          <TableCell className="text-right font-black text-brand-forest text-xs">
+                            {item.closing_stock.toLocaleString()}{" "}
+                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
                           </TableCell>
                           <TableCell className="text-right font-bold text-xs text-gray-500">
-                            UGX {item.unitPrice.toLocaleString()}{" "}<span className="text-[10px] text-gray-400 font-normal">/ {item.unit.replace("s", "")}</span>
+                            UGX {item.unit_price.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-sm">
-                            UGX {itemValue.toLocaleString()}
+                          <TableCell className="text-right font-extrabold text-amber-700 text-xs">
+                            UGX {worthTaken.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-xs">
+                            UGX {worthClosing.toLocaleString()}
                           </TableCell>
                         </TableRow>
                       );

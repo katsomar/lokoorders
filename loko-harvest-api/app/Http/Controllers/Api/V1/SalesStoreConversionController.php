@@ -79,8 +79,8 @@ class SalesStoreConversionController extends Controller
                 }
 
                 // 4. Debit source stock
-                $sourceStock->decrement('current_quantity', $fromQty);
                 $sourceStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $sourceStock->updateStock('take', $fromQty, $fromProduct->sales_unit_price ?? $fromProduct->default_unit_price);
 
                 // 5. Credit destination stock
                 $destStock = SalesStoreStock::firstOrCreate(
@@ -94,8 +94,8 @@ class SalesStoreConversionController extends Controller
                         'updated_by' => auth()->id(),
                     ]
                 );
-                $destStock->increment('current_quantity', $toQty);
                 $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                $destStock->updateStock('add', $toQty, $toProduct->sales_unit_price ?? $toProduct->default_unit_price);
 
                 // 6. Record conversion log
                 $conversion = SalesStoreConversion::create([
@@ -175,8 +175,8 @@ class SalesStoreConversionController extends Controller
                     if ($remainingToDebit <= 0) break;
 
                     $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                    $stock->decrement('current_quantity', $debitAmount);
                     $stock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $stock->updateStock('take', $debitAmount, $fromProduct->sales_unit_price ?? $fromProduct->default_unit_price);
 
                     $currentBatch = $stock->batch_reference;
                     $destSegmentQty = $debitAmount * $ratio;
@@ -193,8 +193,8 @@ class SalesStoreConversionController extends Controller
                             'updated_by' => auth()->id(),
                         ]
                     );
-                    $destStock->increment('current_quantity', $destSegmentQty);
                     $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
+                    $destStock->updateStock('add', $destSegmentQty, $toProduct->sales_unit_price ?? $toProduct->default_unit_price);
 
                     // Log movements for this batch segment
                     SalesStoreMovement::create([

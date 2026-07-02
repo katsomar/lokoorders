@@ -115,8 +115,8 @@ class Order extends Model
                         ],
                         ['current_quantity' => 0, 'updated_by' => $userId]
                     );
-                    $stock->decrement('current_quantity', $item->quantity);
                     $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                    $stock->updateStock('take', $item->quantity, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                     \App\Models\SalesStoreMovement::create([
                         'movement_date' => $this->order_date,
@@ -147,8 +147,8 @@ class Order extends Model
                             ],
                             ['current_quantity' => 0, 'updated_by' => $userId]
                         );
-                        $stock->decrement('current_quantity', $remainingToDebit);
                         $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                        $stock->updateStock('take', $remainingToDebit, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                         $item->update(['batch_reference' => null]);
 
@@ -171,8 +171,8 @@ class Order extends Model
                             if ($remainingToDebit <= 0) break;
 
                             $debitAmount = min($stock->current_quantity, $remainingToDebit);
-                            $stock->decrement('current_quantity', $debitAmount);
                             $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                            $stock->updateStock('take', $debitAmount, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                             $segmentBatch = $stock->batch_reference;
 
@@ -211,8 +211,8 @@ class Order extends Model
 
                         if ($remainingToDebit > 0) {
                             $lastStock = $stocks->last();
-                            $lastStock->decrement('current_quantity', $remainingToDebit);
                             $lastStock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                            $lastStock->updateStock('take', $remainingToDebit, $prod->sales_unit_price ?? $prod->default_unit_price);
 
                             if ($first) {
                                 $item->update([
@@ -300,8 +300,8 @@ class Order extends Model
                     ['current_quantity' => 0, 'updated_by' => $userId]
                 );
 
-                $stock->decrement('current_quantity', $item->quantity);
                 $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                $stock->updateStock('take', $item->quantity, $item->product->sales_unit_price ?? $item->product->default_unit_price);
 
                 \App\Models\SalesStoreMovement::create([
                     'movement_date' => now()->toDateString(),

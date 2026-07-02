@@ -65,12 +65,11 @@ class ProductionStoreIntakeController extends Controller
                 ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $validated['valuation_price']]
             );
 
-            $stock->increment('current_quantity', $validated['quantity']);
             $stock->update([
-                'valuation_price' => $validated['valuation_price'],
                 'updated_by' => auth()->id(),
                 'last_updated' => now()
             ]);
+            $stock->updateStock('add', $validated['quantity'], $validated['valuation_price']);
 
             return $this->success($intake->load('product'), 'Intake recorded successfully', 201);
         });

@@ -1146,10 +1146,11 @@ class DriverVehicleTest extends TestCase
         ]);
 
         // Deduct stock manually
-        \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+        $stockRecord = \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
             ->where('product_id', $eggs->id)
             ->where('batch_reference', 'BATCH-X1')
-            ->decrement('current_quantity', 10);
+            ->first();
+        $stockRecord->updateStock('take', 10);
 
         // Update order via PUT
         $response = $this->actingAs($this->user, 'sanctum')
@@ -1251,10 +1252,11 @@ class DriverVehicleTest extends TestCase
         ]);
 
         // Deduct stock manually
-        \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
+        $stockRecord = \App\Models\SalesStoreStock::where('sales_store_id', $salesStore->id)
             ->where('product_id', $eggs->id)
             ->where('batch_reference', 'BATCH-Y1')
-            ->decrement('current_quantity', 10);
+            ->first();
+        $stockRecord->updateStock('take', 10);
 
         // Delete order via DELETE
         $response = $this->actingAs($this->user, 'sanctum')
