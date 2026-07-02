@@ -75,6 +75,13 @@ export default function SalesStorePage() {
   
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
+  const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
+
+  const getUniqueBatches = () => {
+    const filteredStock = stockItems.filter(item => selectedStoreFilter === "all" || item.sales_store_id === selectedStoreFilter);
+    const batches = filteredStock.map(item => item.batch_reference || 'N/A');
+    return ["all", ...Array.from(new Set(batches))];
+  };
 
   // Manage Stores State
   const [newStoreName, setNewStoreName] = useState("");
@@ -219,6 +226,9 @@ export default function SalesStorePage() {
       
       const matchesStore = selectedStoreFilter === "all" || item.sales_store_id === selectedStoreFilter;
       if (!matchesStore) return false;
+
+      const matchesBatch = selectedBatchFilter === "all" || (item.batch_reference || 'N/A') === selectedBatchFilter;
+      if (!matchesBatch) return false;
 
       if (activeCategory === "all") return true;
       if (activeCategory === "cream") return item.category === "cream";
@@ -603,12 +613,26 @@ export default function SalesStorePage() {
                   {/* Store Filter Dropdown */}
                   <select
                     value={selectedStoreFilter}
-                    onChange={(e) => setSelectedStoreFilter(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedStoreFilter(e.target.value);
+                      setSelectedBatchFilter("all");
+                    }}
                     className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-40"
                   >
                     <option value="all">All Stores</option>
                     {salesStores.map(store => (
                       <option key={store.id} value={store.id}>{store.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedBatchFilter}
+                    onChange={(e) => setSelectedBatchFilter(e.target.value)}
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-45"
+                  >
+                    <option value="all">All Batches</option>
+                    {getUniqueBatches().filter(b => b !== "all").map(batch => (
+                      <option key={batch} value={batch}>Batch: {batch}</option>
                     ))}
                   </select>
 
@@ -672,58 +696,88 @@ export default function SalesStorePage() {
                           No stock records found matching filters.
                         </TableCell>
                       </TableRow>
-                    ) : getFilteredStock().map((item) => {
-                      const worthTaken = item.stock_taken * item.unit_price;
-                      const worthClosing = item.closing_stock * item.unit_price;
-                      const isLow = item.status === 'low' || item.closing_stock < 50;
+                    ) : (
+                      <>
+                        {getFilteredStock().map((item) => {
+                          const worthTaken = item.stock_taken * item.unit_price;
+                          const worthClosing = item.closing_stock * item.unit_price;
+                          const isLow = item.status === 'low' || item.closing_stock < 50;
 
-                      return (
-                        <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
-                          <TableCell className="pl-6 font-bold text-brand-forest text-xs">
-                            {item.sales_store_name}
+                          return (
+                            <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
+                              <TableCell className="pl-6 font-bold text-brand-forest text-xs">
+                                {item.sales_store_name}
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-bold text-brand-forest text-sm">{item.product}</div>
+                                {isLow && (
+                                  <Badge className="bg-red-50 text-red-600 border-none text-[8px] px-1 py-0 h-4 mt-0.5 animate-pulse">
+                                    LOW STOCK ALERT
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-gray-400 font-bold">{item.code}</TableCell>
+                              <TableCell className="font-mono text-xs text-gray-700 font-bold">
+                                <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
+                                  {item.batch_reference || "—"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-brand-forest text-xs">
+                                {item.opening_stock.toLocaleString()}{" "}
+                                <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-amber-600 text-xs">
+                                {item.stock_taken.toLocaleString()}{" "}
+                                <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-blue-600 text-xs">
+                                {item.replacements.toLocaleString()}{" "}
+                                <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                              </TableCell>
+                              <TableCell className="text-right font-black text-brand-forest text-xs">
+                                {item.closing_stock.toLocaleString()}{" "}
+                                <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                              </TableCell>
+                              <TableCell className="text-right font-bold text-xs text-gray-500">
+                                UGX {item.unit_price.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right font-extrabold text-amber-700 text-xs">
+                                UGX {worthTaken.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-xs">
+                                UGX {worthClosing.toLocaleString()}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+
+                        {/* Summary Total Row */}
+                        <TableRow className="bg-gray-100/50 font-black border-t-2 border-brand-sage/40">
+                          <TableCell colSpan={4} className="pl-6 text-brand-forest text-xs font-black uppercase tracking-wider">
+                            Total
                           </TableCell>
-                          <TableCell>
-                            <div className="font-bold text-brand-forest text-sm">{item.product}</div>
-                            {isLow && (
-                              <Badge className="bg-red-50 text-red-600 border-none text-[8px] px-1 py-0 h-4 mt-0.5 animate-pulse">
-                                LOW STOCK ALERT
-                              </Badge>
-                            )}
+                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                            {getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-gray-400 font-bold">{item.code}</TableCell>
-                          <TableCell className="font-mono text-xs text-gray-700 font-bold">
-                            <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
-                              {item.batch_reference || "—"}
-                            </Badge>
+                          <TableCell className="text-right text-amber-600 text-xs font-black">
+                            {getFilteredStock().reduce((sum, item) => sum + item.stock_taken, 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-brand-forest text-xs">
-                            {item.opening_stock.toLocaleString()}{" "}
-                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                          <TableCell className="text-right text-blue-600 text-xs font-black">
+                            {getFilteredStock().reduce((sum, item) => sum + item.replacements, 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-amber-600 text-xs">
-                            {item.stock_taken.toLocaleString()}{" "}
-                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                            {getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-semibold text-blue-600 text-xs">
-                            {item.replacements.toLocaleString()}{" "}
-                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
-                          </TableCell>
-                          <TableCell className="text-right font-black text-brand-forest text-xs">
-                            {item.closing_stock.toLocaleString()}{" "}
-                            <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-xs text-gray-500">
-                            UGX {item.unit_price.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-right font-extrabold text-amber-700 text-xs">
-                            UGX {worthTaken.toLocaleString()}
+                          <TableCell className="text-right text-gray-500 text-xs font-medium">—</TableCell>
+                          <TableCell className="text-right text-amber-700 text-xs font-black">
+                            UGX {getFilteredStock().reduce((sum, item) => sum + (item.stock_taken * item.unit_price), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-xs">
-                            UGX {worthClosing.toLocaleString()}
+                            UGX {getFilteredStock().reduce((sum, item) => sum + (item.closing_stock * item.unit_price), 0).toLocaleString()}
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
