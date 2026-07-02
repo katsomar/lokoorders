@@ -596,6 +596,17 @@ export default function DriverDashboard() {
   const currentLiters = (fuelLevel / 100) * fuelTankCapacity;
   const rangeLeftKm = consumptionPerKm > 0 ? (currentLiters / consumptionPerKm) : 0;
 
+  const incompleteReturns = stats?.incomplete_returns || [];
+  const groupedIncompleteReturns: { [key: string]: any[] } = {};
+  incompleteReturns.forEach((voucher: any) => {
+    const key = voucher.delivery_id || voucher.customer;
+    if (!groupedIncompleteReturns[key]) {
+      groupedIncompleteReturns[key] = [];
+    }
+    groupedIncompleteReturns[key].push(voucher);
+  });
+  const groupedIncompleteReturnsList = Object.entries(groupedIncompleteReturns);
+
   return (
     <div className="min-h-screen bg-[#F4F6F5] flex flex-col font-body pb-24 text-gray-800">
       
@@ -745,7 +756,7 @@ export default function DriverDashboard() {
                       {stats.incomplete_returns && stats.incomplete_returns.length > 0 && (
                         <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                       )}
-                      Returns ({stats.incomplete_returns?.length || 0})
+                      Returns ({groupedIncompleteReturnsList.length})
                     </button>
                   </div>
                 )}
@@ -757,46 +768,52 @@ export default function DriverDashboard() {
                       <p className="text-xs font-bold text-gray-500">Loading Active Route...</p>
                     </div>
                   ) : routeTab === "incomplete_returns" ? (
-                    stats && stats.incomplete_returns && stats.incomplete_returns.length > 0 ? (
-                      stats.incomplete_returns.map((voucher: any, index: number) => (
-                        <motion.div
-                          key={voucher.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                        >
-                          <Link href={`/driver/deliveries/${voucher.delivery_id}`}>
-                            <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
-                              <div className="flex gap-3.5">
-                                <div className="h-11 w-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 group-hover:bg-amber-500/20 transition-colors shrink-0">
-                                  <RefreshCcw size={22} />
-                                </div>
-                                <div>
-                                  <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{voucher.customer}</h4>
-                                  <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
-                                    <MapPin size={11} className="text-brand-mid" />
-                                    {voucher.zone}
+                    groupedIncompleteReturnsList.length > 0 ? (
+                      groupedIncompleteReturnsList.map(([key, vouchers], groupIndex) => {
+                        const firstVoucher = vouchers[0];
+                        return (
+                          <motion.div
+                            key={key}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: groupIndex * 0.05 }}
+                          >
+                            <Link href={`/driver/deliveries/${firstVoucher.delivery_id}`}>
+                              <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-brand-sage flex items-center justify-between group active:scale-[0.98] transition-all">
+                                <div className="flex gap-3.5 flex-1 min-w-0">
+                                  <div className="h-11 w-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 group-hover:bg-amber-500/20 transition-colors shrink-0">
+                                    <RefreshCcw size={22} />
                                   </div>
-                                  <div className="flex flex-col gap-1 mt-2.5">
-                                    <div className="flex items-center gap-2">
-                                      <span className="bg-amber-500/15 text-amber-700 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/20">{voucher.voucher_number}</span>
-                                      <span className="text-[10px] text-gray-400 font-semibold">{voucher.return_date}</span>
+                                  <div className="flex-1 min-w-0">
+                                    <h4 className="font-extrabold text-brand-forest leading-tight group-hover:text-brand-mid transition-colors">{firstVoucher.customer}</h4>
+                                    <div className="flex items-center gap-1 text-[11px] text-gray-500 mt-1 font-medium">
+                                      <MapPin size={11} className="text-brand-mid" />
+                                      {firstVoucher.zone}
                                     </div>
-                                    <p className="text-[11px] font-bold text-gray-600 leading-snug">
-                                      {voucher.product_name}: <span className="text-red-600 font-black">{voucher.remaining_quantity} trays remaining</span> <span className="text-gray-400 font-semibold">(Returned: {voucher.quantity} / Replaced: {voucher.replacement_quantity})</span>
-                                    </p>
+                                    <div className="flex flex-col gap-3 mt-3">
+                                      {vouchers.map((voucher: any) => (
+                                        <div key={voucher.id} className="border-t border-brand-sage/40 pt-2.5 first:border-t-0 first:pt-0">
+                                          <div className="flex items-center gap-2">
+                                            <span className="bg-amber-500/15 text-amber-700 font-mono text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/20">{voucher.voucher_number}</span>
+                                            <span className="text-[10px] text-gray-400 font-semibold">{voucher.return_date}</span>
+                                          </div>
+                                          <p className="text-[11px] font-bold text-gray-600 leading-snug mt-1">
+                                            {voucher.product_name}: <span className="text-red-600 font-black">{voucher.remaining_quantity} {voucher.product_unit || 'trays'} remaining</span> <span className="text-gray-400 font-semibold">(Returned: {voucher.quantity} / Replaced: {voucher.replacement_quantity})</span>
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-1 text-amber-600 shrink-0 ml-2">
+                                  <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Replace</span>
+                                  <ChevronRight size={18} className="text-gray-300 group-hover:text-amber-600 transition-colors transform group-hover:translate-x-1 duration-200" />
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1 text-amber-600">
-                                <span className="text-[10px] font-extrabold opacity-0 group-hover:opacity-100 transition-opacity">Replace</span>
-                                <ChevronRight size={18} className="text-gray-300 group-hover:text-amber-600 transition-colors transform group-hover:translate-x-1 duration-200" />
-                              </div>
-                            </div>
-                          </Link>
-                        </motion.div>
-                      ))
-                    ) : (
+                            </Link>
+                          </motion.div>
+                        );
+                    })) : (
                       <div className="bg-white border border-brand-sage rounded-2xl p-6 text-center text-gray-400">
                         <RefreshCcw size={32} className="mx-auto mb-2 text-gray-300" />
                         <p className="text-xs font-bold text-gray-500">No Incomplete Returns Found</p>
@@ -1684,7 +1701,7 @@ export default function DriverDashboard() {
 
       {/* GENERIC DECLARE RETURNS MODAL (WITHOUT ACTIVE DELIVERY) */}
       {showGenericReturnsModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
             
             <div className="bg-[#0B1510] text-white px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">

@@ -245,6 +245,7 @@ class DriverController extends Controller
                     'customer' => $voucher->customer ? $voucher->customer->name : 'N/A',
                     'zone' => $voucher->customer && $voucher->customer->zone ? $voucher->customer->zone->name : 'N/A',
                     'product_name' => $voucher->product ? $voucher->product->name : 'N/A',
+                    'product_unit' => $voucher->product ? $voucher->product->unit_of_measure : 'trays',
                     'quantity' => (float)$voucher->quantity,
                     'replacement_quantity' => (float)$voucher->replacement_quantity,
                     'remaining_quantity' => (float)($voucher->quantity - $voucher->replacement_quantity),

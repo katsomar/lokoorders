@@ -319,7 +319,7 @@ export default function DeliveryConfirmationPage() {
           const mapped = returnsRes.data.data.data.map((item: any) => {
             const matchingAlloc = allocations.find((a: any) => 
               a.product_id === item.product_id && 
-              a.order_id === delivery.order_id
+              a.order_id === item.order_id
             );
             const remainingAlloc = matchingAlloc 
               ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
@@ -1402,7 +1402,7 @@ export default function DeliveryConfirmationPage() {
 
       {/* DELAY JUSTIFICATION MODAL */}
       {showDelayModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[2000] flex items-center justify-center p-6">
           <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
@@ -1501,7 +1501,7 @@ export default function DeliveryConfirmationPage() {
 
       {/* MODAL 1: DECLARE RETURNS PROMPT QUESTION */}
       {showDeclareReturnsQuestionModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[2000] flex items-center justify-center p-6">
           <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl p-5 text-center space-y-6">
             <div className="h-14 w-14 rounded-full bg-brand-yellow/15 text-brand-yellow flex items-center justify-center mx-auto">
               <RefreshCcw size={28} className="animate-spin" style={{ animationDuration: '6s' }} />
@@ -1532,7 +1532,7 @@ export default function DeliveryConfirmationPage() {
 
       {/* MODAL 2: DECLARE RETURNS BATCH FORM ENTRY */}
       {showDeclareReturnsFormModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[2000] flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
             
             {/* Header */}
@@ -1770,7 +1770,7 @@ export default function DeliveryConfirmationPage() {
 
       {/* MODAL 3: DELIVER PENDING REPLACEMENTS FORM ENTRY */}
       {showPendingReplacementsModal && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[2000] flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
             
             {/* Header */}
@@ -1899,7 +1899,7 @@ export default function DeliveryConfirmationPage() {
       )}
 
       {showUndoneModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm overflow-y-auto">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -1987,7 +1987,7 @@ export default function DeliveryConfirmationPage() {
       )}
 
       {showNotReadyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
