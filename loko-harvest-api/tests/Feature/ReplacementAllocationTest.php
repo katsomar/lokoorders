@@ -253,4 +253,31 @@ class ReplacementAllocationTest extends TestCase
             'status' => 'returned'
         ]);
     }
+
+    public function test_can_create_replacement_allocations_in_bulk()
+    {
+        $response = $this->postJson('/api/v1/replacement-allocations/bulk', [
+            'order_id' => $this->order->id,
+            'driver_id' => $this->driver->id,
+            'items' => [
+                [
+                    'product_id' => $this->product->id,
+                    'sales_store_id' => $this->store->id,
+                    'batch_reference' => 'Batch-A',
+                    'allocated_quantity' => 4.00
+                ]
+            ]
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('success', true);
+
+        // Verify stock is decremented (10 - 4 = 6)
+        $this->assertDatabaseHas('sales_store_stock', [
+            'sales_store_id' => $this->store->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'Batch-A',
+            'current_quantity' => 6.00
+        ]);
+    }
 }

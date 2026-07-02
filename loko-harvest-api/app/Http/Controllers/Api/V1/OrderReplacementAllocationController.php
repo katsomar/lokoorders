@@ -224,4 +224,80 @@ class OrderReplacementAllocationController extends Controller
             return $this->success($allocation->fresh(), 'Leftover replacements returned to store successfully');
         });
     }
+
+    public function storeBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'order_id' => 'required|exists:orders,id',
+            'driver_id' => 'required|exists:drivers,id',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.sales_store_id' => 'required|exists:sales_stores,id',
+            'items.*.batch_reference' => 'nullable|string',
+            'items.*.allocated_quantity' => 'required|numeric|min:0.01'
+        ]);
+
+        try {
+            return DB::transaction(function () use ($validated) {
+                $order = Order::findOrFail($validated['order_id']);
+                $createdAllocations = [];
+
+                foreach ($validated['items'] as $item) {
+                    $product = Product::findOrFail($item['product_id']);
+
+                    // Validate inventory stock level
+                    $batch = $item['batch_reference'] ?? null;
+                    $stock = SalesStoreStock::where('sales_store_id', $item['sales_store_id'])
+                        ->where('product_id', $item['product_id'])
+                        ->where('batch_reference', $batch)
+                        ->first();
+
+                    $available = $stock ? (float)$stock->current_quantity : 0.0;
+                    if ($available < (float)$item['allocated_quantity']) {
+                        throw new \Exception("Insufficient stock for {$product->name} (Batch: " . ($batch ?? 'Unbatched') . ") in the selected sales store. Available: {$available}.");
+                    }
+
+                    // Decrement Stock
+                    $stock->decrement('current_quantity', $item['allocated_quantity']);
+                    $stock->update([
+                        'updated_by' => auth()->id(),
+                        'last_updated' => now()
+                    ]);
+
+                    // Create Allocation
+                    $allocation = OrderReplacementAllocation::create([
+                        'order_id' => $validated['order_id'],
+                        'driver_id' => $validated['driver_id'],
+                        'product_id' => $item['product_id'],
+                        'sales_store_id' => $item['sales_store_id'],
+                        'batch_reference' => $batch,
+                        'allocated_quantity' => $item['allocated_quantity'],
+                        'delivered_quantity' => 0.00,
+                        'returned_quantity' => 0.00,
+                        'status' => 'allocated',
+                        'created_by' => auth()->id()
+                    ]);
+
+                    // Create Store Movement
+                    SalesStoreMovement::create([
+                        'movement_date' => now()->toDateString(),
+                        'sales_store_id' => $item['sales_store_id'],
+                        'product_id' => $item['product_id'],
+                        'batch_reference' => $batch,
+                        'movement_type' => 'dispatch_out',
+                        'quantity' => $item['allocated_quantity'],
+                        'reference_id' => $allocation->id,
+                        'created_by' => auth()->id(),
+                        'notes' => "Replacement pre-allocated for Order: {$order->order_number}"
+                    ]);
+
+                    $createdAllocations[] = $allocation->load(['product', 'salesStore', 'driver']);
+                }
+
+                return $this->success($createdAllocations, 'Replacement allocations created successfully');
+            });
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+    }
 }

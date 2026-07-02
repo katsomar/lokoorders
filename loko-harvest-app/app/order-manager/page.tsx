@@ -73,6 +73,11 @@ export default function OrderManagerDashboard() {
   const [allocDriver, setAllocDriver] = useState("");
   const [orderSearchText, setOrderSearchText] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [allocStores, setAllocStores] = useState<Record<string, string>>({});
+  const [allocBatches, setAllocBatches] = useState<Record<string, string>>({});
+  const [allocQtys, setAllocQtys] = useState<Record<string, string>>({});
+  const [itemBatches, setItemBatches] = useState<Record<string, any[]>>({});
+  const [loadingItemBatches, setLoadingItemBatches] = useState<Record<string, boolean>>({});
 
   const filteredOrderOptions = orders
     .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
@@ -284,9 +289,41 @@ export default function OrderManagerDashboard() {
     fetchAvailableBatches();
   }, [allocStore, allocProduct]);
 
+  const fetchBatchesForProduct = async (productId: string, storeId: string) => {
+    if (!storeId || !productId) {
+      setItemBatches(prev => ({ ...prev, [productId]: [] }));
+      return;
+    }
+    setLoadingItemBatches(prev => ({ ...prev, [productId]: true }));
+    try {
+      const res = await api.get("/sales-stock", {
+        params: { sales_store_id: storeId }
+      });
+      const stocks = res.data?.data || [];
+      const filtered = stocks.filter((s: any) => s.product_id === productId && parseFloat(s.current_quantity) > 0);
+      setItemBatches(prev => ({ ...prev, [productId]: filtered }));
+    } catch (err) {
+      console.error(`Failed to load batches for product ${productId}:`, err);
+      setItemBatches(prev => ({ ...prev, [productId]: [] }));
+    } finally {
+      setLoadingItemBatches(prev => ({ ...prev, [productId]: false }));
+    }
+  };
+
+  const handleItemStoreChange = (productId: string, storeId: string) => {
+    setAllocStores(prev => ({ ...prev, [productId]: storeId }));
+    setAllocBatches(prev => ({ ...prev, [productId]: "" }));
+    fetchBatchesForProduct(productId, storeId);
+  };
+
   const handleAllocOrderChange = (orderId: string) => {
     setAllocOrder(orderId);
     setAllocProduct("");
+    setAllocStores({});
+    setAllocBatches({});
+    setAllocQtys({});
+    setItemBatches({});
+    setLoadingItemBatches({});
     if (!orderId) {
       setAllocOrderItems([]);
       return;
@@ -299,31 +336,58 @@ export default function OrderManagerDashboard() {
 
   const handleAssignReplacement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!allocOrder || !allocProduct || !allocStore || !allocQty || !allocDriver) {
-      alert("Please fill all required allocation fields.");
+    if (!allocOrder || !allocDriver) {
+      alert("Please select an order and driver.");
       return;
     }
+
+    const itemsToSubmit = allocOrderItems
+      .map(item => {
+        const qty = parseFloat(allocQtys[item.product_id]) || 0;
+        const storeId = allocStores[item.product_id] || "";
+        const batch = allocBatches[item.product_id] || "";
+        return {
+          product_id: item.product_id,
+          sales_store_id: storeId,
+          batch_reference: batch || null,
+          allocated_quantity: qty
+        };
+      })
+      .filter(i => i.allocated_quantity > 0);
+
+    if (itemsToSubmit.length === 0) {
+      alert("Please enter an allocated quantity greater than 0 for at least one item.");
+      return;
+    }
+
+    const invalidItem = itemsToSubmit.find(i => !i.sales_store_id);
+    if (invalidItem) {
+      alert("Please select a source store for all allocated items.");
+      return;
+    }
+
     setIsSubmittingAllocation(true);
     try {
-      const res = await api.post("/replacement-allocations", {
+      const res = await api.post("/replacement-allocations/bulk", {
         order_id: allocOrder,
-        product_id: allocProduct,
-        sales_store_id: allocStore,
-        batch_reference: allocBatch || null,
-        allocated_quantity: parseFloat(allocQty),
-        driver_id: allocDriver
+        driver_id: allocDriver,
+        items: itemsToSubmit
       });
       if (res.data?.success) {
         alert("Replacement pre-allocated successfully!");
-        setAllocQty("");
-        setAllocBatch("");
+        setAllocQtys({});
+        setAllocStores({});
+        setAllocBatches({});
+        setItemBatches({});
         setAllocDriver("");
+        setAllocOrder("");
+        setOrderSearchText("");
         fetchAllocations();
         fetchOrders();
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.response?.data?.message || "Failed to allocate replacement. Check store stock levels.");
+      alert(err.response?.data?.message || "Failed to allocate replacements. Check store stock levels.");
     } finally {
       setIsSubmittingAllocation(false);
     }
@@ -1265,41 +1329,6 @@ export default function OrderManagerDashboard() {
 
                     {allocOrder && allocOrderItems.length > 0 && (
                       <>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Product *</label>
-                            <select
-                              required
-                              value={allocProduct}
-                              onChange={(e) => setAllocProduct(e.target.value)}
-                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                            >
-                              <option value="">-- Choose Product --</option>
-                              {allocOrderItems.map(item => (
-                                <option key={item.product_id} value={item.product_id}>
-                                  {item.product?.name || "Product"}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Source Store *</label>
-                            <select
-                              required
-                              value={allocStore}
-                              onChange={(e) => setAllocStore(e.target.value)}
-                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                            >
-                              <option value="">-- Choose Store --</option>
-                              {salesStores.map(store => (
-                                <option key={store.id} value={store.id}>
-                                  {store.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-
                         <div>
                           <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Driver *</label>
                           <select
@@ -1317,39 +1346,71 @@ export default function OrderManagerDashboard() {
                           </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Quantity (Trays) *</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              required
-                              placeholder="0.00"
-                              value={allocQty}
-                              onChange={(e) => setAllocQty(e.target.value)}
-                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Select Batch *</label>
-                            <select
-                              required
-                              value={allocBatch}
-                              onChange={(e) => setAllocBatch(e.target.value)}
-                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                              disabled={loadingBatches || !allocStore}
-                            >
-                              <option value="">{loadingBatches ? "Loading batches..." : "-- Select Batch --"}</option>
-                              {availableBatches.map((b: any) => (
-                                <option key={b.batch_reference || 'unbatched'} value={b.batch_reference || ""}>
-                                  {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
-                                </option>
-                              ))}
-                            </select>
-                            {availableBatches.length === 0 && allocStore && allocProduct && !loadingBatches && (
-                              <p className="text-[9px] text-red-500 font-bold mt-1">⚠️ No available stock in this sales store.</p>
-                            )}
-                          </div>
+                        <div className="space-y-4 pt-2 border-t border-brand-sage/20">
+                          <p className="text-[9px] text-brand-forest font-black uppercase tracking-wider">Order Items Allocations</p>
+                          {allocOrderItems.map(item => {
+                            const productId = item.product_id;
+                            const selectedStore = allocStores[productId] || "";
+                            const selectedBatch = allocBatches[productId] || "";
+                            const qty = allocQtys[productId] || "";
+                            const batches = itemBatches[productId] || [];
+                            const isLoadingB = loadingItemBatches[productId] || false;
+
+                            return (
+                              <div key={productId} className="bg-brand-sage/5 p-3 rounded-2xl border border-brand-sage/20 space-y-3">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold text-gray-900 text-xs">{item.product?.name || "Product"}</span>
+                                  <span className="text-[10px] text-gray-500 font-semibold">(Ordered: {parseFloat(item.quantity)} trays)</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Source Store</label>
+                                    <select
+                                      value={selectedStore}
+                                      onChange={(e) => handleItemStoreChange(productId, e.target.value)}
+                                      className="w-full h-9 px-2 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                    >
+                                      <option value="">-- Choose Store --</option>
+                                      {salesStores.map(store => (
+                                        <option key={store.id} value={store.id}>
+                                          {store.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Select Batch</label>
+                                    <select
+                                      value={selectedBatch}
+                                      onChange={(e) => setAllocBatches(prev => ({ ...prev, [productId]: e.target.value }))}
+                                      disabled={isLoadingB || !selectedStore}
+                                      className="w-full h-9 px-2 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                    >
+                                      <option value="">{isLoadingB ? "Loading..." : "-- Select Batch --"}</option>
+                                      {batches.map((b: any) => (
+                                        <option key={b.batch_reference || 'unbatched'} value={b.batch_reference || ""}>
+                                          {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Quantity (Trays)</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="0.00"
+                                    value={qty}
+                                    onChange={(e) => setAllocQtys(prev => ({ ...prev, [productId]: e.target.value }))}
+                                    className="w-full h-9 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
 
                         <Button
@@ -1375,66 +1436,91 @@ export default function OrderManagerDashboard() {
                     No replacement allocations assigned yet.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {allocations.map(alloc => {
-                      const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
-                      return (
-                        <div key={alloc.id} className="bg-white rounded-2xl border border-brand-sage/40 p-4 shadow-sm space-y-3 text-xs">
-                          <div className="flex justify-between items-start">
+                  <div className="space-y-4">
+                    {(() => {
+                      const groups: { [orderNum: string]: { orderNum: string; customerName: string; driverName: string; items: any[] } } = {};
+                      allocations.forEach(alloc => {
+                        const orderNum = alloc.order?.order_number || "Unassociated";
+                        const customerName = alloc.order?.customer?.name || "Unknown Customer";
+                        const driverName = alloc.driver ? (alloc.driver.full_name || alloc.driver.name) : "No Driver";
+                        if (!groups[orderNum]) {
+                          groups[orderNum] = { orderNum, customerName, driverName, items: [] };
+                        }
+                        groups[orderNum].items.push(alloc);
+                      });
+
+                      return Object.values(groups).map((group: any) => (
+                        <div key={group.orderNum} className="bg-white rounded-2xl border border-brand-sage/40 p-4 shadow-sm space-y-4 text-xs">
+                          <div className="pb-3 border-b border-gray-150 flex justify-between items-start">
                             <div>
-                              <p className="font-bold text-gray-900">{alloc.product?.name || "Product"}</p>
-                              <p className="text-[10px] font-semibold text-brand-forest mt-0.5">Order: {alloc.order?.order_number || "N/A"}</p>
-                              <p className="text-[9px] text-gray-500">Store: {alloc.sales_store?.name} {alloc.batch_reference && `(Batch: ${alloc.batch_reference})`}</p>
-                              {alloc.driver && (
-                                <p className="text-[9px] font-bold text-brand-mid mt-0.5">🚚 Driver: {alloc.driver.full_name || alloc.driver.name}</p>
-                              )}
+                              <h5 className="font-extrabold text-brand-forest text-sm">Order: {group.orderNum}</h5>
+                              <p className="text-[10px] font-semibold text-gray-500 mt-0.5">Customer: {group.customerName}</p>
                             </div>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
-                              alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
-                              alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
-                              'bg-amber-50 text-amber-700 animate-pulse'
-                            }`}>
-                              {alloc.status.replace('_', ' ')}
+                            <span className="bg-brand-sage/15 text-brand-forest font-bold px-2 py-0.5 rounded text-[9px] uppercase tracking-wider flex items-center gap-1">
+                              🚚 {group.driverName}
                             </span>
                           </div>
 
-                          <div className="grid grid-cols-4 gap-2 pt-2 border-t border-gray-100 text-center text-[10px] font-semibold text-gray-500">
-                            <div>
-                              <p className="text-[8px] text-gray-400">Allocated</p>
-                              <p className="text-gray-900 mt-0.5">{alloc.allocated_quantity}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-gray-400">Delivered</p>
-                              <p className="text-green-600 mt-0.5">{alloc.delivered_quantity}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-gray-400">Returned</p>
-                              <p className="text-blue-600 mt-0.5">{alloc.returned_quantity}</p>
-                            </div>
-                            <div>
-                              <p className="text-[8px] text-gray-400">Leftover</p>
-                              <p className="text-red-500 mt-0.5 font-bold">{leftover}</p>
-                            </div>
-                          </div>
+                          <div className="space-y-4 divide-y divide-gray-100">
+                            {group.items.map((alloc: any, idx: number) => {
+                              const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
+                              return (
+                                <div key={alloc.id} className={`space-y-3 ${idx > 0 ? "pt-4" : ""}`}>
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="font-bold text-gray-900">{alloc.product?.name || "Product"}</p>
+                                      <p className="text-[9px] text-gray-500 mt-0.5">Store: {alloc.sales_store?.name} {alloc.batch_reference && `(Batch: ${alloc.batch_reference})`}</p>
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                      alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
+                                      alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
+                                      'bg-amber-50 text-amber-700 animate-pulse'
+                                    }`}>
+                                      {alloc.status.replace('_', ' ')}
+                                    </span>
+                                  </div>
 
-                          {leftover > 0 && (
-                            <Button
-                              onClick={() => {
-                                setSelectedAllocationToReturn(alloc);
-                                setReturnStore(alloc.sales_store_id);
-                                setReturnQty(leftover.toString());
-                                setReturnBatch(alloc.batch_reference || "");
-                                setIsCustomReturnBatch(false);
-                                setShowReturnModal(true);
-                              }}
-                              className="w-full h-9 bg-brand-forest/10 hover:bg-brand-forest/20 text-brand-forest text-[10px] font-black uppercase tracking-widest rounded-xl border-none cursor-pointer"
-                            >
-                              Return Leftover to Store
-                            </Button>
-                          )}
+                                  <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-semibold text-gray-500">
+                                    <div>
+                                      <p className="text-[8px] text-gray-400">Allocated</p>
+                                      <p className="text-gray-900 mt-0.5">{alloc.allocated_quantity}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[8px] text-gray-400">Delivered</p>
+                                      <p className="text-green-600 mt-0.5">{alloc.delivered_quantity}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[8px] text-gray-400">Returned</p>
+                                      <p className="text-blue-600 mt-0.5">{alloc.returned_quantity}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[8px] text-gray-400">Leftover</p>
+                                      <p className="text-red-500 mt-0.5 font-bold">{leftover}</p>
+                                    </div>
+                                  </div>
+
+                                  {leftover > 0 && (
+                                    <Button
+                                      onClick={() => {
+                                        setSelectedAllocationToReturn(alloc);
+                                        setReturnStore(alloc.sales_store_id);
+                                        setReturnQty(leftover.toString());
+                                        setReturnBatch(alloc.batch_reference || "");
+                                        setIsCustomReturnBatch(false);
+                                        setShowReturnModal(true);
+                                      }}
+                                      className="w-full h-8 bg-brand-forest/5 hover:bg-brand-forest/15 text-brand-forest text-[10px] font-black uppercase tracking-widest rounded-lg border-none cursor-pointer"
+                                    >
+                                      Return Leftover to Store
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      );
-                    })}
+                      ));
+                    })()}
                   </div>
                 )}
               </div>

@@ -41,10 +41,7 @@ const DriverTransitMap = dynamic(() => import("@/components/DriverTransitMap"), 
 
 const generateQtyOptions = (maxQty: number) => {
   const options: number[] = [0];
-  for (let q = 0.5; q <= maxQty; q += 0.5) {
-    options.push(q);
-  }
-  if (maxQty > 0 && !options.includes(maxQty)) {
+  if (maxQty > 0) {
     options.push(maxQty);
   }
   return options;
@@ -78,6 +75,7 @@ export default function DeliveryConfirmationPage() {
   interface DeliveryItem {
     name: string;
     quantity: number;
+    unit_of_measure?: string;
   }
   interface DeliveryDetails {
     id: string;
@@ -97,11 +95,12 @@ export default function DeliveryConfirmationPage() {
     vehicle: VehicleDetails | null;
     customer_id?: string;
     order_id?: string;
+    driver_id?: string;
   }
 
   const [delivery, setDelivery] = useState<DeliveryDetails | null>(null);
   const todayStr = new Date().toISOString().split('T')[0];
-  const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
+  const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr && delivery.status !== "delivered" && delivery.status !== "returned";
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showDelayModal, setShowDelayModal] = useState(false);
   const [showNotReadyModal, setShowNotReadyModal] = useState(false);
@@ -129,6 +128,9 @@ export default function DeliveryConfirmationPage() {
   const [pastOrders, setPastOrders] = useState<any[]>([]);
   const [selectedPastOrder, setSelectedPastOrder] = useState<any>(null);
   const [pastOrderItems, setPastOrderItems] = useState<any[]>([]);
+  const [orderSearchQuery, setOrderSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingOrders, setIsSearchingOrders] = useState(false);
   const [pendingReplacements, setPendingReplacements] = useState<any[]>([]);
   const [hasCheckedReplacements, setHasCheckedReplacements] = useState(false);
   const [checkingReplacements, setCheckingReplacements] = useState(false);
@@ -224,6 +226,7 @@ export default function DeliveryConfirmationPage() {
             items: (d.order?.items || []).map((item: any) => ({
               name: item.product?.name || "Unknown Product",
               quantity: item.quantity,
+              unit_of_measure: item.product?.unit_of_measure || "trays",
             })),
             required_delivery_date: d.order?.required_delivery_date || "",
             assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
@@ -240,6 +243,7 @@ export default function DeliveryConfirmationPage() {
             } : null,
             customer_id: d.order?.customer_id || "N/A",
             order_id: d.order_id || "N/A",
+            driver_id: d.driver_id || "N/A",
           });
           
           if (d.status === "in_transit") {
@@ -268,9 +272,11 @@ export default function DeliveryConfirmationPage() {
     if (delivery?.order_id) {
       const fetchAllocationsList = async () => {
         try {
-          const res = await api.get('/replacement-allocations', {
-            params: { order_id: delivery.order_id }
-          });
+          const params: any = { order_id: delivery.order_id };
+          if (delivery.driver_id && delivery.driver_id !== "N/A") {
+            params.driver_id = delivery.driver_id;
+          }
+          const res = await api.get('/replacement-allocations', { params });
           if (res.data?.success) {
             const payload = res.data.data;
             const list = payload?.data?.data || payload?.data || [];
@@ -282,13 +288,18 @@ export default function DeliveryConfirmationPage() {
       };
       fetchAllocationsList();
     }
-  }, [delivery?.order_id]);
+  }, [delivery?.order_id, delivery?.driver_id]);
 
   useEffect(() => {
     if (step === 4 && delivery?.customer_id && delivery?.order_id && !hasCheckedReplacements) {
       setHasCheckedReplacements(true);
       setCheckingReplacements(true);
       
+      const allocParams: any = { order_id: delivery.order_id };
+      if (delivery.driver_id && delivery.driver_id !== "N/A") {
+        allocParams.driver_id = delivery.driver_id;
+      }
+
       Promise.all([
         api.get('/returns', {
           params: {
@@ -297,9 +308,7 @@ export default function DeliveryConfirmationPage() {
           }
         }),
         api.get('/replacement-allocations', {
-          params: {
-            order_id: delivery.order_id
-          }
+          params: allocParams
         })
       ]).then(([returnsRes, allocsRes]) => {
         if (returnsRes.data?.success && allocsRes.data?.success) {
@@ -308,7 +317,10 @@ export default function DeliveryConfirmationPage() {
           const allocations = Array.isArray(list) ? list : [];
           
           const mapped = returnsRes.data.data.data.map((item: any) => {
-            const matchingAlloc = allocations.find((a: any) => a.product_id === item.product_id);
+            const matchingAlloc = allocations.find((a: any) => 
+              a.product_id === item.product_id && 
+              a.order_id === delivery.order_id
+            );
             const remainingAlloc = matchingAlloc 
               ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
               : 0;
@@ -365,7 +377,7 @@ export default function DeliveryConfirmationPage() {
     }
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr;
+    const isMissed = delivery?.required_delivery_date && delivery.required_delivery_date < todayStr && delivery.status !== "delivered" && delivery.status !== "returned";
     if (isMissed) {
       setShowDelayModal(true);
     } else {
@@ -530,10 +542,11 @@ export default function DeliveryConfirmationPage() {
     }
   };
 
-  const handlePastOrderSelect = (orderId: string) => {
+  const handlePastOrderSelect = async (orderId: string) => {
     if (!orderId) {
       setSelectedPastOrder(null);
       setPastOrderItems([]);
+      setAllocationsList([]);
       return;
     }
     const order = pastOrders.find(o => o.id === orderId);
@@ -545,11 +558,60 @@ export default function DeliveryConfirmationPage() {
         batch_reference: item.batch_reference || "",
         quantity: parseFloat(item.quantity) || 0,
         unit_price: parseFloat(item.unit_price) || 0,
+        unit_of_measure: item.product?.unit_of_measure || "trays",
         returnQty: "",
         replaceQty: "",
       }));
       setPastOrderItems(items);
+
+      try {
+        const params: any = { order_id: order.id };
+        if (delivery?.driver_id && delivery.driver_id !== "N/A") {
+          params.driver_id = delivery.driver_id;
+        }
+        const res = await api.get('/replacement-allocations', { params });
+        if (res.data?.success) {
+          const payload = res.data.data;
+          const list = payload?.data?.data || payload?.data || [];
+          setAllocationsList(Array.isArray(list) ? list : []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch allocations list:", err);
+      }
     }
+  };
+
+  const handleOrderSearch = async (query: string) => {
+    setOrderSearchQuery(query);
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearchingOrders(true);
+    try {
+      const res = await api.get('/orders', {
+        params: {
+          customer_id: delivery?.customer_id,
+          search: query,
+          status: 'delivered',
+          per_page: 5,
+        }
+      });
+      setSearchResults(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to search orders:", err);
+    } finally {
+      setIsSearchingOrders(false);
+    }
+  };
+
+  const handleSelectSearchResult = (order: any) => {
+    if (!pastOrders.some(o => o.id === order.id)) {
+      setPastOrders(prev => [order, ...prev]);
+    }
+    handlePastOrderSelect(order.id);
+    setOrderSearchQuery("");
+    setSearchResults([]);
   };
 
   const handleItemQtyChange = (productId: string, field: 'returnQty' | 'replaceQty', val: string) => {
@@ -558,7 +620,7 @@ export default function DeliveryConfirmationPage() {
         if (field === 'returnQty') {
           const returnQtyVal = parseFloat(val) || 0;
           const qty = Math.min(returnQtyVal, item.quantity);
-          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
           const remainingAlloc = matchingAlloc 
             ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
             : 0;
@@ -571,7 +633,7 @@ export default function DeliveryConfirmationPage() {
           };
         } else {
           const returnQtyVal = parseFloat(item.returnQty) || 0;
-          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
           const remainingAlloc = matchingAlloc 
             ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
             : 0;
@@ -653,7 +715,7 @@ export default function DeliveryConfirmationPage() {
         let qty = replaceVal;
         if (qty > maxLimit) {
           qty = maxLimit;
-          alert(`Quantity capped at maximum pre-assigned allocation limit of ${maxLimit} Trays.`);
+          alert(`Quantity capped at maximum pre-assigned allocation limit of ${maxLimit} ${item.product?.unit_of_measure || "Trays"}.`);
         }
         
         return {
@@ -936,7 +998,7 @@ export default function DeliveryConfirmationPage() {
                     {delivery.items.map((item, i) => (
                       <div key={i} className="flex justify-between items-center p-3 bg-[#0B1510] rounded-xl border border-brand-forest/20">
                         <span className="text-xs font-bold text-gray-300">{item.name}</span>
-                        <span className="text-base font-black text-brand-yellow">{item.quantity} Trays</span>
+                        <span className="text-base font-black text-brand-yellow">{item.quantity} {item.unit_of_measure || "Trays"}</span>
                       </div>
                     ))}
                   </div>
@@ -1493,6 +1555,43 @@ export default function DeliveryConfirmationPage() {
             {/* Content */}
             <div className="p-5 space-y-5 overflow-y-auto flex-1 text-xs">
               
+              {/* Quick Search */}
+              <div className="relative">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Quick Search Order (Last 4 Digits)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 0002"
+                  value={orderSearchQuery}
+                  onChange={(e) => handleOrderSearch(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                />
+                {searchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-[#0B1510] border border-brand-forest/40 rounded-xl z-50 overflow-hidden shadow-2xl max-h-48 overflow-y-auto">
+                    {searchResults.map(order => (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(order)}
+                        className="w-full px-3 py-2 text-left text-xs font-semibold text-white hover:bg-brand-yellow hover:text-brand-forest transition-colors border-b border-brand-forest/10 last:border-0"
+                      >
+                        {order.order_number} ({order.order_date}) - UGX {parseFloat(order.total_amount).toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isSearchingOrders && (
+                  <div className="absolute right-3 top-7 text-[10px] text-brand-yellow font-bold animate-pulse">Searching...</div>
+                )}
+              </div>
+
+              {!selectedPastOrder && (
+                <div className="flex items-center gap-3 my-2">
+                  <div className="h-[1px] bg-brand-forest/20 flex-1" />
+                  <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">OR SELECT FROM LIST</span>
+                  <div className="h-[1px] bg-brand-forest/20 flex-1" />
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Past Order *</label>
                 <select
@@ -1523,7 +1622,7 @@ export default function DeliveryConfirmationPage() {
                               <div>
                                 <p className="font-bold text-white">{item.name}</p>
                                 <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                                  Ordered: {item.quantity} Trays | Price: UGX {item.unit_price.toLocaleString()}
+                                  Ordered: {item.quantity} {item.unit_of_measure || "trays"} | Price: UGX {item.unit_price.toLocaleString()}
                                 </p>
                                 {item.batch_reference && (
                                   <p className="text-[9px] text-brand-yellow font-bold mt-0.5">Batch: {item.batch_reference}</p>
@@ -1538,7 +1637,7 @@ export default function DeliveryConfirmationPage() {
 
                             <div className="grid grid-cols-2 gap-3 pt-1">
                               <div>
-                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Return Qty (Trays)</label>
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Return Qty ({item.unit_of_measure || "trays"})</label>
                                 <input
                                   type="number"
                                   step="0.01"
@@ -1551,7 +1650,7 @@ export default function DeliveryConfirmationPage() {
                               <div>
                                 <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Replaced Today (Qty)</label>
                                 {(() => {
-                                  const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
+                                  const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
                                   const remainingAlloc = matchingAlloc 
                                     ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
                                     : 0;
@@ -1568,7 +1667,7 @@ export default function DeliveryConfirmationPage() {
                                     >
                                       {options.map(qty => (
                                         <option key={qty} value={qty}>
-                                          {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} trays`}
+                                          {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.unit_of_measure || "trays"}`}
                                         </option>
                                       ))}
                                     </select>
@@ -1724,7 +1823,7 @@ export default function DeliveryConfirmationPage() {
                           >
                             {generateQtyOptions(Math.min(remaining, item.remainingAlloc)).map(qty => (
                               <option key={qty} value={qty}>
-                                {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} trays`}
+                                {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.product?.unit_of_measure || "trays"}`}
                               </option>
                             ))}
                           </select>
@@ -1742,7 +1841,7 @@ export default function DeliveryConfirmationPage() {
                             </p>
                             <p>
                               <span className="font-bold text-brand-yellow">Allocated Limit:</span>{" "}
-                              {item.remainingAlloc} Trays (Max)
+                              {item.remainingAlloc} {item.product?.unit_of_measure || "Trays"} (Max)
                             </p>
                           </div>
                         )}

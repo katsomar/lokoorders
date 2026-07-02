@@ -26,7 +26,8 @@ import {
   User,
   Coffee,
   Lock,
-  RefreshCcw
+  RefreshCcw,
+  CornerDownLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -34,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
+import { SignatureCanvas } from "@/components/ui/signature-canvas";
 
 const DriverRouteMap = dynamic(() => import("@/components/DriverRouteMap"), {
   ssr: false,
@@ -77,6 +79,285 @@ export default function DriverDashboard() {
 
   const [driverAllocations, setDriverAllocations] = useState<any[]>([]);
   const [loadingAllocations, setLoadingAllocations] = useState(false);
+
+  // States for Generic Record Return Modal
+  const [showGenericReturnsModal, setShowGenericReturnsModal] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState("");
+  const [pastOrders, setPastOrders] = useState<any[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [selectedPastOrder, setSelectedPastOrder] = useState<any>(null);
+  const [pastOrderItems, setPastOrderItems] = useState<any[]>([]);
+  const [allocationsList, setAllocationsList] = useState<any[]>([]);
+  const [formReasonCode, setFormReasonCode] = useState("broken_cracked");
+  const [formNotes, setFormNotes] = useState("");
+  const [formRepName, setFormRepName] = useState("");
+  const [formSignature, setFormSignature] = useState("");
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
+
+  const [orderSearchQuery, setOrderSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingOrders, setIsSearchingOrders] = useState(false);
+
+  const handleOrderSearch = async (query: string) => {
+    setOrderSearchQuery(query);
+    if (query.trim().length < 3) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearchingOrders(true);
+    try {
+      const res = await api.get('/orders', {
+        params: {
+          search: query,
+          status: 'delivered',
+          per_page: 5
+        }
+      });
+      setSearchResults(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to search orders:", err);
+    } finally {
+      setIsSearchingOrders(false);
+    }
+  };
+
+  const handleSelectSearchResult = async (order: any) => {
+    setSelectedCustomer(order.customer_id);
+    setSelectedPastOrder(order);
+    setOrderSearchQuery("");
+    setSearchResults([]);
+
+    setLoadingOrders(true);
+    try {
+      const res = await api.get('/orders', {
+        params: {
+          customer_id: order.customer_id,
+          status: 'delivered',
+          per_page: 20,
+        }
+      });
+      setPastOrders(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load customer orders:", err);
+      setPastOrders([order]);
+    } finally {
+      setLoadingOrders(false);
+    }
+
+    const items = (order.items || []).map((item: any) => ({
+      product_id: item.product_id,
+      name: item.product?.name || "Unknown Product",
+      batch_reference: item.batch_reference || "",
+      quantity: parseFloat(item.quantity) || 0,
+      unit_price: parseFloat(item.unit_price) || 0,
+      unit_of_measure: item.product?.unit_of_measure || "trays",
+      returnQty: "",
+      replaceQty: "",
+    }));
+    setPastOrderItems(items);
+
+    try {
+      const res = await api.get('/replacement-allocations', {
+        params: { order_id: order.id }
+      });
+      if (res.data?.success) {
+        const payload = res.data.data;
+        const list = payload?.data?.data || payload?.data || [];
+        setAllocationsList(Array.isArray(list) ? list : []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch allocations list:", err);
+    }
+  };
+
+  const generateQtyOptions = (max: number) => {
+    const options = [0];
+    if (max > 0) {
+      options.push(max);
+    }
+    return options;
+  };
+
+  const fetchCustomers = async () => {
+    setLoadingCustomers(true);
+    try {
+      const res = await api.get("/customers", { params: { per_page: 200 } });
+      setCustomers(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch customers:", err);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
+  const handleCustomerChange = async (customerId: string) => {
+    setSelectedCustomer(customerId);
+    setSelectedPastOrder(null);
+    setPastOrderItems([]);
+    setPastOrders([]);
+    if (!customerId) return;
+    
+    setLoadingOrders(true);
+    try {
+      const res = await api.get('/orders', {
+        params: {
+          customer_id: customerId,
+          status: 'delivered',
+          per_page: 20,
+        }
+      });
+      setPastOrders(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load past orders:", err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  const handlePastOrderSelect = async (orderId: string) => {
+    if (!orderId) {
+      setSelectedPastOrder(null);
+      setPastOrderItems([]);
+      setAllocationsList([]);
+      return;
+    }
+    const order = pastOrders.find(o => o.id === orderId);
+    if (order) {
+      setSelectedPastOrder(order);
+      const items = (order.items || []).map((item: any) => ({
+        product_id: item.product_id,
+        name: item.product?.name || "Unknown Product",
+        batch_reference: item.batch_reference || "",
+        quantity: parseFloat(item.quantity) || 0,
+        unit_price: parseFloat(item.unit_price) || 0,
+        unit_of_measure: item.product?.unit_of_measure || "trays",
+        returnQty: "",
+        replaceQty: "",
+      }));
+      setPastOrderItems(items);
+
+      try {
+        const res = await api.get('/replacement-allocations', {
+          params: { order_id: order.id }
+        });
+        if (res.data?.success) {
+          const payload = res.data.data;
+          const list = payload?.data?.data || payload?.data || [];
+          setAllocationsList(Array.isArray(list) ? list : []);
+        }
+      } catch (err) {
+        console.error("Failed to fetch allocations list:", err);
+      }
+    }
+  };
+
+  const handleItemQtyChange = (productId: string, field: 'returnQty' | 'replaceQty', val: string) => {
+    setPastOrderItems(prev => prev.map(item => {
+      if (item.product_id === productId) {
+        if (field === 'returnQty') {
+          const returnQtyVal = parseFloat(val) || 0;
+          const qty = Math.min(returnQtyVal, item.quantity);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
+          const remainingAlloc = matchingAlloc 
+            ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+            : 0;
+          const maxReplaceLimit = Math.min(qty, remainingAlloc);
+          
+          return {
+            ...item,
+            returnQty: val === "" ? "" : qty.toString(),
+            replaceQty: item.replaceQty !== "" && parseFloat(item.replaceQty) > maxReplaceLimit ? maxReplaceLimit.toString() : item.replaceQty
+          };
+        } else {
+          const returnQtyVal = parseFloat(item.returnQty) || 0;
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
+          const remainingAlloc = matchingAlloc 
+            ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+            : 0;
+          const maxLimit = Math.min(returnQtyVal, remainingAlloc);
+          const replaceQtyVal = parseFloat(val) || 0;
+          const qty = Math.min(replaceQtyVal, maxLimit);
+          return {
+            ...item,
+            replaceQty: val === "" ? "" : qty.toString()
+          };
+        }
+      }
+      return item;
+    }));
+  };
+
+  const handleSubmitGenericReturn = async () => {
+    if (!selectedPastOrder) return;
+    if (!formRepName.trim()) {
+      alert("Please enter the name of the acknowledging client representative.");
+      return;
+    }
+    if (!formSignature) {
+      alert("Please capture the client's signature.");
+      return;
+    }
+    
+    const itemsToSubmit = pastOrderItems
+      .filter((item: any) => parseFloat(item.returnQty) > 0)
+      .map((item: any) => ({
+        product_id: item.product_id,
+        batch_reference: item.batch_reference || null,
+        quantity: parseFloat(item.returnQty),
+        unit_price: parseFloat(item.unit_price),
+        replacement_quantity: parseFloat(item.replaceQty) || 0,
+      }));
+
+    if (itemsToSubmit.length === 0) {
+      alert("Please enter a return quantity of at least one item.");
+      return;
+    }
+
+    const deliveryId = selectedPastOrder.deliveries?.[0]?.id;
+    if (!deliveryId) {
+      alert("This past order does not have a valid delivery record to attach the return voucher to.");
+      return;
+    }
+
+    setIsSubmittingReturn(true);
+    try {
+      const res = await api.post('/returns/bulk', {
+        delivery_id: deliveryId,
+        order_id: selectedPastOrder.id,
+        customer_id: selectedCustomer,
+        reason_code: formReasonCode,
+        notes: formNotes,
+        acknowledged_by: formRepName,
+        signature_data: formSignature,
+        items: itemsToSubmit,
+      });
+
+      if (res.data?.success) {
+        alert("Returns recorded successfully!");
+        setShowGenericReturnsModal(false);
+        setSelectedCustomer("");
+        setSelectedPastOrder(null);
+        setPastOrderItems([]);
+        setPastOrders([]);
+        setFormRepName("");
+        setFormSignature("");
+        setFormNotes("");
+        // Reload dashboard stats
+        const statsRes = await api.get("/driver/dashboard");
+        if (statsRes.data?.success) {
+          setStats(statsRes.data.data);
+        }
+      }
+    } catch (e: any) {
+      console.error("Failed to submit bulk returns:", e);
+      alert(e.response?.data?.message || "Failed to submit returns. Please try again.");
+    } finally {
+      setIsSubmittingReturn(false);
+    }
+  };
 
   interface AssignedDelivery {
     id: string;
@@ -157,7 +438,8 @@ export default function DriverDashboard() {
           const res = await api.get("/replacement-allocations", {
             params: { driver_id: stats.driver_id, per_page: 100 }
           });
-          const list = res.data?.data?.data || res.data?.data || [];
+          const payload = res.data?.data;
+          const list = payload?.data?.data || payload?.data || [];
           setDriverAllocations(Array.isArray(list) ? list : []);
         } catch (err) {
           console.error("Failed to load driver allocations:", err);
@@ -437,7 +719,7 @@ export default function DriverDashboard() {
                           : "text-brand-forest hover:bg-brand-sage/20"
                       }`}
                     >
-                      Active ({stats.assigned_route.filter(r => !r.required_delivery_date || r.required_delivery_date >= new Date().toISOString().split('T')[0]).length})
+                      Active ({stats.assigned_route.filter(r => r.status !== "delivered" && r.status !== "returned" && (!r.required_delivery_date || r.required_delivery_date >= new Date().toISOString().split('T')[0])).length})
                     </button>
                     <button 
                       onClick={() => setRouteTab("missed")}
@@ -447,10 +729,10 @@ export default function DriverDashboard() {
                           : "text-red-700 hover:bg-red-500/10"
                       }`}
                     >
-                      {stats.assigned_route.some(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]) && (
+                      {stats.assigned_route.some(r => r.status !== "delivered" && r.status !== "returned" && r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]) && (
                         <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
                       )}
-                      Missed ({stats.assigned_route.filter(r => r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]).length})
+                      Missed ({stats.assigned_route.filter(r => r.status !== "delivered" && r.status !== "returned" && r.required_delivery_date && r.required_delivery_date < new Date().toISOString().split('T')[0]).length})
                     </button>
                     <button 
                       onClick={() => setRouteTab("incomplete_returns")}
@@ -524,10 +806,12 @@ export default function DriverDashboard() {
                   ) : stats && stats.assigned_route.length > 0 ? (
                     (() => {
                       const todayStr = new Date().toISOString().split('T')[0];
-                      const routesToShow = stats.assigned_route.filter(r => {
-                        const isMissed = r.required_delivery_date && r.required_delivery_date < todayStr;
-                        return routeTab === "missed" ? isMissed : !isMissed;
-                      });
+                      const routesToShow = stats.assigned_route
+                        .filter(r => r.status !== "delivered" && r.status !== "returned")
+                        .filter(r => {
+                          const isMissed = r.required_delivery_date && r.required_delivery_date < todayStr;
+                          return routeTab === "missed" ? isMissed : !isMissed;
+                        });
 
                       if (routesToShow.length === 0) {
                         return (
@@ -614,7 +898,7 @@ export default function DriverDashboard() {
                   <Gauge size={16} className="text-brand-mid" />
                   Shift Tools & Fleet
                 </h3>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   
                   {/* Card A: Vehicle & Crates Info */}
                   <button 
@@ -655,6 +939,23 @@ export default function DriverDashboard() {
                     <div className="min-w-0 w-full">
                       <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block truncate">Fuel refills</span>
                       <h4 className="text-[10px] font-black text-brand-forest group-hover:text-brand-mid mt-0.5 leading-snug">Refuel</h4>
+                    </div>
+                  </button>
+
+                  {/* Card D: Record Returns */}
+                  <button 
+                    onClick={() => {
+                      fetchCustomers();
+                      setShowGenericReturnsModal(true);
+                    }}
+                    className="bg-white border border-brand-sage rounded-2xl p-3 flex flex-col items-start text-left gap-3 hover:shadow-md hover:border-brand-mid active:scale-95 transition-all group shrink-0"
+                  >
+                    <div className="h-8 w-8 rounded-lg bg-brand-sage/20 flex items-center justify-center text-brand-forest group-hover:bg-brand-sage group-hover:text-brand-forest transition-colors">
+                      <CornerDownLeft size={18} />
+                    </div>
+                    <div className="min-w-0 w-full">
+                      <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block truncate">Customer returns</span>
+                      <h4 className="text-[10px] font-black text-brand-forest group-hover:text-brand-mid mt-0.5 leading-snug">Returns</h4>
                     </div>
                   </button>
 
@@ -771,46 +1072,73 @@ export default function DriverDashboard() {
                   <p className="text-[10px] text-gray-400 mt-0.5">No physical replacements have been pre-allocated to your truck for this shift.</p>
                 </div>
               ) : (
-                driverAllocations.map((alloc) => {
-                  const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
-                  return (
-                    <div key={alloc.id} className="bg-white border border-brand-sage rounded-2xl p-4 shadow-sm space-y-3 text-xs">
-                      <div className="flex justify-between items-start">
+                (() => {
+                  const groups: { [orderNum: string]: { orderNum: string; customerName: string; items: any[] } } = {};
+                  driverAllocations.forEach(alloc => {
+                    const orderNum = alloc.order?.order_number || "Unassociated";
+                    const customerName = alloc.order?.customer?.name || "Unknown Customer";
+                    if (!groups[orderNum]) {
+                      groups[orderNum] = { orderNum, customerName, items: [] };
+                    }
+                    groups[orderNum].items.push(alloc);
+                  });
+
+                  return Object.values(groups).map((group: any) => (
+                    <div key={group.orderNum} className="bg-white border border-brand-sage rounded-2xl p-4 shadow-sm space-y-4 text-xs">
+                      <div className="pb-3 border-b border-gray-150 flex justify-between items-start">
                         <div>
-                          <h4 className="font-extrabold text-brand-forest text-sm leading-tight">{alloc.product?.name}</h4>
-                          <p className="text-[10px] font-semibold text-gray-400 mt-0.5">Order #: {alloc.order?.order_number || "N/A"}</p>
-                          <p className="text-[9px] text-gray-500 font-bold mt-1">Source Store: {alloc.sales_store?.name} {alloc.batch_reference && `(Batch: ${alloc.batch_reference})`}</p>
+                          <h5 className="font-extrabold text-brand-forest text-sm">Order #: {group.orderNum}</h5>
+                          <p className="text-[10px] font-semibold text-gray-500 mt-0.5">Customer: {group.customerName}</p>
                         </div>
-                        <Badge className={`text-[8px] font-black uppercase tracking-wider ${
-                          alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
-                          alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
-                          'bg-amber-50 text-amber-700'
-                        }`}>
-                          {alloc.status.replace('_', ' ')}
-                        </Badge>
+                        <span className="bg-brand-sage/10 text-brand-forest font-bold px-2 py-0.5 rounded text-[8px] uppercase tracking-wider h-fit">
+                          Replacement Inventory
+                        </span>
                       </div>
 
-                      <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-gray-100 text-center text-[10px] font-semibold text-gray-500">
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Assigned</p>
-                          <p className="text-gray-900 mt-0.5 font-bold">{alloc.allocated_quantity}</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Delivered</p>
-                          <p className="text-green-600 mt-0.5 font-bold">{alloc.delivered_quantity}</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Returned</p>
-                          <p className="text-blue-600 mt-0.5 font-bold">{alloc.returned_quantity}</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-gray-400 uppercase tracking-wide">Leftover</p>
-                          <p className="text-red-500 mt-0.5 font-black">{leftover}</p>
-                        </div>
+                      <div className="space-y-4 divide-y divide-gray-100">
+                        {group.items.map((alloc: any, idx: number) => {
+                          const leftover = alloc.allocated_quantity - alloc.delivered_quantity - alloc.returned_quantity;
+                          return (
+                            <div key={alloc.id} className={`space-y-3 ${idx > 0 ? "pt-4" : ""}`}>
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="font-extrabold text-brand-forest text-[11px] leading-tight">{alloc.product?.name}</h4>
+                                  <p className="text-[9px] text-gray-500 font-semibold mt-1">Source Store: {alloc.sales_store?.name} {alloc.batch_reference && `(Batch: ${alloc.batch_reference})`}</p>
+                                </div>
+                                <Badge className={`text-[8px] font-black uppercase tracking-wider ${
+                                  alloc.status === 'delivered' ? 'bg-green-50 text-green-700' :
+                                  alloc.status === 'returned' ? 'bg-blue-50 text-blue-700' :
+                                  'bg-amber-50 text-amber-700'
+                                }`}>
+                                  {alloc.status.replace('_', ' ')}
+                                </Badge>
+                              </div>
+
+                              <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-semibold text-gray-500">
+                                <div>
+                                  <p className="text-[8px] text-gray-400 uppercase tracking-wide">Assigned</p>
+                                  <p className="text-gray-900 mt-0.5 font-bold">{alloc.allocated_quantity}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-gray-400 uppercase tracking-wide">Delivered</p>
+                                  <p className="text-green-600 mt-0.5 font-bold">{alloc.delivered_quantity}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-gray-400 uppercase tracking-wide">Returned</p>
+                                  <p className="text-blue-600 mt-0.5 font-bold">{alloc.returned_quantity}</p>
+                                </div>
+                                <div>
+                                  <p className="text-[8px] text-gray-400 uppercase tracking-wide">Leftover</p>
+                                  <p className="text-red-500 mt-0.5 font-black">{leftover}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                })
+                  ));
+                })()
               )}
             </motion.div>
           )}
@@ -1351,6 +1679,269 @@ export default function DriverDashboard() {
               Acknowledge & Close
             </Button>
           </motion.div>
+        </div>
+      )}
+
+      {/* GENERIC DECLARE RETURNS MODAL (WITHOUT ACTIVE DELIVERY) */}
+      {showGenericReturnsModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#132A1C] border border-brand-forest/40 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col my-8 max-h-[90vh]">
+            
+            <div className="bg-[#0B1510] text-white px-5 py-4 flex justify-between items-center border-b border-brand-forest/30">
+              <div className="flex items-center gap-2">
+                <CornerDownLeft className="text-brand-yellow" size={18} />
+                <h3 className="font-heading font-black text-sm text-brand-yellow">Record Return Voucher</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowGenericReturnsModal(false);
+                  setSelectedCustomer("");
+                  setSelectedPastOrder(null);
+                  setPastOrderItems([]);
+                  setPastOrders([]);
+                  setFormRepName("");
+                  setFormSignature("");
+                  setFormNotes("");
+                }} 
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs flex-1 text-white">
+              
+              {/* Quick Search Order */}
+              <div className="relative">
+                <label className="text-[10px] text-brand-yellow font-black uppercase tracking-wider block mb-1">
+                  Quick Search Order Number
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Type last 4 digits of order (e.g. 0009)..."
+                  value={orderSearchQuery}
+                  onChange={(e) => handleOrderSearch(e.target.value)}
+                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                />
+                
+                {/* Search Results overlay */}
+                {searchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 mt-1.5 bg-[#0B1510] border border-brand-forest/30 rounded-xl shadow-2xl z-[1100] max-h-48 overflow-y-auto divide-y divide-brand-forest/20">
+                    {searchResults.map((order: any) => (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(order)}
+                        className="w-full text-left px-4 py-2.5 hover:bg-[#132A1C] transition-colors flex flex-col gap-0.5 text-white"
+                      >
+                        <span className="font-extrabold text-xs text-brand-yellow">{order.order_number}</span>
+                        <span className="text-[10px] text-gray-300 font-semibold">{order.customer?.name || "Unknown Customer"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {isSearchingOrders && (
+                  <div className="absolute right-3 top-7 text-[10px] text-brand-yellow font-bold animate-pulse">Searching...</div>
+                )}
+              </div>
+
+              {!selectedPastOrder && (
+                <div className="flex items-center gap-3 my-2">
+                  <div className="h-[1px] bg-brand-forest/20 flex-1" />
+                  <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">OR SELECT MANUALLY</span>
+                  <div className="h-[1px] bg-brand-forest/20 flex-1" />
+                </div>
+              )}
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Customer *</label>
+                {loadingCustomers ? (
+                  <div className="text-gray-400 font-semibold animate-pulse">Loading customers...</div>
+                ) : (
+                  <select
+                    required
+                    value={selectedCustomer}
+                    onChange={(e) => handleCustomerChange(e.target.value)}
+                    className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                  >
+                    <option value="">-- Choose Customer --</option>
+                    {customers.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {selectedCustomer && (
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Select Past Order *</label>
+                  {loadingOrders ? (
+                    <div className="text-gray-400 font-semibold animate-pulse">Loading orders...</div>
+                  ) : pastOrders.length === 0 ? (
+                    <div className="text-red-400 font-bold">No completed orders found for this customer.</div>
+                  ) : (
+                    <select
+                      required
+                      value={selectedPastOrder?.id || ""}
+                      onChange={(e) => handlePastOrderSelect(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                    >
+                      <option value="">-- Choose Past Order --</option>
+                      {pastOrders.map(order => (
+                        <option key={order.id} value={order.id}>
+                          {order.order_number} ({order.order_date}) - UGX {parseFloat(order.total_amount).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {selectedPastOrder && pastOrderItems.length > 0 && (
+                <div className="space-y-4 pt-3 border-t border-brand-forest/20 animate-in fade-in duration-200">
+                  <div className="space-y-3.5">
+                    <p className="text-[10px] text-brand-yellow font-black uppercase tracking-wider">Specify quantities to return</p>
+                    
+                    {pastOrderItems.map((item) => {
+                      const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
+                      const remainingAlloc = matchingAlloc 
+                        ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
+                        : 0;
+                      
+                      const returnQtyVal = parseFloat(item.returnQty) || 0;
+                      const maxReplaceLimit = Math.min(returnQtyVal, remainingAlloc);
+                      const replaceOptions = generateQtyOptions(maxReplaceLimit);
+
+                      return (
+                        <div key={item.product_id} className="p-3 bg-[#070D0A] rounded-xl border border-brand-forest/20 space-y-3 text-white">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-extrabold text-white text-xs">{item.name}</p>
+                              {item.batch_reference && (
+                                <p className="text-[9px] text-gray-400 font-mono mt-0.5">Batch: {item.batch_reference}</p>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-gray-400 font-bold">Ordered: {item.quantity} {item.unit_of_measure || "trays"}</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3.5">
+                            <div>
+                              <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Return Qty ({item.unit_of_measure || "trays"})</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={item.returnQty}
+                                onChange={(e) => handleItemQtyChange(item.product_id, 'returnQty', e.target.value)}
+                                className="w-full h-8 px-3 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[9px] text-gray-400 font-bold uppercase block mb-1">Replaced Qty</label>
+                              <select
+                                value={item.replaceQty || "0"}
+                                disabled={!item.returnQty || maxReplaceLimit === 0}
+                                onChange={(e) => handleItemQtyChange(item.product_id, 'replaceQty', e.target.value)}
+                                className="w-full h-8 px-2 text-xs font-bold rounded-lg border border-brand-forest/30 bg-[#070D0A] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow disabled:opacity-40"
+                              >
+                                {replaceOptions.map(qty => (
+                                  <option key={qty} value={qty}>
+                                    {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.unit_of_measure || "trays"}`}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Adjustment Reason Code *</label>
+                    <select
+                      value={formReasonCode}
+                      onChange={(e) => setFormReasonCode(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                    >
+                      <option value="broken_cracked">Broken / Cracked Eggs</option>
+                      <option value="rotten_spoiled">Rotten / Spoiled Eggs</option>
+                      <option value="wrong_product">Wrong Product Delivered</option>
+                      <option value="near_expiry">Near Expiry</option>
+                      <option value="packaging_damage">Packaging Damage</option>
+                      <option value="other">Other Reason</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Adjustment Notes</label>
+                    <textarea
+                      placeholder="Specify returns details..."
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      className="w-full h-16 p-2 rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white text-xs font-semibold focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Acknowledged By (Client Rep Name) *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Sarah Namubiru"
+                      value={formRepName}
+                      onChange={(e) => setFormRepName(e.target.value)}
+                      className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Client Representative Signature *</label>
+                    <div className="bg-[#0B1510] p-3 rounded-2xl border border-brand-forest/20">
+                      <SignatureCanvas onSave={(data) => setFormSignature(data)} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedPastOrder && pastOrderItems.some(i => parseFloat(i.returnQty) > 0) && (
+                <div className="bg-brand-yellow/10 border border-brand-yellow/20 p-3.5 rounded-xl flex justify-between items-center">
+                  <span className="font-extrabold text-brand-yellow">Estimated Return Value:</span>
+                  <span className="font-mono font-black text-brand-yellow text-sm">
+                    UGX {pastOrderItems.reduce((acc, curr) => acc + ((parseFloat(curr.returnQty) || 0) * curr.unit_price), 0).toLocaleString()}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-4 pt-3 border-t border-brand-forest/20">
+                <Button 
+                  type="button" 
+                  onClick={() => {
+                    setShowGenericReturnsModal(false);
+                    setSelectedCustomer("");
+                    setSelectedPastOrder(null);
+                    setPastOrderItems([]);
+                    setPastOrders([]);
+                    setFormRepName("");
+                    setFormSignature("");
+                    setFormNotes("");
+                  }} 
+                  className="flex-1 bg-transparent hover:bg-white/5 text-gray-400 hover:text-white border border-brand-forest/30 text-xs font-bold rounded-xl h-11"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubmitGenericReturn}
+                  disabled={isSubmittingReturn || !formRepName || !formSignature || !pastOrderItems.some(i => parseFloat(i.returnQty) > 0)}
+                  className="flex-1 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest text-xs font-black rounded-xl h-11 border-none cursor-pointer"
+                >
+                  {isSubmittingReturn ? "Submitting..." : "Record Returns"}
+                </Button>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
     </div>

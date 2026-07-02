@@ -29,9 +29,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::delete('/orders/{id}', [App\Http\Controllers\Api\V1\OrderController::class, 'destroy']);
         Route::post('/orders/{id}/status', [App\Http\Controllers\Api\V1\OrderController::class, 'updateStatus']);
 
-        // Replacement Allocations
         Route::get('/replacement-allocations', [App\Http\Controllers\Api\V1\OrderReplacementAllocationController::class, 'index']);
         Route::post('/replacement-allocations', [App\Http\Controllers\Api\V1\OrderReplacementAllocationController::class, 'store']);
+        Route::post('/replacement-allocations/bulk', [App\Http\Controllers\Api\V1\OrderReplacementAllocationController::class, 'storeBulk']);
         Route::post('/replacement-allocations/{id}/return', [App\Http\Controllers\Api\V1\OrderReplacementAllocationController::class, 'returnAllocation']);
 
         
