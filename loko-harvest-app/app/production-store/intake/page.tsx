@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import api from "@/lib/api";
+import { useAuth } from "@/store/useAuth";
 
 const intakeSchema = z.object({
   production_store_id: z.string().min(1, "Production store is required"),
@@ -52,6 +53,8 @@ type IntakeFormValues = z.infer<typeof intakeSchema>;
 
 export default function ProductionIntakePage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
@@ -211,7 +214,13 @@ export default function ProductionIntakePage() {
       await api.post("/production-intakes", data);
       setIsLoading(false);
       setIsSuccess(true);
-      setTimeout(() => router.push("/production-store"), 2000);
+      setTimeout(() => {
+        if (user?.role === "order_manager") {
+          router.push("/order-manager");
+        } else {
+          router.push("/production-store");
+        }
+      }, 2000);
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to save intake record. Please check validation errors.");
       setIsLoading(false);
@@ -305,7 +314,15 @@ export default function ProductionIntakePage() {
                         <Input label="Extra Good Eggs" type="number" placeholder="0" {...register("good_extra_eggs", { valueAsNumber: true })} error={errors.good_extra_eggs?.message} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Good Eggs Valuation Price (UGX) Per Tray" type="number" placeholder="12000" {...register("good_valuation_price", { valueAsNumber: true })} error={errors.good_valuation_price?.message} />
+                        <Input 
+                          label="Good Eggs Valuation Price (UGX) Per Tray" 
+                          type="number" 
+                          placeholder="12000" 
+                          readOnly={!isAdmin}
+                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          {...register("good_valuation_price", { valueAsNumber: true })} 
+                          error={errors.good_valuation_price?.message} 
+                        />
                       </div>
                     </div>
                     
@@ -318,7 +335,15 @@ export default function ProductionIntakePage() {
                           <Input label="D1 Extra Eggs" type="number" placeholder="0" {...register("d1_extra_eggs", { valueAsNumber: true })} error={errors.d1_extra_eggs?.message} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input label="D1 Valuation Price (UGX) Per Tray" type="number" placeholder="5000" {...register("d1_valuation_price", { valueAsNumber: true })} error={errors.d1_valuation_price?.message} />
+                          <Input 
+                            label="D1 Valuation Price (UGX) Per Tray" 
+                            type="number" 
+                            placeholder="5000" 
+                            readOnly={!isAdmin}
+                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            {...register("d1_valuation_price", { valueAsNumber: true })} 
+                            error={errors.d1_valuation_price?.message} 
+                          />
                         </div>
                       </div>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
@@ -328,7 +353,15 @@ export default function ProductionIntakePage() {
                           <Input label="D2 Extra Eggs" type="number" placeholder="0" {...register("d2_extra_eggs", { valueAsNumber: true })} error={errors.d2_extra_eggs?.message} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input label="D2 Valuation Price (UGX) Per Tray" type="number" placeholder="3000" {...register("d2_valuation_price", { valueAsNumber: true })} error={errors.d2_valuation_price?.message} />
+                          <Input 
+                            label="D2 Valuation Price (UGX) Per Tray" 
+                            type="number" 
+                            placeholder="3000" 
+                            readOnly={!isAdmin}
+                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            {...register("d2_valuation_price", { valueAsNumber: true })} 
+                            error={errors.d2_valuation_price?.message} 
+                          />
                         </div>
                       </div>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
@@ -349,7 +382,15 @@ export default function ProductionIntakePage() {
                         <Input label="Shell Extra Eggs" type="number" placeholder="0" {...register("shell_extra_eggs", { valueAsNumber: true })} error={errors.shell_extra_eggs?.message} />
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Shell Valuation Price (UGX) Per Tray" type="number" placeholder="2000" {...register("shell_valuation_price", { valueAsNumber: true })} error={errors.shell_valuation_price?.message} />
+                        <Input 
+                          label="Shell Valuation Price (UGX) Per Tray" 
+                          type="number" 
+                          placeholder="2000" 
+                          readOnly={!isAdmin}
+                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          {...register("shell_valuation_price", { valueAsNumber: true })} 
+                          error={errors.shell_valuation_price?.message} 
+                        />
                       </div>
                     </div>
                   </div>
@@ -358,10 +399,20 @@ export default function ProductionIntakePage() {
                     <Input label="Quantity Received" type="number" step="0.01" placeholder="0.00" {...register("quantity", { valueAsNumber: true })} error={errors.quantity?.message} required />
                   </div>
                 )}
-
+ 
                 {!isEggProduct && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Input label="Valuation Price (UGX) Per Tray" type="number" step="1" placeholder="0" {...register("valuation_price", { valueAsNumber: true })} error={errors.valuation_price?.message} required />
+                    <Input 
+                      label="Valuation Price (UGX) Per Tray" 
+                      type="number" 
+                      step="1" 
+                      placeholder="0" 
+                      readOnly={!isAdmin}
+                      className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                      {...register("valuation_price", { valueAsNumber: true })} 
+                      error={errors.valuation_price?.message} 
+                      required 
+                    />
                   </div>
                 )}
 

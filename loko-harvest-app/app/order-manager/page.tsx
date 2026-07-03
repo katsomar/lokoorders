@@ -27,7 +27,8 @@ import {
   RefreshCw,
   Eye,
   Loader2,
-  Truck
+  Truck,
+  ArrowDownToLine
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -45,6 +46,18 @@ export default function OrderManagerDashboard() {
   const [inventorySubView, setInventorySubView] = useState<"list" | "damages">("list");
   const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
+ 
+  const formatQuantity = (qtyStr: string, unit: string) => {
+    const qty = parseFloat(qtyStr);
+    if (isNaN(qty)) return qtyStr;
+    if (unit.toLowerCase() === "trays") {
+      const trays = Math.floor(qty);
+      const decimal = qty - trays;
+      const eggs = Math.round(decimal * 30);
+      return `${trays} Trays & ${eggs} Eggs`;
+    }
+    return `${qty.toLocaleString()} ${unit}`;
+  };
 
   // Replacements tab states
   const [allocations, setAllocations] = useState<any[]>([]);
@@ -1310,16 +1323,27 @@ export default function OrderManagerDashboard() {
                         <Warehouse size={16} className="text-brand-mid" />
                         Warehouse Inventory
                       </h3>
-                      <button
-                        onClick={() => {
-                          setInventorySubView("damages");
-                          fetchAdjustments();
-                        }}
-                        className="text-[10px] font-black uppercase text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <AlertTriangle size={12} />
-                        Report Damages
-                      </button>
+                      <div className="flex gap-2">
+                        {storeType === "production" && (
+                          <button
+                            onClick={() => router.push("/production-store/intake")}
+                            className="text-[10px] font-black uppercase text-brand-forest hover:text-white bg-brand-sage/20 hover:bg-brand-forest border border-brand-sage/40 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
+                          >
+                            <ArrowDownToLine size={12} />
+                            Record Intake
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setInventorySubView("damages");
+                            fetchAdjustments();
+                          }}
+                          className="text-[10px] font-black uppercase text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <AlertTriangle size={12} />
+                          Report Damages
+                        </button>
+                      </div>
                     </div>
 
                     {/* Sub-tabs for Store Type selection */}
@@ -1412,9 +1436,14 @@ export default function OrderManagerDashboard() {
                                 ? "text-brand-amber" 
                                 : "text-brand-forest"
                             }`}>
-                              {parseFloat(item.current_quantity).toLocaleString()}
+                              {item.product?.unit_of_measure?.toLowerCase() === "trays" 
+                                ? formatQuantity(item.current_quantity, "trays")
+                                : parseFloat(item.current_quantity).toLocaleString()
+                              }
                             </span>
-                            <span className="text-[9px] text-gray-400 font-extrabold uppercase ml-1 block">{item.product?.unit_of_measure}</span>
+                            {item.product?.unit_of_measure?.toLowerCase() !== "trays" && (
+                              <span className="text-[9px] text-gray-400 font-extrabold uppercase ml-1 block">{item.product?.unit_of_measure}</span>
+                            )}
                           </div>
                         </div>
                       ))

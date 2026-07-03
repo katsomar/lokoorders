@@ -59,10 +59,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, clearAuth } = useAuth();
 
   React.useEffect(() => {
-    if (user && user.role === "order_manager") {
+    if (user && user.role === "order_manager" && pathname !== "/production-store/intake") {
       router.push("/order-manager");
     }
-  }, [user, router]);
+  }, [user, router, pathname]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
