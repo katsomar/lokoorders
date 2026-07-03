@@ -41,6 +41,11 @@ const intakeSchema = z.object({
   d3_extra_eggs: z.number().min(0).optional(),
   shell_trays: z.number().min(0).optional(),
   shell_extra_eggs: z.number().min(0).optional(),
+  good_valuation_price: z.number().min(0).optional(),
+  d1_valuation_price: z.number().min(0).optional(),
+  d2_valuation_price: z.number().min(0).optional(),
+  d3_valuation_price: z.number().min(0).optional(),
+  shell_valuation_price: z.number().min(0).optional(),
 });
 
 type IntakeFormValues = z.infer<typeof intakeSchema>;
@@ -90,6 +95,11 @@ export default function ProductionIntakePage() {
       d3_extra_eggs: 0,
       shell_trays: 0,
       shell_extra_eggs: 0,
+      good_valuation_price: 0,
+      d1_valuation_price: 0,
+      d2_valuation_price: 0,
+      d3_valuation_price: 0,
+      shell_valuation_price: 0,
     },
   });
 
@@ -108,6 +118,12 @@ export default function ProductionIntakePage() {
   const watchD3ExtraEggs = watch("d3_extra_eggs") || 0;
   const watchShellTrays = watch("shell_trays") || 0;
   const watchShellExtraEggs = watch("shell_extra_eggs") || 0;
+
+  const watchGoodValuationPrice = watch("good_valuation_price") || 0;
+  const watchD1ValuationPrice = watch("d1_valuation_price") || 0;
+  const watchD2ValuationPrice = watch("d2_valuation_price") || 0;
+  const watchD3ValuationPrice = watch("d3_valuation_price") || 0;
+  const watchShellValuationPrice = watch("shell_valuation_price") || 0;
   
   const lastProductIdRef = React.useRef("");
 
@@ -121,14 +137,27 @@ export default function ProductionIntakePage() {
   const filteredProducts = products.filter((p) => allowedIntakeCodes.includes(p.code));
 
   useEffect(() => {
-    if (watchProductId && filteredProducts.length > 0 && watchProductId !== lastProductIdRef.current) {
-      const selected = filteredProducts.find((p) => p.id === watchProductId);
+    if (watchProductId && products.length > 0 && watchProductId !== lastProductIdRef.current) {
+      const selected = products.find((p) => p.id === watchProductId);
       if (selected) {
-        setValue("valuation_price", parseFloat(selected.default_unit_price) || 0);
+        const basePrice = parseFloat(selected.default_unit_price) || 0;
+        setValue("valuation_price", basePrice);
+        setValue("good_valuation_price", basePrice);
+
+        const d1Prod = products.find(p => p.code === `${selected.code}-D1`);
+        const d2Prod = products.find(p => p.code === `${selected.code}-D2`);
+        const d3Prod = products.find(p => p.code === `${selected.code}-D3`);
+        const shlProd = products.find(p => p.code === `${selected.code}-SHL`);
+
+        setValue("d1_valuation_price", d1Prod ? parseFloat(d1Prod.default_unit_price) : 5000);
+        setValue("d2_valuation_price", d2Prod ? parseFloat(d2Prod.default_unit_price) : 3000);
+        setValue("d3_valuation_price", d3Prod ? parseFloat(d3Prod.default_unit_price) : 0);
+        setValue("shell_valuation_price", shlProd ? parseFloat(shlProd.default_unit_price) : 2000);
+
         lastProductIdRef.current = watchProductId;
       }
     }
-  }, [watchProductId, filteredProducts, setValue]);
+  }, [watchProductId, products, setValue]);
 
   const selectedProduct = filteredProducts.find((p) => p.id === watchProductId);
   const isEggProduct = selectedProduct && ["EGG-WHT", "EGG-BRN", "EGG-CRM"].includes(selectedProduct.code);
@@ -153,11 +182,30 @@ export default function ProductionIntakePage() {
   const calculated = getCalculatedTrays();
   const calculatedQty = isEggProduct ? calculated.total : watchQty;
 
+  const getCalculatedValuation = () => {
+    if (!isEggProduct) {
+      return watchQty * watchPrice;
+    }
+    const goodVal = calculated.good * watchGoodValuationPrice;
+    const d1Val = calculated.d1 * watchD1ValuationPrice;
+    const d2Val = calculated.d2 * watchD2ValuationPrice;
+    const d3Val = calculated.d3 * watchD3ValuationPrice;
+    const shellVal = calculated.shell * watchShellValuationPrice;
+    return goodVal + d1Val + d2Val + d3Val + shellVal;
+  };
+
+  const estimatedValue = getCalculatedValuation();
+
   const onSubmit = async (data: IntakeFormValues) => {
     if (!isEggProduct && (!data.quantity || data.quantity <= 0)) {
       alert("Quantity received is required for non-egg products.");
       return;
     }
+
+    if (isEggProduct) {
+      data.valuation_price = data.good_valuation_price || 0;
+    }
+    
     setIsLoading(true);
     try {
       await api.post("/production-intakes", data);
@@ -248,6 +296,7 @@ export default function ProductionIntakePage() {
                     <h3 className="text-xs font-black text-brand-forest uppercase tracking-wider border-b border-brand-sage/30 pb-2">
                       Detailed Egg Intake Breakdown
                     </h3>
+                    
                     <div className="space-y-3">
                       <h4 className="text-[11px] font-bold text-brand-forest uppercase">1. Good Eggs</h4>
                       <div className="grid grid-cols-3 gap-4">
@@ -255,7 +304,11 @@ export default function ProductionIntakePage() {
                         <Input label="Extra Good Trays" type="number" placeholder="0" {...register("good_extra_trays", { valueAsNumber: true })} error={errors.good_extra_trays?.message} />
                         <Input label="Extra Good Eggs" type="number" placeholder="0" {...register("good_extra_eggs", { valueAsNumber: true })} error={errors.good_extra_eggs?.message} />
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Good Eggs Valuation Price (UGX) Per Tray" type="number" placeholder="12000" {...register("good_valuation_price", { valueAsNumber: true })} error={errors.good_valuation_price?.message} />
+                      </div>
                     </div>
+                    
                     <div className="space-y-3 pt-2">
                       <h4 className="text-[11px] font-bold text-brand-forest uppercase">2. Damaged Eggs (Classes)</h4>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
@@ -264,6 +317,9 @@ export default function ProductionIntakePage() {
                           <Input label="D1 Trays" type="number" placeholder="0" {...register("d1_trays", { valueAsNumber: true })} error={errors.d1_trays?.message} />
                           <Input label="D1 Extra Eggs" type="number" placeholder="0" {...register("d1_extra_eggs", { valueAsNumber: true })} error={errors.d1_extra_eggs?.message} />
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input label="D1 Valuation Price (UGX) Per Tray" type="number" placeholder="5000" {...register("d1_valuation_price", { valueAsNumber: true })} error={errors.d1_valuation_price?.message} />
+                        </div>
                       </div>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
                         <span className="text-[10px] font-bold text-brand-forest uppercase block font-heading">Class 2 Damages (Deep cracks/visible yolk - Sellable)</span>
@@ -271,12 +327,18 @@ export default function ProductionIntakePage() {
                           <Input label="D2 Trays" type="number" placeholder="0" {...register("d2_trays", { valueAsNumber: true })} error={errors.d2_trays?.message} />
                           <Input label="D2 Extra Eggs" type="number" placeholder="0" {...register("d2_extra_eggs", { valueAsNumber: true })} error={errors.d2_extra_eggs?.message} />
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input label="D2 Valuation Price (UGX) Per Tray" type="number" placeholder="3000" {...register("d2_valuation_price", { valueAsNumber: true })} error={errors.d2_valuation_price?.message} />
+                        </div>
                       </div>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
                         <span className="text-[10px] font-bold text-red-650 uppercase block font-heading">Class 3 Damages (Severely cracked/rotten - Waste)</span>
                         <div className="grid grid-cols-2 gap-4">
                           <Input label="D3 Trays" type="number" placeholder="0" {...register("d3_trays", { valueAsNumber: true })} error={errors.d3_trays?.message} />
                           <Input label="D3 Extra Eggs" type="number" placeholder="0" {...register("d3_extra_eggs", { valueAsNumber: true })} error={errors.d3_extra_eggs?.message} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Input label="D3 Valuation Price (UGX) Per Tray" type="number" disabled placeholder="0" {...register("d3_valuation_price", { valueAsNumber: true })} error={errors.d3_valuation_price?.message} />
                         </div>
                       </div>
                     </div>
@@ -286,6 +348,9 @@ export default function ProductionIntakePage() {
                         <Input label="Shell Trays" type="number" placeholder="0" {...register("shell_trays", { valueAsNumber: true })} error={errors.shell_trays?.message} />
                         <Input label="Shell Extra Eggs" type="number" placeholder="0" {...register("shell_extra_eggs", { valueAsNumber: true })} error={errors.shell_extra_eggs?.message} />
                       </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Shell Valuation Price (UGX) Per Tray" type="number" placeholder="2000" {...register("shell_valuation_price", { valueAsNumber: true })} error={errors.shell_valuation_price?.message} />
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -294,12 +359,14 @@ export default function ProductionIntakePage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input label="Valuation Price (UGX) Per Tray" type="number" step="1" placeholder="0" {...register("valuation_price", { valueAsNumber: true })} error={errors.valuation_price?.message} required />
-                  <Input label="Batch Number" placeholder="e.g. B-0516-A" {...register("batch_number")} />
-                </div>
+                {!isEggProduct && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label="Valuation Price (UGX) Per Tray" type="number" step="1" placeholder="0" {...register("valuation_price", { valueAsNumber: true })} error={errors.valuation_price?.message} required />
+                  </div>
+                )}
 
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Input label="Batch Number" placeholder="e.g. B-0516-A" {...register("batch_number")} />
                   <Input label="Notes / Observations" placeholder="Any quality notes or specific details..." {...register("notes")} />
                 </div>
 
@@ -322,7 +389,7 @@ export default function ProductionIntakePage() {
                 <div className="space-y-1">
                   <p className="text-[10px] text-white/60 uppercase font-bold tracking-wider">Estimated Batch Value</p>
                   <h3 className="text-3xl font-black font-heading text-white">
-                    UGX {Math.round(calculatedQty * watchPrice).toLocaleString()}
+                    UGX {Math.round(estimatedValue).toLocaleString()}
                   </h3>
                 </div>
 
@@ -339,7 +406,9 @@ export default function ProductionIntakePage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Valuation Rate:</span>
-                    <span className="font-bold text-brand-yellow">UGX {watchPrice.toLocaleString()} / tray</span>
+                    <span className="font-bold text-brand-yellow">
+                      {isEggProduct ? "Various / Category" : `UGX ${watchPrice.toLocaleString()} / unit`}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Batch No:</span>
@@ -356,23 +425,23 @@ export default function ProductionIntakePage() {
                     <div className="pl-2 space-y-1 text-[11px] text-white/80">
                       <div className="flex justify-between">
                         <span>- Good Trays:</span>
-                        <span>{calculated.good.toFixed(2)} Trays</span>
+                        <span>{calculated.good.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchGoodValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Class 1 Damages:</span>
-                        <span>{calculated.d1.toFixed(2)} Trays</span>
+                        <span>{calculated.d1.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD1ValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Class 2 Damages:</span>
-                        <span>{calculated.d2.toFixed(2)} Trays</span>
+                        <span>{calculated.d2.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD2ValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between text-red-300">
                         <span>- Class 3 Damages (Waste):</span>
-                        <span>{calculated.d3.toFixed(2)} Trays</span>
+                        <span>{calculated.d3.toFixed(2)} Trays <span className="text-[10px] text-red-400 font-mono">(UGX 0/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Shell Eggs:</span>
-                        <span>{calculated.shell.toFixed(2)} Trays</span>
+                        <span>{calculated.shell.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchShellValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                     </div>
                   </div>
