@@ -43,10 +43,15 @@ const intakeSchema = z.object({
   shell_trays: z.number().min(0).optional(),
   shell_extra_eggs: z.number().min(0).optional(),
   good_valuation_price: z.number().min(0).optional(),
+  good_egg_valuation_price: z.number().min(0).optional(),
   d1_valuation_price: z.number().min(0).optional(),
+  d1_egg_valuation_price: z.number().min(0).optional(),
   d2_valuation_price: z.number().min(0).optional(),
+  d2_egg_valuation_price: z.number().min(0).optional(),
   d3_valuation_price: z.number().min(0).optional(),
+  d3_egg_valuation_price: z.number().min(0).optional(),
   shell_valuation_price: z.number().min(0).optional(),
+  shell_egg_valuation_price: z.number().min(0).optional(),
 });
 
 type IntakeFormValues = z.infer<typeof intakeSchema>;
@@ -99,10 +104,15 @@ export default function ProductionIntakePage() {
       shell_trays: 0,
       shell_extra_eggs: 0,
       good_valuation_price: 0,
+      good_egg_valuation_price: 0,
       d1_valuation_price: 0,
+      d1_egg_valuation_price: 0,
       d2_valuation_price: 0,
+      d2_egg_valuation_price: 0,
       d3_valuation_price: 0,
+      d3_egg_valuation_price: 0,
       shell_valuation_price: 0,
+      shell_egg_valuation_price: 0,
     },
   });
 
@@ -123,10 +133,15 @@ export default function ProductionIntakePage() {
   const watchShellExtraEggs = watch("shell_extra_eggs") || 0;
 
   const watchGoodValuationPrice = watch("good_valuation_price") || 0;
+  const watchGoodEggValuationPrice = watch("good_egg_valuation_price") || 0;
   const watchD1ValuationPrice = watch("d1_valuation_price") || 0;
+  const watchD1EggValuationPrice = watch("d1_egg_valuation_price") || 0;
   const watchD2ValuationPrice = watch("d2_valuation_price") || 0;
+  const watchD2EggValuationPrice = watch("d2_egg_valuation_price") || 0;
   const watchD3ValuationPrice = watch("d3_valuation_price") || 0;
+  const watchD3EggValuationPrice = watch("d3_egg_valuation_price") || 0;
   const watchShellValuationPrice = watch("shell_valuation_price") || 0;
+  const watchShellEggValuationPrice = watch("shell_egg_valuation_price") || 0;
   
   const lastProductIdRef = React.useRef("");
 
@@ -143,20 +158,26 @@ export default function ProductionIntakePage() {
     if (watchProductId && products.length > 0 && watchProductId !== lastProductIdRef.current) {
       const selected = products.find((p) => p.id === watchProductId);
       if (selected) {
-        const basePrice = parseFloat(selected.default_unit_price) || 0;
+        const basePrice = parseFloat(selected.production_unit_price || selected.default_unit_price) || 0;
+        const eggBasePrice = parseFloat(selected.production_egg_unit_price) || (basePrice / 30);
         setValue("valuation_price", basePrice);
         setValue("good_valuation_price", basePrice);
-
+        setValue("good_egg_valuation_price", eggBasePrice);
+ 
         const d1Prod = products.find(p => p.code === `${selected.code}-D1`);
         const d2Prod = products.find(p => p.code === `${selected.code}-D2`);
         const d3Prod = products.find(p => p.code === `${selected.code}-D3`);
         const shlProd = products.find(p => p.code === `${selected.code}-SHL`);
-
-        setValue("d1_valuation_price", d1Prod ? parseFloat(d1Prod.default_unit_price) : 5000);
-        setValue("d2_valuation_price", d2Prod ? parseFloat(d2Prod.default_unit_price) : 3000);
-        setValue("d3_valuation_price", d3Prod ? parseFloat(d3Prod.default_unit_price) : 0);
-        setValue("shell_valuation_price", shlProd ? parseFloat(shlProd.default_unit_price) : 2000);
-
+ 
+        setValue("d1_valuation_price", d1Prod ? parseFloat(d1Prod.production_unit_price || d1Prod.default_unit_price) : 5000);
+        setValue("d1_egg_valuation_price", d1Prod ? parseFloat(d1Prod.production_egg_unit_price) : 5000 / 30);
+        setValue("d2_valuation_price", d2Prod ? parseFloat(d2Prod.production_unit_price || d2Prod.default_unit_price) : 3000);
+        setValue("d2_egg_valuation_price", d2Prod ? parseFloat(d2Prod.production_egg_unit_price) : 3000 / 30);
+        setValue("d3_valuation_price", d3Prod ? parseFloat(d3Prod.production_unit_price || d3Prod.default_unit_price) : 0);
+        setValue("d3_egg_valuation_price", d3Prod ? parseFloat(d3Prod.production_egg_unit_price) : 0);
+        setValue("shell_valuation_price", shlProd ? parseFloat(shlProd.production_unit_price || shlProd.default_unit_price) : 2000);
+        setValue("shell_egg_valuation_price", shlProd ? parseFloat(shlProd.production_egg_unit_price) : 2000 / 30);
+ 
         lastProductIdRef.current = watchProductId;
       }
     }
@@ -189,11 +210,11 @@ export default function ProductionIntakePage() {
     if (!isEggProduct) {
       return watchQty * watchPrice;
     }
-    const goodVal = calculated.good * watchGoodValuationPrice;
-    const d1Val = calculated.d1 * watchD1ValuationPrice;
-    const d2Val = calculated.d2 * watchD2ValuationPrice;
-    const d3Val = calculated.d3 * watchD3ValuationPrice;
-    const shellVal = calculated.shell * watchShellValuationPrice;
+    const goodVal = (watchGoodStacks * 30 + watchGoodExtraTrays) * watchGoodValuationPrice + watchGoodExtraEggs * watchGoodEggValuationPrice;
+    const d1Val = watchD1Trays * watchD1ValuationPrice + watchD1ExtraEggs * watchD1EggValuationPrice;
+    const d2Val = watchD2Trays * watchD2ValuationPrice + watchD2ExtraEggs * watchD2EggValuationPrice;
+    const d3Val = watchD3Trays * watchD3ValuationPrice + watchD3ExtraEggs * watchD3EggValuationPrice;
+    const shellVal = watchShellTrays * watchShellValuationPrice + watchShellExtraEggs * watchShellEggValuationPrice;
     return goodVal + d1Val + d2Val + d3Val + shellVal;
   };
 
@@ -315,13 +336,22 @@ export default function ProductionIntakePage() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input 
-                          label="Good Eggs Valuation Price (UGX) Per Tray" 
+                          label="Good Eggs Price (UGX) Per Tray" 
                           type="number" 
                           placeholder="12000" 
                           readOnly={!isAdmin}
                           className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
                           {...register("good_valuation_price", { valueAsNumber: true })} 
                           error={errors.good_valuation_price?.message} 
+                        />
+                        <Input 
+                          label="Good Eggs Price (UGX) Per Egg" 
+                          type="number" 
+                          placeholder="400" 
+                          readOnly={!isAdmin}
+                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          {...register("good_egg_valuation_price", { valueAsNumber: true })} 
+                          error={errors.good_egg_valuation_price?.message} 
                         />
                       </div>
                     </div>
@@ -336,13 +366,22 @@ export default function ProductionIntakePage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input 
-                            label="D1 Valuation Price (UGX) Per Tray" 
+                            label="D1 Price (UGX) Per Tray" 
                             type="number" 
                             placeholder="5000" 
                             readOnly={!isAdmin}
                             className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
                             {...register("d1_valuation_price", { valueAsNumber: true })} 
                             error={errors.d1_valuation_price?.message} 
+                          />
+                          <Input 
+                            label="D1 Price (UGX) Per Egg" 
+                            type="number" 
+                            placeholder="167" 
+                            readOnly={!isAdmin}
+                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            {...register("d1_egg_valuation_price", { valueAsNumber: true })} 
+                            error={errors.d1_egg_valuation_price?.message} 
                           />
                         </div>
                       </div>
@@ -354,7 +393,7 @@ export default function ProductionIntakePage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <Input 
-                            label="D2 Valuation Price (UGX) Per Tray" 
+                            label="D2 Price (UGX) Per Tray" 
                             type="number" 
                             placeholder="3000" 
                             readOnly={!isAdmin}
@@ -362,16 +401,26 @@ export default function ProductionIntakePage() {
                             {...register("d2_valuation_price", { valueAsNumber: true })} 
                             error={errors.d2_valuation_price?.message} 
                           />
+                          <Input 
+                            label="D2 Price (UGX) Per Egg" 
+                            type="number" 
+                            placeholder="100" 
+                            readOnly={!isAdmin}
+                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            {...register("d2_egg_valuation_price", { valueAsNumber: true })} 
+                            error={errors.d2_egg_valuation_price?.message} 
+                          />
                         </div>
                       </div>
                       <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
-                        <span className="text-[10px] font-bold text-red-650 uppercase block font-heading">Class 3 Damages (Severely cracked/rotten - Waste)</span>
+                        <span className="text-[10px] font-bold text-red-655 uppercase block font-heading">Class 3 Damages (Severely cracked/rotten - Waste)</span>
                         <div className="grid grid-cols-2 gap-4">
                           <Input label="D3 Trays" type="number" placeholder="0" {...register("d3_trays", { valueAsNumber: true })} error={errors.d3_trays?.message} />
                           <Input label="D3 Extra Eggs" type="number" placeholder="0" {...register("d3_extra_eggs", { valueAsNumber: true })} error={errors.d3_extra_eggs?.message} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input label="D3 Valuation Price (UGX) Per Tray" type="number" disabled placeholder="0" {...register("d3_valuation_price", { valueAsNumber: true })} error={errors.d3_valuation_price?.message} />
+                          <Input label="D3 Price (UGX) Per Tray" type="number" disabled placeholder="0" {...register("d3_valuation_price", { valueAsNumber: true })} error={errors.d3_valuation_price?.message} />
+                          <Input label="D3 Price (UGX) Per Egg" type="number" disabled placeholder="0" {...register("d3_egg_valuation_price", { valueAsNumber: true })} error={errors.d3_egg_valuation_price?.message} />
                         </div>
                       </div>
                     </div>
@@ -383,13 +432,22 @@ export default function ProductionIntakePage() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input 
-                          label="Shell Valuation Price (UGX) Per Tray" 
+                          label="Shell Price (UGX) Per Tray" 
                           type="number" 
                           placeholder="2000" 
                           readOnly={!isAdmin}
                           className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
                           {...register("shell_valuation_price", { valueAsNumber: true })} 
                           error={errors.shell_valuation_price?.message} 
+                        />
+                        <Input 
+                          label="Shell Price (UGX) Per Egg" 
+                          type="number" 
+                          placeholder="67" 
+                          readOnly={!isAdmin}
+                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          {...register("shell_egg_valuation_price", { valueAsNumber: true })} 
+                          error={errors.shell_egg_valuation_price?.message} 
                         />
                       </div>
                     </div>

@@ -54,7 +54,7 @@ class SalesStoreStock extends Model
     public function product() { return $this->belongsTo(Product::class); }
     public function salesStore() { return $this->belongsTo(SalesStore::class); }
 
-    public function updateStock(string $type, float $qty, ?float $price = null)
+    public function updateStock(string $type, float $qty, ?float $price = null, ?float $eggPrice = null)
     {
         $this->transferred_in = $this->transferred_in ?? 0;
         $this->conversions_in = $this->conversions_in ?? 0;
@@ -82,6 +82,10 @@ class SalesStoreStock extends Model
 
         if ($price !== null) {
             $this->unit_price = $price;
+        }
+
+        if ($eggPrice !== null) {
+            $this->egg_unit_price = $eggPrice;
         }
 
         $this->opening_stock = $this->conversions_in;

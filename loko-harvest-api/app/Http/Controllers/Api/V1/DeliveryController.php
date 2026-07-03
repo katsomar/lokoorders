@@ -54,9 +54,13 @@ class DeliveryController extends Controller
 
         $orderIds = isset($validated['order_ids']) ? $validated['order_ids'] : [$validated['order_id']];
         $preventStatusUpdate = $request->input('prevent_status_update', false);
+        $vehicleId = $validated['vehicle_id'] ?? null;
 
         try {
-            return DB::transaction(function () use ($orderIds, $driverId, $preventStatusUpdate) {
+            return DB::transaction(function () use ($orderIds, $driverId, $vehicleId, $preventStatusUpdate) {
+                if ($vehicleId) {
+                    \App\Models\Driver::where('id', $driverId)->update(['vehicle_id' => $vehicleId]);
+                }
                 $deliveries = [];
                 foreach ($orderIds as $orderId) {
                     // Prevent duplicate assignment if active delivery already exists for this order

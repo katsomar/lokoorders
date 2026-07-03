@@ -116,7 +116,7 @@ export default function DriversPage() {
   const [newDriverEmail, setNewDriverEmail] = useState("");
   const [newDriverPhone, setNewDriverPhone] = useState("");
   const [newDriverLicense, setNewDriverLicense] = useState("");
-  const [newDriverVehicleId, setNewDriverVehicleId] = useState("");
+  const [newDriverVehicleIds, setNewDriverVehicleIds] = useState<string[]>([]);
   const [newDriverStatus, setNewDriverStatus] = useState("active");
   const [newDriverDateJoined, setNewDriverDateJoined] = useState(new Date().toISOString().split('T')[0]);
   const [newDriverNotes, setNewDriverNotes] = useState("");
@@ -141,7 +141,7 @@ export default function DriversPage() {
   const [editDriverEmail, setEditDriverEmail] = useState("");
   const [editDriverPhone, setEditDriverPhone] = useState("");
   const [editDriverLicense, setEditDriverLicense] = useState("");
-  const [editDriverVehicleId, setEditDriverVehicleId] = useState("");
+  const [editDriverVehicleIds, setEditDriverVehicleIds] = useState<string[]>([]);
   const [editDriverStatus, setEditDriverStatus] = useState("active");
   const [editDriverDateJoined, setEditDriverDateJoined] = useState("");
   const [editDriverNotes, setEditDriverNotes] = useState("");
@@ -308,7 +308,7 @@ export default function DriversPage() {
     
     // Find the IDs of the drivers who have this vehicle registration number
     const assignedIds = drivers
-      .filter(d => d.vehicle_registration === selectedVehicleForLogistics.registration_number)
+      .filter(d => (d.vehicles || []).some((v: any) => v.registration_number === selectedVehicleForLogistics.registration_number))
       .map(d => d.id);
     setLogisticsDriverIds(assignedIds);
   }, [selectedVehicleForLogistics, drivers]);
@@ -413,7 +413,10 @@ export default function DriversPage() {
       formData.append("full_name", newDriverName);
       if (newDriverEmail) formData.append("email", newDriverEmail);
       formData.append("phone", newDriverPhone);
-      if (newDriverVehicleId) formData.append("vehicle_id", newDriverVehicleId);
+      if (newDriverVehicleIds.length > 0) {
+        newDriverVehicleIds.forEach(id => formData.append("vehicle_ids[]", id));
+        formData.append("vehicle_id", newDriverVehicleIds[0]);
+      }
       formData.append("license_number", newDriverLicense);
       formData.append("employment_status", newDriverStatus);
       formData.append("date_joined", newDriverDateJoined);
@@ -433,7 +436,7 @@ export default function DriversPage() {
       setNewDriverEmail("");
       setNewDriverPhone("");
       setNewDriverLicense("");
-      setNewDriverVehicleId("");
+      setNewDriverVehicleIds([]);
       setNewDriverStatus("active");
       setNewDriverDateJoined(new Date().toISOString().split('T')[0]);
       setNewDriverNotes("");
@@ -501,7 +504,8 @@ export default function DriversPage() {
     setEditDriverEmail(driver.email || "");
     setEditDriverPhone(driver.phone || "");
     setEditDriverLicense(driver.license || "");
-    setEditDriverVehicleId(driver.vehicle_id || "");
+    const assignedVehicleIds = (driver.vehicles || []).map((v: any) => v.id);
+    setEditDriverVehicleIds(assignedVehicleIds);
     setEditDriverStatus(driver.employment_status || "active");
     setEditDriverDateJoined(driver.date_joined ? driver.date_joined.split(' ')[0] : new Date().toISOString().split('T')[0]);
     setEditDriverNotes(driver.notes || "");
@@ -529,9 +533,11 @@ export default function DriversPage() {
       formData.append("employment_status", editDriverStatus);
       formData.append("date_joined", editDriverDateJoined);
       formData.append("notes", editDriverNotes || "");
-      if (editDriverVehicleId) {
-        formData.append("vehicle_id", editDriverVehicleId);
+      if (editDriverVehicleIds.length > 0) {
+        editDriverVehicleIds.forEach(id => formData.append("vehicle_ids[]", id));
+        formData.append("vehicle_id", editDriverVehicleIds[0]);
       } else {
+        formData.append("vehicle_ids", "");
         formData.append("vehicle_id", "");
       }
       if (editDriverAvatarFile) {
@@ -697,9 +703,15 @@ export default function DriversPage() {
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Assigned Vehicle</p>
                           <p className="text-xs font-bold text-gray-700 flex items-center gap-1">
                             <Truck size={12} className="text-brand-mid shrink-0" /> 
-                            {driver.vehicle_registration}
+                            {driver.vehicles && driver.vehicles.length > 0 
+                              ? driver.vehicles.map((v: any) => v.registration_number).join(", ")
+                              : driver.vehicle_registration || 'N/A'}
                           </p>
-                          <p className="text-[9px] text-gray-400 font-semibold truncate max-w-full">{driver.vehicle_make}</p>
+                          <p className="text-[9px] text-gray-400 font-semibold truncate max-w-full">
+                            {driver.vehicles && driver.vehicles.length > 0 
+                              ? driver.vehicles.map((v: any) => `${v.make} ${v.model || ''}`).join(", ")
+                              : driver.vehicle_make || 'N/A'}
+                          </p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fulfillment Log</p>
@@ -1706,16 +1718,28 @@ export default function DriversPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Assign Vehicle</label>
-                      <select
-                        value={editDriverVehicleId}
-                        onChange={(e) => setEditDriverVehicleId(e.target.value)}
-                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      >
-                        <option value="">No Vehicle Assigned</option>
-                        {vehicles.map(v => (
-                          <option key={v.id} value={v.id}>{v.registration_number} ({v.make})</option>
-                        ))}
-                      </select>
+                      <div className="border border-brand-sage/50 rounded-xl p-3 bg-gray-50/50 max-h-32 overflow-y-auto space-y-2">
+                        {vehicles.map(v => {
+                          const isChecked = editDriverVehicleIds.includes(v.id);
+                          return (
+                            <label key={v.id} className="flex items-center gap-2 font-bold text-gray-700 cursor-pointer hover:text-brand-forest text-xs">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setEditDriverVehicleIds(editDriverVehicleIds.filter(id => id !== v.id));
+                                  } else {
+                                    setEditDriverVehicleIds([...editDriverVehicleIds, v.id]);
+                                  }
+                                }}
+                                className="accent-brand-forest h-3.5 w-3.5 rounded border-gray-300 cursor-pointer"
+                              />
+                              <span>{v.registration_number} ({v.make})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div>
@@ -2260,16 +2284,28 @@ export default function DriversPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1.5">Assign Vehicle</label>
-                      <select
-                        value={newDriverVehicleId}
-                        onChange={(e) => setNewDriverVehicleId(e.target.value)}
-                        className="w-full h-9.5 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      >
-                        <option value="">No Vehicle Assigned</option>
-                        {vehicles.map(v => (
-                          <option key={v.id} value={v.id}>{v.registration_number} ({v.make})</option>
-                        ))}
-                      </select>
+                      <div className="border border-brand-sage/50 rounded-xl p-3 bg-gray-50/50 max-h-32 overflow-y-auto space-y-2">
+                        {vehicles.map(v => {
+                          const isChecked = newDriverVehicleIds.includes(v.id);
+                          return (
+                            <label key={v.id} className="flex items-center gap-2 font-bold text-gray-700 cursor-pointer hover:text-brand-forest text-xs">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  if (isChecked) {
+                                    setNewDriverVehicleIds(newDriverVehicleIds.filter(id => id !== v.id));
+                                  } else {
+                                    setNewDriverVehicleIds([...newDriverVehicleIds, v.id]);
+                                  }
+                                }}
+                                className="accent-brand-forest h-3.5 w-3.5 rounded border-gray-300 cursor-pointer"
+                              />
+                              <span>{v.registration_number} ({v.make})</span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     <div>

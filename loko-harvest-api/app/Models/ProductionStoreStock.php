@@ -41,7 +41,7 @@ class ProductionStoreStock extends Model
     public function product() { return $this->belongsTo(Product::class); }
     public function productionStore() { return $this->belongsTo(ProductionStore::class); }
 
-    public function updateStock(string $type, float $qty, ?float $price = null)
+    public function updateStock(string $type, float $qty, ?float $price = null, ?float $eggPrice = null)
     {
         $this->opening_stock = $this->opening_stock ?? 0;
         $this->stock_taken = $this->stock_taken ?? 0;
@@ -61,6 +61,10 @@ class ProductionStoreStock extends Model
         if ($price !== null) {
             $this->unit_price = $price;
             $this->valuation_price = $price;
+        }
+
+        if ($eggPrice !== null) {
+            $this->egg_unit_price = $eggPrice;
         }
 
         $this->closing_stock = $this->opening_stock - ($this->stock_taken + $this->replacements + $this->damages);

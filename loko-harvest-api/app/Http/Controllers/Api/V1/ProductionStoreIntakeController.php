@@ -68,23 +68,28 @@ class ProductionStoreIntakeController extends Controller
                 $categories = [
                     $productCode => [
                         'qty' => $goodQty,
-                        'price' => $request->good_valuation_price ?? $validated['valuation_price']
+                        'price' => $request->good_valuation_price ?? $validated['valuation_price'],
+                        'egg_price' => $request->good_egg_valuation_price ?? ($request->good_valuation_price ?? $validated['valuation_price']) / 30
                     ],
                     $productCode . '-D1' => [
                         'qty' => $d1Qty,
-                        'price' => $request->d1_valuation_price ?? $validated['valuation_price']
+                        'price' => $request->d1_valuation_price ?? $validated['valuation_price'],
+                        'egg_price' => $request->d1_egg_valuation_price ?? ($request->d1_valuation_price ?? $validated['valuation_price']) / 30
                     ],
                     $productCode . '-D2' => [
                         'qty' => $d2Qty,
-                        'price' => $request->d2_valuation_price ?? $validated['valuation_price']
+                        'price' => $request->d2_valuation_price ?? $validated['valuation_price'],
+                        'egg_price' => $request->d2_egg_valuation_price ?? ($request->d2_valuation_price ?? $validated['valuation_price']) / 30
                     ],
                     $productCode . '-D3' => [
                         'qty' => $d3Qty,
-                        'price' => $request->d3_valuation_price ?? 0
+                        'price' => $request->d3_valuation_price ?? 0,
+                        'egg_price' => $request->d3_egg_valuation_price ?? 0
                     ],
                     $productCode . '-SHL' => [
                         'qty' => $shellQty,
-                        'price' => $request->shell_valuation_price ?? $validated['valuation_price']
+                        'price' => $request->shell_valuation_price ?? $validated['valuation_price'],
+                        'egg_price' => $request->shell_egg_valuation_price ?? ($request->shell_valuation_price ?? $validated['valuation_price']) / 30
                     ]
                 ];
 
@@ -93,6 +98,7 @@ class ProductionStoreIntakeController extends Controller
                 foreach ($categories as $code => $data) {
                     $qty = $data['qty'];
                     $price = $data['price'];
+                    $eggPrice = $data['egg_price'];
                     if ($qty <= 0) {
                         continue;
                     }
@@ -108,6 +114,7 @@ class ProductionStoreIntakeController extends Controller
                         'product_id' => $subProduct->id,
                         'quantity' => $qty,
                         'valuation_price' => $price,
+                        'egg_valuation_price' => $eggPrice,
                         'unit_of_measure' => $subProduct->unit_of_measure,
                         'batch_reference' => $validated['batch_number'] ?? null,
                         'notes' => $validated['notes'] ?? null,
@@ -125,14 +132,14 @@ class ProductionStoreIntakeController extends Controller
                             'product_id' => $subProduct->id,
                             'batch_reference' => $validated['batch_number'] ?? null
                         ],
-                        ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $price]
+                        ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $price, 'egg_unit_price' => $eggPrice]
                     );
 
                     $stock->update([
                         'updated_by' => auth()->id(),
                         'last_updated' => now()
                     ]);
-                    $stock->updateStock('add', $qty, $price);
+                    $stock->updateStock('add', $qty, $price, $eggPrice);
                 }
 
                 $responseIntake = $createdIntake ?? ProductionStoreIntake::where('production_store_id', $validated['production_store_id'])
@@ -155,6 +162,7 @@ class ProductionStoreIntakeController extends Controller
                 'product_id' => $validated['product_id'],
                 'quantity' => $quantity,
                 'valuation_price' => $validated['valuation_price'],
+                'egg_valuation_price' => 0.00,
                 'unit_of_measure' => $product->unit_of_measure,
                 'batch_reference' => $validated['batch_number'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -168,14 +176,14 @@ class ProductionStoreIntakeController extends Controller
                     'product_id' => $validated['product_id'],
                     'batch_reference' => $validated['batch_number'] ?? null
                 ],
-                ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $validated['valuation_price']]
+                ['current_quantity' => 0, 'updated_by' => auth()->id(), 'valuation_price' => $validated['valuation_price'], 'egg_unit_price' => 0.00]
             );
 
             $stock->update([
                 'updated_by' => auth()->id(),
                 'last_updated' => now()
             ]);
-            $stock->updateStock('add', $quantity, $validated['valuation_price']);
+            $stock->updateStock('add', $quantity, $validated['valuation_price'], 0.00);
 
             return $this->success($intake->load('product'), 'Intake recorded successfully', 201);
         });

@@ -46,6 +46,8 @@ class ProductController extends Controller
             'default_unit_price' => 'sometimes|required|numeric|min:0',
             'production_unit_price' => 'sometimes|required|numeric|min:0',
             'sales_unit_price' => 'sometimes|required|numeric|min:0',
+            'production_egg_unit_price' => 'sometimes|required|numeric|min:0',
+            'sales_egg_unit_price' => 'sometimes|required|numeric|min:0',
             'is_active' => 'sometimes|required|boolean',
         ]);
 

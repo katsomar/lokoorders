@@ -14,8 +14,12 @@ class VehicleController extends Controller
     public function index()
     {
         $vehicles = Vehicle::with(['drivers'])->get();
-
+ 
         $data = $vehicles->map(function ($vehicle) {
+            $drivers = $vehicle->drivers;
+            if ($drivers->isEmpty()) {
+                $drivers = \App\Models\Driver::where('vehicle_id', $vehicle->id)->get();
+            }
             return [
                 'id' => $vehicle->id,
                 'registration_number' => $vehicle->registration_number,
@@ -28,11 +32,11 @@ class VehicleController extends Controller
                 'added_fuel_per_shift' => $vehicle->added_fuel_per_shift,
                 'fuel_tank_capacity' => $vehicle->fuel_tank_capacity,
                 'status' => $vehicle->status,
-                'assigned_drivers' => $vehicle->drivers->pluck('full_name')->toArray(),
+                'assigned_drivers' => $drivers->pluck('full_name')->toArray(),
                 'image' => $vehicle->image_path ? (filter_var($vehicle->image_path, FILTER_VALIDATE_URL) ? $vehicle->image_path : url('storage/' . $vehicle->image_path)) : null,
             ];
         });
-
+ 
         return $this->success($data);
     }
 
@@ -109,17 +113,19 @@ class VehicleController extends Controller
             ]);
 
             $driverIds = $validated['driver_ids'] ?? null;
-
+ 
             if ($driverIds !== null) {
-                // Disassociate drivers who were previously assigned to this vehicle but not in new list
+                // Sync the drivers of this vehicle in the pivot table!
+                $vehicle->drivers()->sync($driverIds);
+ 
+                // Disassociate drivers who were previously assigned to this vehicle but not in new list (legacy)
                 \App\Models\Driver::where('vehicle_id', $vehicle->id)
                     ->whereNotIn('id', $driverIds)
                     ->update(['vehicle_id' => null]);
-
-                // Associate the selected drivers
-                if (!empty($driverIds)) {
-                    \App\Models\Driver::whereIn('id', $driverIds)
-                        ->update(['vehicle_id' => $vehicle->id]);
+ 
+                // Associate the selected drivers (legacy)
+                foreach ($driverIds as $driverId) {
+                    \App\Models\Driver::where('id', $driverId)->update(['vehicle_id' => $vehicle->id]);
                 }
             }
 

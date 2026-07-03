@@ -282,8 +282,8 @@ class DriverController extends Controller
 
     public function index()
     {
-        $drivers = Driver::with(['vehicle', 'deliveries', 'user'])->get();
-
+        $drivers = Driver::with(['vehicles', 'deliveries', 'user'])->get();
+ 
         $data = $drivers->map(function ($driver) {
             $status = 'available';
             if ($driver->employment_status === 'inactive') {
@@ -296,10 +296,10 @@ class DriverController extends Controller
                     $status = 'busy';
                 }
             }
-
+ 
             // Stable pseudo-random rating based on driver ID (between 4.5 and 5.0)
             $rating = 4.5 + (abs(crc32($driver->id)) % 51) / 100;
-
+ 
             // Location: Use the destination delivery zone of the latest delivery, or fallback
             $latestDelivery = $driver->deliveries()
                 ->with(['order.customer.zone'])
@@ -313,17 +313,31 @@ class DriverController extends Controller
                 $locations = ['Kampala Central', 'Wandegeya', 'Bukoto', 'Ntinda', 'Kireka'];
                 $location = $locations[abs(crc32($driver->id)) % count($locations)];
             }
-
+ 
+            $firstVehicle = $driver->vehicles->first() ?: $driver->vehicle;
+            $vehiclesList = $driver->vehicles;
+            if ($vehiclesList->isEmpty() && $driver->vehicle) {
+                $vehiclesList = collect([$driver->vehicle]);
+            }
+ 
             return [
                 'id' => $driver->id,
                 'name' => $driver->full_name,
                 'phone' => $driver->phone,
                 'email' => $driver->user ? $driver->user->email : '',
                 'notes' => $driver->notes,
-                'vehicle_id' => $driver->vehicle_id,
+                'vehicle_id' => $firstVehicle ? $firstVehicle->id : null,
                 'license' => $driver->license_number,
-                'vehicle_registration' => $driver->vehicle ? $driver->vehicle->registration_number : 'N/A',
-                'vehicle_make' => $driver->vehicle ? ($driver->vehicle->make . ' ' . $driver->vehicle->model) : 'N/A',
+                'vehicle_registration' => $firstVehicle ? $firstVehicle->registration_number : 'N/A',
+                'vehicle_make' => $firstVehicle ? ($firstVehicle->make . ' ' . $firstVehicle->model) : 'N/A',
+                'vehicles' => $vehiclesList->map(function ($v) {
+                    return [
+                        'id' => $v->id,
+                        'registration_number' => $v->registration_number,
+                        'make' => $v->make,
+                        'model' => $v->model,
+                    ];
+                })->toArray(),
                 'status' => $status,
                 'rating' => $rating,
                 'deliveries' => $driver->deliveries()->count(),
@@ -334,7 +348,7 @@ class DriverController extends Controller
                 'license_photo' => $driver->license_path ? (filter_var($driver->license_path, FILTER_VALIDATE_URL) ? $driver->license_path : url('storage/' . $driver->license_path)) : null,
             ];
         });
-
+ 
         return $this->success($data);
     }
 
@@ -345,6 +359,8 @@ class DriverController extends Controller
             'email' => 'nullable|email|unique:users,email',
             'phone' => 'required|string',
             'vehicle_id' => 'nullable|exists:vehicles,id',
+            'vehicle_ids' => 'nullable|array',
+            'vehicle_ids.*' => 'exists:vehicles,id',
             'license_number' => 'required|string',
             'employment_status' => 'nullable|in:active,inactive',
             'date_joined' => 'nullable|date',
@@ -381,7 +397,7 @@ class DriverController extends Controller
                 'user_id' => $user->id,
                 'full_name' => $validated['full_name'],
                 'phone' => $validated['phone'],
-                'vehicle_id' => $validated['vehicle_id'] ?? null,
+                'vehicle_id' => $validated['vehicle_id'] ?? (isset($validated['vehicle_ids']) && !empty($validated['vehicle_ids']) ? $validated['vehicle_ids'][0] : null),
                 'license_number' => $validated['license_number'],
                 'employment_status' => $validated['employment_status'] ?? 'active',
                 'date_joined' => $validated['date_joined'] ?? now()->toDateString(),
@@ -389,6 +405,12 @@ class DriverController extends Controller
                 'avatar_path' => $avatarPath,
                 'license_path' => $licensePath,
             ]);
+
+            if (isset($validated['vehicle_ids'])) {
+                $driver->vehicles()->sync($validated['vehicle_ids']);
+            } elseif (isset($validated['vehicle_id'])) {
+                $driver->vehicles()->sync(array_filter([$validated['vehicle_id']]));
+            }
 
             return $this->success($driver, 'Driver registered successfully', 201);
         });
@@ -403,7 +425,9 @@ class DriverController extends Controller
             'full_name' => 'required|string',
             'email' => 'nullable|email|unique:users,email,' . ($user ? $user->id : 'NULL'),
             'phone' => 'required|string',
-            'vehicle_id' => 'nullable|exists:vehicles,id',
+            'vehicle_id' => 'nullable|string',
+            'vehicle_ids' => 'nullable|array',
+            'vehicle_ids.*' => 'exists:vehicles,id',
             'license_number' => 'required|string',
             'employment_status' => 'nullable|in:active,inactive',
             'date_joined' => 'nullable|date',
@@ -441,7 +465,7 @@ class DriverController extends Controller
             $driver->update([
                 'full_name' => $validated['full_name'],
                 'phone' => $validated['phone'],
-                'vehicle_id' => $validated['vehicle_id'] ?? null,
+                'vehicle_id' => (!empty($validated['vehicle_id']) && $validated['vehicle_id'] !== 'null') ? $validated['vehicle_id'] : (isset($validated['vehicle_ids']) && !empty($validated['vehicle_ids']) ? $validated['vehicle_ids'][0] : null),
                 'license_number' => $validated['license_number'],
                 'employment_status' => $validated['employment_status'] ?? 'active',
                 'date_joined' => $validated['date_joined'] ?? now()->toDateString(),
@@ -449,6 +473,17 @@ class DriverController extends Controller
                 'avatar_path' => $avatarPath,
                 'license_path' => $licensePath,
             ]);
+
+            if ($request->has('vehicle_ids')) {
+                $driver->vehicles()->sync($validated['vehicle_ids'] ?? []);
+            } elseif ($request->has('vehicle_id')) {
+                $vehId = $validated['vehicle_id'];
+                if (!empty($vehId) && $vehId !== 'null') {
+                    $driver->vehicles()->sync([$vehId]);
+                } else {
+                    $driver->vehicles()->sync([]);
+                }
+            }
 
             return $this->success($driver, 'Driver updated successfully');
         });

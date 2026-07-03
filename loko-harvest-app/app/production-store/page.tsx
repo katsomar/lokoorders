@@ -65,6 +65,7 @@ export default function ProductionStorePage() {
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
+  const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -307,6 +308,7 @@ export default function ProductionStorePage() {
           replacements: parseFloat(item.replacements || 0),
           closing_stock: parseFloat(item.closing_stock || 0),
           unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
+          egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
         };
       });
       setStockItems(mappedStock);
@@ -356,15 +358,29 @@ export default function ProductionStorePage() {
 
   const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
  
-  const handleUpdatePrice = async (productId: string, priceType: "production" | "sales", newPrice: number) => {
+  const handleUpdatePrice = async (productId: string, priceType: "production" | "sales", newPrice: number, newEggPrice?: number) => {
     try {
-      const payload = priceType === "production" 
-        ? { production_unit_price: newPrice }
-        : { sales_unit_price: newPrice };
+      const payload: any = {};
+      if (priceType === "production") {
+        payload.production_unit_price = newPrice;
+        if (newEggPrice !== undefined) {
+          payload.production_egg_unit_price = newEggPrice;
+        }
+      } else {
+        payload.sales_unit_price = newPrice;
+        if (newEggPrice !== undefined) {
+          payload.sales_egg_unit_price = newEggPrice;
+        }
+      }
       
       await api.put(`/products/${productId}`, payload);
       alert("Product price updated successfully!");
       setEditingPrices(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
+      setEditingEggPrices(prev => {
         const copy = { ...prev };
         delete copy[productId];
         return copy;
@@ -376,20 +392,28 @@ export default function ProductionStorePage() {
   };
  
   const handleUpdateAllPrices = async () => {
-    const changedIds = Object.keys(editingPrices);
+    const changedIds = Array.from(new Set([...Object.keys(editingPrices), ...Object.keys(editingEggPrices)]));
     if (changedIds.length === 0) return;
  
     setIsUpdatingAllPrices(true);
     try {
       const promises = changedIds.map(async (id) => {
-        const val = parseFloat(editingPrices[id]);
-        const priceVal = isNaN(val) ? 0 : val;
-        return api.put(`/products/${id}`, { production_unit_price: priceVal });
+        const payload: any = {};
+        if (editingPrices[id] !== undefined) {
+          const val = parseFloat(editingPrices[id]);
+          payload.production_unit_price = isNaN(val) ? 0 : val;
+        }
+        if (editingEggPrices[id] !== undefined) {
+          const val = parseFloat(editingEggPrices[id]);
+          payload.production_egg_unit_price = isNaN(val) ? 0 : val;
+        }
+        return api.put(`/products/${id}`, payload);
       });
  
       await Promise.all(promises);
       alert("All product prices updated successfully!");
       setEditingPrices({});
+      setEditingEggPrices({});
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to update some or all product prices.");
@@ -399,8 +423,32 @@ export default function ProductionStorePage() {
   };
 
   // Compute valuations
+  const getStockItemValuation = (item: any) => {
+    if (item.unit.toLowerCase() === "trays") {
+      const trays = Math.floor(item.closing_stock);
+      const decimal = item.closing_stock - trays;
+      const eggs = Math.round(decimal * 30);
+      const trayPrice = item.unit_price;
+      const eggPrice = item.egg_unit_price || (trayPrice / 30);
+      return (trays * trayPrice) + (eggs * eggPrice);
+    }
+    return item.closing_stock * item.unit_price;
+  };
+
+  const getStockItemValuationTaken = (item: any) => {
+    if (item.unit.toLowerCase() === "trays") {
+      const trays = Math.floor(item.stock_taken);
+      const decimal = item.stock_taken - trays;
+      const eggs = Math.round(decimal * 30);
+      const trayPrice = item.unit_price;
+      const eggPrice = item.egg_unit_price || (trayPrice / 30);
+      return (trays * trayPrice) + (eggs * eggPrice);
+    }
+    return item.stock_taken * item.unit_price;
+  };
+
   const calculateTotalValuation = () => {
-    return getFilteredStock().reduce((acc, item) => acc + (item.closing_stock * item.unit_price), 0);
+    return getFilteredStock().reduce((acc, item) => acc + getStockItemValuation(item), 0);
   };
 
   const formatQuantity = (qty: number, unit: string) => {
@@ -711,7 +759,7 @@ export default function ProductionStorePage() {
               <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1">
                 Worth UGX {(getFilteredStock()
                   .filter(item => item.code.includes("EGG-DMG"))
-                  .reduce((acc, item) => acc + (item.closing_stock * item.unit_price), 0)).toLocaleString()}
+                  .reduce((acc, item) => acc + getStockItemValuation(item), 0)).toLocaleString()}
               </p>
             </CardContent>
           </Card>
@@ -847,8 +895,8 @@ export default function ProductionStorePage() {
                     ) : (
                       <>
                         {getFilteredStock().map((item) => {
-                          const worthTaken = item.stock_taken * item.unit_price;
-                          const worthClosing = item.closing_stock * item.unit_price;
+                          const worthTaken = getStockItemValuationTaken(item);
+                          const worthClosing = getStockItemValuation(item);
                           return (
                             <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
                               <TableCell className="pl-6 font-bold text-brand-forest text-xs">
@@ -931,10 +979,10 @@ export default function ProductionStorePage() {
                           </TableCell>
                           <TableCell className="text-right text-gray-500 text-xs font-medium">—</TableCell>
                           <TableCell className="text-right text-amber-700 text-xs font-black">
-                            UGX {getFilteredStock().reduce((sum, item) => sum + (item.stock_taken * item.unit_price), 0).toLocaleString()}
+                            UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuationTaken(item), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-black text-brand-forest font-heading text-xs">
-                            UGX {getFilteredStock().reduce((sum, item) => sum + (item.closing_stock * item.unit_price), 0).toLocaleString()}
+                            UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuation(item), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center pr-6">—</TableCell>
                         </TableRow>
@@ -1258,13 +1306,13 @@ export default function ProductionStorePage() {
                     Set the internal production/valuation unit prices for products. These are used when calculating production inventory worth and transfer valuations.
                   </CardDescription>
                 </div>
-                {Object.keys(editingPrices).length > 0 && (
+                {(Object.keys(editingPrices).length > 0 || Object.keys(editingEggPrices).length > 0) && (
                   <Button
                     onClick={handleUpdateAllPrices}
                     isLoading={isUpdatingAllPrices}
                     className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-10 px-5 text-sm border-none cursor-pointer flex items-center gap-1.5"
                   >
-                    Save All Changes ({Object.keys(editingPrices).length})
+                    Save All Changes ({Object.keys(editingPrices).length + Object.keys(editingEggPrices).length})
                   </Button>
                 )}
               </CardHeader>
@@ -1276,7 +1324,8 @@ export default function ProductionStorePage() {
                       <TableHead className="text-xs font-bold text-brand-forest">Product Name</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Category</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Unit</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest w-60">Production Price (UGX)</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest w-44">Tray Price (UGX)</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest w-44">Egg Price (UGX)</TableHead>
                       <TableHead className="text-center text-xs font-bold text-brand-forest pr-6 w-32">Action</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1306,6 +1355,12 @@ export default function ProductionStorePage() {
                           ? editingPrices[product.id]
                           : (product.production_unit_price !== undefined ? product.production_unit_price : product.default_unit_price).toString();
                         
+                        const currentEggVal = editingEggPrices[product.id] !== undefined
+                          ? editingEggPrices[product.id]
+                          : (product.production_egg_unit_price !== undefined ? product.production_egg_unit_price : (parseFloat(product.production_unit_price || product.default_unit_price) / 30).toFixed(2)).toString();
+                        
+                        const hasEggPrice = product.unit_of_measure === 'trays';
+                        
                         return (
                           <TableRow key={product.id} className="hover:bg-brand-sage/5 transition-colors">
                             <TableCell className="pl-6 font-mono text-xs font-bold text-gray-500">{product.code}</TableCell>
@@ -1320,15 +1375,39 @@ export default function ProductionStorePage() {
                                   ...editingPrices,
                                   [product.id]: e.target.value
                                 })}
-                                className="text-right h-9 w-40 ml-auto border-brand-sage rounded-xl font-bold"
+                                className="text-right h-9 w-36 ml-auto border-brand-sage rounded-xl font-bold"
                                 placeholder="0.00"
                               />
                             </TableCell>
+                            <TableCell className="text-right pr-4">
+                              {hasEggPrice ? (
+                                <Input
+                                  type="number"
+                                  value={currentEggVal}
+                                  onChange={(e) => setEditingEggPrices({
+                                    ...editingEggPrices,
+                                    [product.id]: e.target.value
+                                  })}
+                                  className="text-right h-9 w-36 ml-auto border-brand-sage rounded-xl font-bold"
+                                  placeholder="0.00"
+                                />
+                              ) : (
+                                <span className="text-gray-400 text-xs font-semibold">-</span>
+                              )}
+                            </TableCell>
                             <TableCell className="text-center pr-6">
                               <Button
-                                onClick={() => handleUpdatePrice(product.id, "production", parseFloat(currentVal) || 0)}
+                                onClick={() => handleUpdatePrice(
+                                  product.id, 
+                                  "production", 
+                                  parseFloat(currentVal) || 0,
+                                  hasEggPrice ? (parseFloat(currentEggVal) || 0) : undefined
+                                )}
                                 className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-9 px-4 text-xs border-none cursor-pointer"
-                                disabled={parseFloat(currentVal) === (product.production_unit_price !== undefined ? parseFloat(product.production_unit_price) : parseFloat(product.default_unit_price))}
+                                disabled={
+                                  parseFloat(currentVal) === (product.production_unit_price !== undefined ? parseFloat(product.production_unit_price) : parseFloat(product.default_unit_price)) &&
+                                  (!hasEggPrice || parseFloat(currentEggVal) === (product.production_egg_unit_price !== undefined ? parseFloat(product.production_egg_unit_price) : parseFloat(product.production_unit_price || product.default_unit_price) / 30))
+                                }
                               >
                                 Save
                               </Button>
