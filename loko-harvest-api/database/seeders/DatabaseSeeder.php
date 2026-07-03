@@ -11,8 +11,12 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             UserSeeder::class,
+            ProductSeeder::class,
+            VehicleSeeder::class,
+            CustomerSeeder::class,
+            DeliveryZoneSeeder::class,
         ]);
-
+ 
         // Clean up default stores inserted by migrations to leave the database completely clean
         DB::table('production_stores')->delete();
         DB::table('sales_stores')->delete();
