@@ -127,7 +127,7 @@ export default function SalesStorePage() {
         api.get('/sales-movements'),
         api.get('/sales-stores'),
         api.get('/sales-store-transfers'),
-        api.get('/products')
+        api.get('/products?t=' + Date.now())
       ]);
 
       const stockData = stockRes.data.data || [];
@@ -404,6 +404,10 @@ export default function SalesStorePage() {
     if (!selectedTargetProduct) return 0;
     if (selectedTargetProduct.code.endsWith('-15P')) return qty * 2;
     if (selectedTargetProduct.code.endsWith('-06P')) return qty * 5;
+    if (selectedTargetProduct.code.endsWith('-FAM')) return qty / 5;
+    if (selectedTargetProduct.code.endsWith('-DBL')) return qty / 2;
+    if (selectedTargetProduct.code.endsWith('-TPL')) return qty / 3;
+    if (selectedTargetProduct.code === 'EGG-CRM-SGL') return qty / 2;
     return qty; // Single Pack / Plain Trays ratio is 1:1
   };
 
@@ -1010,8 +1014,16 @@ export default function SalesStorePage() {
                               {getConversionYield().toLocaleString()} {selectedTargetProduct.unit_of_measure === 'trays' ? 'Trays' : 'Packs'}
                             </strong>
                           </div>
-                          <div className="text-[9px] text-gray-400 font-medium">
-                            Formula: 1 tray yields {selectedTargetProduct.code.endsWith('-15P') ? '2 x 15-Packs' : selectedTargetProduct.code.endsWith('-06P') ? '5 x 6-Packs' : '1 x Single Pack'}
+                           <div className="text-[9px] text-gray-400 font-medium">
+                             Formula: {
+                              selectedTargetProduct.code.endsWith('-15P') ? '1 tray yields 2 x 15-Packs' :
+                              selectedTargetProduct.code.endsWith('-06P') ? '1 tray yields 5 x 6-Packs' :
+                              selectedTargetProduct.code.endsWith('-FAM') ? '5 trays yield 1 x Family Pack' :
+                              selectedTargetProduct.code.endsWith('-DBL') ? '2 trays yield 1 x Double Pack' :
+                              selectedTargetProduct.code.endsWith('-TPL') ? '3 trays yield 1 x Triple Pack' :
+                              selectedTargetProduct.code === 'EGG-CRM-SGL' ? '2 trays yield 1 x Single Pack' :
+                              '1 tray yields 1 unit/pack/tray'
+                            }
                           </div>
                         </div>
                       )}

@@ -53,11 +53,19 @@ class SalesStoreConversionController extends Controller
             }
 
             // 2. Validate conversion ratio
-            $ratio = 1; // Default ratio (e.g. EGG-CRM-SGL, EGG-WHT-SGL, EGG-BRN-SGL, EGG-BRN-TRYS)
+            $ratio = 1.0; // Default ratio (e.g. Single Pack / Plain Trays)
             if (str_ends_with($toProduct->code, '-15P')) {
-                $ratio = 2; // 1 tray of 30 eggs yields 2 packs of 15 eggs
+                $ratio = 2.0; // 1 tray of 30 eggs yields 2 packs of 15 eggs
             } elseif (str_ends_with($toProduct->code, '-06P')) {
-                $ratio = 5; // 1 tray of 30 eggs yields 5 packs of 6 eggs
+                $ratio = 5.0; // 1 tray of 30 eggs yields 5 packs of 6 eggs
+            } elseif (str_ends_with($toProduct->code, '-FAM')) {
+                $ratio = 0.2; // 5 trays yield 1 family pack
+            } elseif (str_ends_with($toProduct->code, '-DBL')) {
+                $ratio = 0.5; // 2 trays yield 1 double pack
+            } elseif (str_ends_with($toProduct->code, '-TPL')) {
+                $ratio = 1.0 / 3.0; // 3 trays yield 1 triple pack
+            } elseif ($toProduct->code === 'EGG-CRM-SGL') {
+                $ratio = 0.5; // 2 trays yield 1 single pack
             }
 
             $toQty = $fromQty * $ratio;
