@@ -368,8 +368,11 @@ class DeliveryController extends Controller
                     ['current_quantity' => 0, 'updated_by' => $userId]
                 );
 
-                $stock->increment('current_quantity', $item->quantity);
-                $stock->update(['updated_by' => $userId, 'last_updated' => now()]);
+                if ($returnSalesStoreId === $order->sales_store_id) {
+                    $stock->updateStock('sold', -$item->quantity, $item->unit_price);
+                } else {
+                    $stock->updateStock('transfer_in', $item->quantity, $item->unit_price);
+                }
 
                 \App\Models\SalesStoreMovement::create([
                     'movement_date' => now()->toDateString(),

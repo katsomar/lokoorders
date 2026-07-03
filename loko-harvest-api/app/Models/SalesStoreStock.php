@@ -16,19 +16,19 @@ class SalesStoreStock extends Model
 
         static::creating(function ($model) {
             if ($model->opening_stock === null || $model->opening_stock == 0) {
-                if ($model->current_quantity != 0) {
-                    $model->opening_stock = $model->current_quantity;
-                    $model->closing_stock = $model->current_quantity;
+                if ($model->transferred_in == 0 && $model->conversions_in == 0 && $model->current_quantity != 0) {
+                    $model->transferred_in = $model->current_quantity;
                 }
+                $model->opening_stock = $model->transferred_in + $model->conversions_in;
+                $model->closing_stock = $model->current_quantity;
             }
         });
 
         static::saving(function ($model) {
-            if ($model->opening_stock != 0 || $model->stock_taken != 0 || $model->replacements != 0) {
-                $expectedClosing = $model->opening_stock - ($model->stock_taken + $model->replacements);
-                if ($model->closing_stock != $expectedClosing) {
-                    $model->closing_stock = $expectedClosing;
-                }
+            if ($model->exists) {
+                $model->opening_stock = $model->transferred_in + $model->conversions_in;
+                $exits = $model->conversions_out + $model->sold_quantity + $model->transferred_out;
+                $model->closing_stock = $model->opening_stock - ($exits + $model->replacements);
                 $model->current_quantity = $model->closing_stock;
             }
         });
@@ -39,10 +39,16 @@ class SalesStoreStock extends Model
 
     public function updateStock(string $type, float $qty, ?float $price = null)
     {
-        if ($type === 'add') {
-            $this->opening_stock += $qty;
-        } elseif ($type === 'take') {
-            $this->stock_taken += $qty;
+        if ($type === 'transfer_in' || $type === 'add') {
+            $this->transferred_in += $qty;
+        } elseif ($type === 'conversion_in') {
+            $this->conversions_in += $qty;
+        } elseif ($type === 'conversion_out') {
+            $this->conversions_out += $qty;
+        } elseif ($type === 'sold' || $type === 'take') {
+            $this->sold_quantity += $qty;
+        } elseif ($type === 'transfer_out') {
+            $this->transferred_out += $qty;
         } elseif ($type === 'replace') {
             $this->replacements += $qty;
         }
@@ -51,7 +57,9 @@ class SalesStoreStock extends Model
             $this->unit_price = $price;
         }
 
-        $this->closing_stock = $this->opening_stock - ($this->stock_taken + $this->replacements);
+        $this->opening_stock = $this->transferred_in + $this->conversions_in;
+        $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out;
+        $this->closing_stock = $this->opening_stock - ($exits + $this->replacements);
         $this->current_quantity = $this->closing_stock;
         $this->save();
     }

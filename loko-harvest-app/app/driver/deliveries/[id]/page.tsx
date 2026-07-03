@@ -318,8 +318,7 @@ export default function DeliveryConfirmationPage() {
           
           const mapped = returnsRes.data.data.data.map((item: any) => {
             const matchingAlloc = allocations.find((a: any) => 
-              a.product_id === item.product_id && 
-              a.order_id === item.order_id
+              a.product_id === item.product_id
             );
             const remainingAlloc = matchingAlloc 
               ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
@@ -620,7 +619,7 @@ export default function DeliveryConfirmationPage() {
         if (field === 'returnQty') {
           const returnQtyVal = parseFloat(val) || 0;
           const qty = Math.min(returnQtyVal, item.quantity);
-          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
           const remainingAlloc = matchingAlloc 
             ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
             : 0;
@@ -633,7 +632,7 @@ export default function DeliveryConfirmationPage() {
           };
         } else {
           const returnQtyVal = parseFloat(item.returnQty) || 0;
-          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id && a.order_id === selectedPastOrder?.id);
+          const matchingAlloc = allocationsList.find((a: any) => a.product_id === item.product_id);
           const remainingAlloc = matchingAlloc 
             ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
             : 0;

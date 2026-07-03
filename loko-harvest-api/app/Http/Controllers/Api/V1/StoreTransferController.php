@@ -162,7 +162,7 @@ class StoreTransferController extends Controller
                     ['current_quantity' => 0, 'updated_by' => auth()->id()]
                 );
                 $salesStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-                $salesStock->updateStock('add', $qty, $transferPrice);
+                $salesStock->updateStock('transfer_in', $qty, $transferPrice);
 
                 // Log movement in sales store
                 SalesStoreMovement::create([
@@ -221,7 +221,7 @@ class StoreTransferController extends Controller
                         ['current_quantity' => 0, 'updated_by' => auth()->id()]
                     );
                     $salesStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-                    $salesStock->updateStock('add', $debitAmount, $stock->valuation_price ?: $transferPrice);
+                    $salesStock->updateStock('transfer_in', $debitAmount, $stock->valuation_price ?: $transferPrice);
 
                     // Log movement in sales store
                     SalesStoreMovement::create([

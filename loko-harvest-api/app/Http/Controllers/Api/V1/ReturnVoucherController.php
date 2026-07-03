@@ -114,11 +114,9 @@ class ReturnVoucherController extends Controller
             $createdVouchers = [];
             $createdBy = auth()->id() ?? User::first()?->id;
             $nextSeq = $this->getNextVoucherSequence();
+            $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
 
             foreach ($validated['items'] as $item) {
-                $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
-                $nextSeq++;
-                
                 $monetaryValue = $item['quantity'] * $item['unit_price'];
 
                 $voucher = ReturnVoucher::create([
@@ -182,14 +180,27 @@ class ReturnVoucherController extends Controller
             }
 
             $updatedVouchers = [];
+            $user = auth()->user();
+            $driver = \App\Models\Driver::where('user_id', $user->id)->first();
+            $driverId = $driver ? $driver->id : null;
 
             foreach ($validated['replacements'] as $item) {
                 $voucher = ReturnVoucher::findOrFail($item['return_voucher_id']);
                 
                 // Find matching replacement allocation
-                $allocation = \App\Models\OrderReplacementAllocation::where('order_id', $voucher->order_id)
-                    ->where('product_id', $voucher->product_id)
-                    ->first();
+                $allocation = null;
+                if ($driverId) {
+                    $allocation = \App\Models\OrderReplacementAllocation::where('driver_id', $driverId)
+                        ->where('product_id', $voucher->product_id)
+                        ->where('status', 'allocated')
+                        ->first();
+                }
+
+                if (!$allocation) {
+                    $allocation = \App\Models\OrderReplacementAllocation::where('order_id', $voucher->order_id)
+                        ->where('product_id', $voucher->product_id)
+                        ->first();
+                }
 
                 if (!$allocation) {
                     throw new \Exception("No replacement allocation was pre-assigned by the manager/admin for product: " . ($voucher->product->name ?? 'Product') . " on Order: " . ($voucher->order->order_number ?? 'Order'));

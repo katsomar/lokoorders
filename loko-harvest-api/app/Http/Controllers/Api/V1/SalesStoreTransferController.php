@@ -95,7 +95,7 @@ class SalesStoreTransferController extends Controller
             $price = $product->sales_unit_price ?? $product->default_unit_price;
 
             $sourceStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-            $sourceStock->updateStock('take', $qty, $price);
+            $sourceStock->updateStock('transfer_out', $qty, $price);
 
             // 2. Credit destination stock
             $destStock = SalesStoreStock::firstOrCreate(
@@ -109,7 +109,7 @@ class SalesStoreTransferController extends Controller
                 ]
             );
             $destStock->update(['updated_by' => auth()->id(), 'last_updated' => now()]);
-            $destStock->updateStock('add', $qty, $price);
+            $destStock->updateStock('transfer_in', $qty, $price);
 
             // 3. Record transfer log
             $transfer = SalesStoreTransfer::create([
