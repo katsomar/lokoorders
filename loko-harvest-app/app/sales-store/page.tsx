@@ -87,6 +87,24 @@ export default function SalesStorePage() {
     return ["all", ...Array.from(new Set(batches))];
   };
 
+  const formatQuantity = (qty: number, unit: string) => {
+    if (unit.toLowerCase() === "trays") {
+      const trays = Math.floor(qty);
+      const decimal = qty - trays;
+      const eggs = Math.round(decimal * 30);
+      return `${trays} Trays & ${eggs} Eggs`;
+    }
+    return `${qty.toLocaleString()} ${unit}`;
+  };
+
+  const formatTotalQuantity = (qty: number) => {
+    const allTrays = getFilteredStock().every(item => item.unit.toLowerCase() === "trays");
+    if (allTrays) {
+      return formatQuantity(qty, "trays");
+    }
+    return qty.toLocaleString();
+  };
+
   // Manage Stores State
   const [newStoreName, setNewStoreName] = useState("");
   const [newStoreCode, setNewStoreCode] = useState("");
@@ -887,38 +905,30 @@ export default function SalesStorePage() {
                                     </TableCell>
                                     <TableCell className="text-right font-black text-brand-forest text-xs">
                                       <div className="flex flex-col items-end">
-                                        <span className="text-gray-400 text-[10px] font-normal">Initial: {item.transferred_in}</span>
-                                        <span>{item.transferred_in.toLocaleString()} → {item.closing_stock.toLocaleString()}{" "}
-                                        <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span></span>
+                                        <span className="text-gray-400 text-[10px] font-normal">Initial: {formatQuantity(item.transferred_in, item.unit)}</span>
+                                        <span>{formatQuantity(item.transferred_in, item.unit)} → {formatQuantity(item.closing_stock, item.unit)}</span>
                                       </div>
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-brand-forest text-xs">
-                                      {item.opening_stock.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.opening_stock, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-emerald-600 text-xs">
-                                      {item.conversions_in.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.conversions_in, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-orange-600 text-xs">
-                                      {item.conversions_out.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.conversions_out, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-amber-600 text-xs">
-                                      {item.sold_quantity.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.sold_quantity, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-purple-600 text-xs">
-                                      {item.transferred_out.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.transferred_out, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-semibold text-blue-600 text-xs">
-                                      {item.replacements.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.replacements, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-black text-brand-forest text-xs">
-                                      {item.closing_stock.toLocaleString()}{" "}
-                                      <span className="text-[10px] text-gray-400 font-normal">{item.unit}</span>
+                                      {formatQuantity(item.closing_stock, item.unit)}
                                     </TableCell>
                                     <TableCell className="text-right font-bold text-xs text-gray-500">
                                       UGX {item.unit_price.toLocaleString()}
@@ -963,25 +973,25 @@ export default function SalesStorePage() {
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-black">—</TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0))}
                           </TableCell>
                           <TableCell className="text-right text-emerald-600 text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.conversions_in, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.conversions_in, 0))}
                           </TableCell>
                           <TableCell className="text-right text-orange-600 text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.conversions_out, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.conversions_out, 0))}
                           </TableCell>
                           <TableCell className="text-right text-amber-600 text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.sold_quantity, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.sold_quantity, 0))}
                           </TableCell>
                           <TableCell className="text-right text-purple-600 text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.transferred_out, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.transferred_out, 0))}
                           </TableCell>
                           <TableCell className="text-right text-blue-600 text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.replacements, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.replacements, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-black">
-                            {getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0).toLocaleString()}
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0))}
                           </TableCell>
                           <TableCell className="text-right text-gray-500 text-xs font-medium">—</TableCell>
                           <TableCell className="text-right text-amber-700 text-xs font-black">

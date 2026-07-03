@@ -25,11 +25,22 @@ import api from "@/lib/api";
 const intakeSchema = z.object({
   production_store_id: z.string().min(1, "Production store is required"),
   product_id: z.string().min(1, "Product is required"),
-  quantity: z.number().min(0.01, "Quantity must be > 0"),
+  quantity: z.number().min(0).optional(),
   intake_date: z.string(),
   valuation_price: z.number().min(0, "Valuation price must be >= 0"),
   batch_number: z.string().optional(),
   notes: z.string().optional(),
+  good_stacks: z.number().min(0).optional(),
+  good_extra_trays: z.number().min(0).optional(),
+  good_extra_eggs: z.number().min(0).optional(),
+  d1_trays: z.number().min(0).optional(),
+  d1_extra_eggs: z.number().min(0).optional(),
+  d2_trays: z.number().min(0).optional(),
+  d2_extra_eggs: z.number().min(0).optional(),
+  d3_trays: z.number().min(0).optional(),
+  d3_extra_eggs: z.number().min(0).optional(),
+  shell_trays: z.number().min(0).optional(),
+  shell_extra_eggs: z.number().min(0).optional(),
 });
 
 type IntakeFormValues = z.infer<typeof intakeSchema>;
@@ -68,6 +79,17 @@ export default function ProductionIntakePage() {
     defaultValues: {
       intake_date: new Date().toISOString().split("T")[0],
       valuation_price: 0,
+      good_stacks: 0,
+      good_extra_trays: 0,
+      good_extra_eggs: 0,
+      d1_trays: 0,
+      d1_extra_eggs: 0,
+      d2_trays: 0,
+      d2_extra_eggs: 0,
+      d3_trays: 0,
+      d3_extra_eggs: 0,
+      shell_trays: 0,
+      shell_extra_eggs: 0,
     },
   });
 
@@ -75,6 +97,18 @@ export default function ProductionIntakePage() {
   const watchQty = watch("quantity") || 0;
   const watchPrice = watch("valuation_price") || 0;
   const watchBatch = watch("batch_number") || "";
+  const watchGoodStacks = watch("good_stacks") || 0;
+  const watchGoodExtraTrays = watch("good_extra_trays") || 0;
+  const watchGoodExtraEggs = watch("good_extra_eggs") || 0;
+  const watchD1Trays = watch("d1_trays") || 0;
+  const watchD1ExtraEggs = watch("d1_extra_eggs") || 0;
+  const watchD2Trays = watch("d2_trays") || 0;
+  const watchD2ExtraEggs = watch("d2_extra_eggs") || 0;
+  const watchD3Trays = watch("d3_trays") || 0;
+  const watchD3ExtraEggs = watch("d3_extra_eggs") || 0;
+  const watchShellTrays = watch("shell_trays") || 0;
+  const watchShellExtraEggs = watch("shell_extra_eggs") || 0;
+  
   const lastProductIdRef = React.useRef("");
 
   useEffect(() => {
@@ -96,7 +130,34 @@ export default function ProductionIntakePage() {
     }
   }, [watchProductId, filteredProducts, setValue]);
 
+  const selectedProduct = filteredProducts.find((p) => p.id === watchProductId);
+  const isEggProduct = selectedProduct && ["EGG-WHT", "EGG-BRN", "EGG-CRM"].includes(selectedProduct.code);
+
+  const getCalculatedTrays = () => {
+    const goodTrays = watchGoodStacks * 30 + watchGoodExtraTrays + watchGoodExtraEggs / 30;
+    const d1Trays = watchD1Trays + watchD1ExtraEggs / 30;
+    const d2Trays = watchD2Trays + watchD2ExtraEggs / 30;
+    const d3Trays = watchD3Trays + watchD3ExtraEggs / 30;
+    const shellTrays = watchShellTrays + watchShellExtraEggs / 30;
+    
+    return {
+      good: goodTrays,
+      d1: d1Trays,
+      d2: d2Trays,
+      d3: d3Trays,
+      shell: shellTrays,
+      total: goodTrays + d1Trays + d2Trays + d3Trays + shellTrays
+    };
+  };
+
+  const calculated = getCalculatedTrays();
+  const calculatedQty = isEggProduct ? calculated.total : watchQty;
+
   const onSubmit = async (data: IntakeFormValues) => {
+    if (!isEggProduct && (!data.quantity || data.quantity <= 0)) {
+      alert("Quantity received is required for non-egg products.");
+      return;
+    }
     setIsLoading(true);
     try {
       await api.post("/production-intakes", data);
@@ -113,8 +174,6 @@ export default function ProductionIntakePage() {
     label: `${p.name} (Code: ${p.code})`,
     value: p.id,
   }));
-
-  const selectedProduct = filteredProducts.find((p) => p.id === watchProductId);
 
   if (isSuccess) {
     return (
@@ -135,8 +194,6 @@ export default function ProductionIntakePage() {
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-5xl mx-auto">
-        
-        {/* Header */}
         <div className="flex items-center gap-4">
           <button onClick={() => router.back()} className="text-brand-forest flex items-center justify-center h-10 w-10 hover:bg-brand-sage/20 rounded-xl transition-colors">
             <ChevronLeft size={24} />
@@ -147,10 +204,7 @@ export default function ProductionIntakePage() {
           </div>
         </div>
 
-        {/* Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          
-          {/* Form Column */}
           <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 space-y-6">
             <Card className="border-none shadow-xl rounded-2xl overflow-hidden">
               <CardHeader className="bg-brand-sage/20 border-b border-brand-sage flex flex-row items-center gap-3 py-5 px-6">
@@ -179,7 +233,7 @@ export default function ProductionIntakePage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6">
                   <Select
                     label="Product Type"
                     options={productOptions}
@@ -187,48 +241,70 @@ export default function ProductionIntakePage() {
                     error={errors.product_id?.message}
                     required
                   />
-                  <Input
-                    label="Quantity Received"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    {...register("quantity", { valueAsNumber: true })}
-                    error={errors.quantity?.message}
-                    required
-                  />
                 </div>
 
+                {isEggProduct ? (
+                  <div className="space-y-6 border border-brand-sage/40 p-5 rounded-2xl bg-gray-50/50">
+                    <h3 className="text-xs font-black text-brand-forest uppercase tracking-wider border-b border-brand-sage/30 pb-2">
+                      Detailed Egg Intake Breakdown
+                    </h3>
+                    <div className="space-y-3">
+                      <h4 className="text-[11px] font-bold text-brand-forest uppercase">1. Good Eggs</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        <Input label="Good Stacks (30 trays)" type="number" placeholder="0" {...register("good_stacks", { valueAsNumber: true })} error={errors.good_stacks?.message} />
+                        <Input label="Extra Good Trays" type="number" placeholder="0" {...register("good_extra_trays", { valueAsNumber: true })} error={errors.good_extra_trays?.message} />
+                        <Input label="Extra Good Eggs" type="number" placeholder="0" {...register("good_extra_eggs", { valueAsNumber: true })} error={errors.good_extra_eggs?.message} />
+                      </div>
+                    </div>
+                    <div className="space-y-3 pt-2">
+                      <h4 className="text-[11px] font-bold text-brand-forest uppercase">2. Damaged Eggs (Classes)</h4>
+                      <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
+                        <span className="text-[10px] font-bold text-brand-forest uppercase block font-heading">Class 1 Damages (Small cracks/poop/blood - Sellable)</span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input label="D1 Trays" type="number" placeholder="0" {...register("d1_trays", { valueAsNumber: true })} error={errors.d1_trays?.message} />
+                          <Input label="D1 Extra Eggs" type="number" placeholder="0" {...register("d1_extra_eggs", { valueAsNumber: true })} error={errors.d1_extra_eggs?.message} />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
+                        <span className="text-[10px] font-bold text-brand-forest uppercase block font-heading">Class 2 Damages (Deep cracks/visible yolk - Sellable)</span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input label="D2 Trays" type="number" placeholder="0" {...register("d2_trays", { valueAsNumber: true })} error={errors.d2_trays?.message} />
+                          <Input label="D2 Extra Eggs" type="number" placeholder="0" {...register("d2_extra_eggs", { valueAsNumber: true })} error={errors.d2_extra_eggs?.message} />
+                        </div>
+                      </div>
+                      <div className="p-3 bg-white rounded-xl border border-brand-sage/20 space-y-2">
+                        <span className="text-[10px] font-bold text-red-650 uppercase block font-heading">Class 3 Damages (Severely cracked/rotten - Waste)</span>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input label="D3 Trays" type="number" placeholder="0" {...register("d3_trays", { valueAsNumber: true })} error={errors.d3_trays?.message} />
+                          <Input label="D3 Extra Eggs" type="number" placeholder="0" {...register("d3_extra_eggs", { valueAsNumber: true })} error={errors.d3_extra_eggs?.message} />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3 pt-2">
+                      <h4 className="text-[11px] font-bold text-brand-forest uppercase">3. Shell Eggs (Empty shells)</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <Input label="Shell Trays" type="number" placeholder="0" {...register("shell_trays", { valueAsNumber: true })} error={errors.shell_trays?.message} />
+                        <Input label="Shell Extra Eggs" type="number" placeholder="0" {...register("shell_extra_eggs", { valueAsNumber: true })} error={errors.shell_extra_eggs?.message} />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-6">
+                    <Input label="Quantity Received" type="number" step="0.01" placeholder="0.00" {...register("quantity", { valueAsNumber: true })} error={errors.quantity?.message} required />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input
-                    label="Valuation Price (UGX)"
-                    type="number"
-                    step="1"
-                    placeholder="0"
-                    {...register("valuation_price", { valueAsNumber: true })}
-                    error={errors.valuation_price?.message}
-                    required
-                  />
-                  <Input
-                    label="Batch Number"
-                    placeholder="e.g. B-0516-A"
-                    {...register("batch_number")}
-                  />
+                  <Input label="Valuation Price (UGX) Per Tray" type="number" step="1" placeholder="0" {...register("valuation_price", { valueAsNumber: true })} error={errors.valuation_price?.message} required />
+                  <Input label="Batch Number" placeholder="e.g. B-0516-A" {...register("batch_number")} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-6">
-                  <Input
-                    label="Notes / Observations"
-                    placeholder="Any quality notes or specific details..."
-                    {...register("notes")}
-                  />
+                  <Input label="Notes / Observations" placeholder="Any quality notes or specific details..." {...register("notes")} />
                 </div>
 
                 <div className="pt-4">
-                  <Button 
-                    type="submit" 
-                    className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md" 
-                    isLoading={isLoading}
-                  >
+                  <Button type="submit" className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md cursor-pointer border-none" isLoading={isLoading}>
                     <Save size={18} />
                     Save Intake Record
                   </Button>
@@ -237,7 +313,6 @@ export default function ProductionIntakePage() {
             </Card>
           </form>
 
-          {/* Real-time preview sidebar */}
           <div className="space-y-6">
             <Card className="border-none shadow-xl bg-brand-forest text-white overflow-hidden rounded-2xl">
               <CardHeader className="bg-white/5 border-b border-white/10 py-4 px-5">
@@ -247,7 +322,7 @@ export default function ProductionIntakePage() {
                 <div className="space-y-1">
                   <p className="text-[10px] text-white/60 uppercase font-bold tracking-wider">Estimated Batch Value</p>
                   <h3 className="text-3xl font-black font-heading text-white">
-                    UGX {(watchQty * watchPrice).toLocaleString()}
+                    UGX {Math.round(calculatedQty * watchPrice).toLocaleString()}
                   </h3>
                 </div>
 
@@ -259,22 +334,52 @@ export default function ProductionIntakePage() {
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Quantity:</span>
                     <span className="font-bold text-white">
-                      {watchQty.toLocaleString()} <span className="text-[10px] text-white/50">{selectedProduct?.unit_of_measure || ""}</span>
+                      {isEggProduct ? `${calculatedQty.toFixed(2)} Trays` : `${calculatedQty.toLocaleString()} ${selectedProduct?.unit_of_measure || ""}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Valuation Rate:</span>
-                    <span className="font-bold text-brand-yellow">UGX {watchPrice.toLocaleString()} / unit</span>
+                    <span className="font-bold text-brand-yellow">UGX {watchPrice.toLocaleString()} / tray</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Batch No:</span>
                     <span className="font-mono font-bold text-white bg-white/10 px-2 py-0.5 rounded text-[10px]">{watchBatch || "N/A"}</span>
                   </div>
                 </div>
+
+                {isEggProduct && (
+                  <div className="border-t border-white/10 pt-4 space-y-2.5 text-xs font-body">
+                    <div className="flex justify-between items-center text-brand-yellow font-black">
+                      <span>Total Intake Trays:</span>
+                      <span>{calculated.total.toFixed(2)} Trays</span>
+                    </div>
+                    <div className="pl-2 space-y-1 text-[11px] text-white/80">
+                      <div className="flex justify-between">
+                        <span>- Good Trays:</span>
+                        <span>{calculated.good.toFixed(2)} Trays</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>- Class 1 Damages:</span>
+                        <span>{calculated.d1.toFixed(2)} Trays</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>- Class 2 Damages:</span>
+                        <span>{calculated.d2.toFixed(2)} Trays</span>
+                      </div>
+                      <div className="flex justify-between text-red-300">
+                        <span>- Class 3 Damages (Waste):</span>
+                        <span>{calculated.d3.toFixed(2)} Trays</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>- Shell Eggs:</span>
+                        <span>{calculated.shell.toFixed(2)} Trays</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* Helper Tips */}
             <div className="space-y-4">
               <div className="p-4 bg-white rounded-xl shadow-md border border-brand-sage/40 flex gap-3 items-start">
                 <Calendar size={18} className="text-brand-mid mt-0.5 flex-shrink-0" />
@@ -292,7 +397,6 @@ export default function ProductionIntakePage() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </DashboardLayout>
