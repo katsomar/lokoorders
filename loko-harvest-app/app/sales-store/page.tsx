@@ -112,6 +112,16 @@ export default function SalesStorePage() {
   const [convNotes, setConvNotes] = useState("");
   const [isSubmittingConv, setIsSubmittingConv] = useState(false);
 
+  // Report damage states
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [adjustingItem, setAdjustingItem] = useState<SalesStockItem | null>(null);
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustImageFile, setAdjustImageFile] = useState<File | null>(null);
+  const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
+  const adjustCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [adjustDrawing, setAdjustDrawing] = useState(false);
+
   // State for interactive calculator (Packs to Trays Estimator)
   const [calcEggType, setCalcEggType] = useState<"cream" | "white">("cream");
   const [calcDirection, setCalcDirection] = useState<"trays-to-packs" | "packs-to-trays">("trays-to-packs");
@@ -439,6 +449,116 @@ export default function SalesStorePage() {
     }
   };
 
+  const handleStartAdjustment = (item: SalesStockItem) => {
+    setAdjustingItem(item);
+    setAdjustQty("");
+    setAdjustReason("");
+    setAdjustImageFile(null);
+    setShowAdjustModal(true);
+  };
+
+  const startDrawing = (e: any) => {
+    if (e.cancelable) e.preventDefault();
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.strokeStyle = "#132A1C"; // brand forest
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+
+    const pos = getEventPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setAdjustDrawing(true);
+  };
+
+  const draw = (e: any) => {
+    if (!adjustDrawing) return;
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const pos = getEventPos(e, canvas);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setAdjustDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const getEventPos = (e: any, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  };
+
+  const handleAdjustmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustingItem) return;
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+
+    const signatureData = canvas.toDataURL("image/png");
+
+    if (!adjustQty || !adjustReason) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    setIsSubmittingAdjustment(true);
+    try {
+      const formData = new FormData();
+      formData.append("store_type", "sales");
+      formData.append("sales_store_id", adjustingItem.sales_store_id);
+      formData.append("product_id", adjustingItem.product_id);
+      formData.append("batch_reference", adjustingItem.batch_reference || "PDN-BATCH");
+      formData.append("quantity", adjustQty);
+      formData.append("reason", adjustReason);
+      formData.append("signature_data", signatureData);
+      
+      if (adjustImageFile) {
+        formData.append("image_file", adjustImageFile);
+      }
+
+      const res = await api.post("/store-adjustments", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      if (res.data?.success) {
+        alert("Stock loss recorded and updated successfully!");
+        setShowAdjustModal(false);
+        setAdjustingItem(null);
+        setAdjustQty("");
+        setAdjustReason("");
+        setAdjustImageFile(null);
+        fetchData();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to submit stock adjustment request.");
+    } finally {
+      setIsSubmittingAdjustment(false);
+    }
+  };
+
   // Calculator Conversion Live Logic (Packs to Trays Estimator)
   const getCalcResults = () => {
     if (calcDirection === "trays-to-packs") {
@@ -714,7 +834,8 @@ export default function SalesStorePage() {
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Unit Price</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Value Taken</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Value Closing</TableHead>
-                      <TableHead className="text-center text-xs font-bold text-brand-forest pr-6">Audit Status</TableHead>
+                      <TableHead className="text-center text-xs font-bold text-brand-forest">Audit Status</TableHead>
+                      <TableHead className="text-center text-xs font-bold text-brand-forest pr-6">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -808,7 +929,7 @@ export default function SalesStorePage() {
                                     <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-xs">
                                       UGX {worthClosing.toLocaleString()}
                                     </TableCell>
-                                    <TableCell className="text-center pr-6">
+                                    <TableCell className="text-center">
                                       {isAudited ? (
                                         <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[10px] hover:bg-emerald-50 font-bold">
                                           ✓ Audited
@@ -818,6 +939,15 @@ export default function SalesStorePage() {
                                           ⚠️ Error ({crossCheckSum})
                                         </Badge>
                                       )}
+                                    </TableCell>
+                                    <TableCell className="text-center pr-6">
+                                      <button
+                                        onClick={() => handleStartAdjustment(item)}
+                                        className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Report Damage/Loss"
+                                      >
+                                        <AlertTriangle size={14} />
+                                      </button>
                                     </TableCell>
                                   </TableRow>
                                 );
@@ -860,6 +990,7 @@ export default function SalesStorePage() {
                           <TableCell className="text-right pr-6 font-black text-brand-forest font-heading text-xs">
                             UGX {getFilteredStock().reduce((sum, item) => sum + (item.closing_stock * item.unit_price), 0).toLocaleString()}
                           </TableCell>
+                          <TableCell className="text-center">—</TableCell>
                           <TableCell className="text-center pr-6">—</TableCell>
                         </TableRow>
                       </>
@@ -1513,6 +1644,131 @@ export default function SalesStorePage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT DAMAGE MODAL */}
+      {showAdjustModal && adjustingItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
+            
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center gap-2">
+              <AlertTriangle size={20} className="text-brand-yellow" />
+              <div>
+                <h3 className="font-heading font-bold text-base">Report Damage & Spoilage</h3>
+                <p className="text-[10px] text-white/70">Instantly record and deduct stock losses for {adjustingItem.product}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAdjustmentSubmit} className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-4 bg-gray-50/50 p-3 rounded-xl border border-brand-sage/20 mb-2">
+                <div>
+                  <span className="text-gray-400 font-bold block">Store Location</span>
+                  <span className="font-extrabold text-brand-forest">{adjustingItem.sales_store_name}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 font-bold block">Current Stock</span>
+                  <span className="font-extrabold text-brand-forest">{adjustingItem.quantity.toLocaleString()} {adjustingItem.unit}</span>
+                </div>
+              </div>
+
+              {adjustingItem.batch_reference && (
+                <div className="bg-amber-50/50 border border-brand-yellow/30 p-2.5 rounded-xl text-[10px] font-bold text-brand-forest">
+                  ⚠️ Target Batch: <span className="font-mono underline">{adjustingItem.batch_reference}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label={`Quantity to Discard (${adjustingItem.unit}) *`}
+                  type="number"
+                  step="0.01"
+                  value={adjustQty}
+                  onChange={(e) => setAdjustQty(e.target.value)}
+                  placeholder="e.g. 5.00"
+                  required
+                />
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-brand-forest block">Upload Photo Proof</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        setAdjustImageFile(e.target.files[0]);
+                      }
+                    }}
+                    className="w-full text-[10px] text-gray-500 font-semibold file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-brand-sage/10 file:text-brand-forest file:cursor-pointer hover:file:bg-brand-sage/20"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-brand-forest block">Reason / Details *</label>
+                <textarea
+                  required
+                  placeholder="Provide details about the damage (breakage, rotting, spoilage)..."
+                  value={adjustReason}
+                  onChange={(e) => setAdjustReason(e.target.value)}
+                  className="w-full min-h-[60px] p-2.5 text-xs font-semibold rounded-xl border border-brand-sage/50 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                />
+              </div>
+
+              {/* Signature Drawing */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-bold text-brand-forest block">Signature *</label>
+                  <button
+                    type="button"
+                    onClick={clearSignature}
+                    className="text-[10px] text-red-600 hover:text-red-700 font-bold bg-transparent border-none cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div className="border border-brand-sage/40 rounded-xl overflow-hidden shadow-inner bg-white">
+                  <canvas
+                    ref={adjustCanvasRef}
+                    width={600}
+                    height={150}
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                    className="w-full h-[100px] cursor-crosshair block"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setShowAdjustModal(false);
+                    setAdjustingItem(null);
+                  }}
+                  className="border-brand-sage text-gray-600 text-xs font-bold rounded-xl h-10 cursor-pointer"
+                  disabled={isSubmittingAdjustment}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 shadow-md cursor-pointer"
+                  isLoading={isSubmittingAdjustment}
+                >
+                  Record Loss
+                </Button>
+              </div>
+
+            </form>
+
           </div>
         </div>
       )}

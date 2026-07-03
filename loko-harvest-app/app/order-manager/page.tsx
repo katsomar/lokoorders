@@ -42,6 +42,7 @@ export default function OrderManagerDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "alerts" | "replacements">("orders");
+  const [inventorySubView, setInventorySubView] = useState<"list" | "damages">("list");
   const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -78,6 +79,27 @@ export default function OrderManagerDashboard() {
   const [allocQtys, setAllocQtys] = useState<Record<string, string>>({});
   const [itemBatches, setItemBatches] = useState<Record<string, any[]>>({});
   const [loadingItemBatches, setLoadingItemBatches] = useState<Record<string, boolean>>({});
+
+  // Stock adjustments states
+  const [adjustmentsList, setAdjustmentsList] = useState<any[]>([]);
+  const [loadingAdjustments, setLoadingAdjustments] = useState(false);
+  const [adjustStoreType, setAdjustStoreType] = useState<"production" | "sales">("sales");
+  const [adjustStoreId, setAdjustStoreId] = useState("");
+  const [adjustStoresList, setAdjustStoresList] = useState<any[]>([]);
+  const [adjustProductId, setAdjustProductId] = useState("");
+  const [adjustProducts, setAdjustProducts] = useState<any[]>([]);
+  const [adjustBatch, setAdjustBatch] = useState("");
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustImageFile, setAdjustImageFile] = useState<File | null>(null);
+  const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
+  const [adjustBatchesList, setAdjustBatchesList] = useState<any[]>([]);
+  const [loadingAdjustBatches, setLoadingAdjustBatches] = useState(false);
+  const [isCustomAdjustBatch, setIsCustomAdjustBatch] = useState(false);
+  const adjustCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [adjustDrawing, setAdjustDrawing] = useState(false);
+  const [productSearchText, setProductSearchText] = useState("");
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
 
   const filteredOrderOptions = orders
     .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
@@ -474,6 +496,209 @@ export default function OrderManagerDashboard() {
       fetchAllocations();
     }
   }, [activeTab]);
+
+  // Stock adjustments effects & handlers
+  const fetchAdjustments = async () => {
+    setLoadingAdjustments(true);
+    try {
+      const res = await api.get("/store-adjustments");
+      setAdjustmentsList(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch adjustments:", err);
+    } finally {
+      setLoadingAdjustments(false);
+    }
+  };
+
+  const fetchAdjustProducts = async () => {
+    try {
+      const res = await api.get("/products");
+      setAdjustProducts(res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch products:", err);
+    }
+  };
+
+  const getFilteredAdjustProducts = () => {
+    if (adjustStoreType === "production") {
+      return adjustProducts.filter(p => 
+        ["EGG-WHT", "EGG-BRN", "EGG-CRM", "EGG-DMG-TRYS", "EGG-DMG-LOOSE", "POU-LVE", "POU-DRS", "BY-MNR"].includes(p.code)
+      );
+    }
+    return adjustProducts;
+  };
+
+  const getFilteredProductsForForm = () => {
+    const list = getFilteredAdjustProducts();
+    if (!productSearchText.trim()) return list;
+    return list.filter(p => 
+      p.name.toLowerCase().includes(productSearchText.toLowerCase()) ||
+      p.code.toLowerCase().includes(productSearchText.toLowerCase())
+    );
+  };
+
+  useEffect(() => {
+    async function loadAdjustStores() {
+      setAdjustProductId("");
+      setProductSearchText("");
+      try {
+        const endpoint = adjustStoreType === "production" ? "/production-stores" : "/sales-stores";
+        const res = await api.get(endpoint);
+        const list = res.data?.data || [];
+        setAdjustStoresList(list);
+        if (list.length > 0) {
+          setAdjustStoreId(list[0].id);
+        } else {
+          setAdjustStoreId("");
+        }
+      } catch (err) {
+        console.error("Failed to load adjust stores:", err);
+      }
+    }
+    if (activeTab === "inventory" && inventorySubView === "damages") {
+      loadAdjustStores();
+      fetchAdjustProducts();
+      fetchAdjustments();
+    }
+  }, [adjustStoreType, activeTab, inventorySubView]);
+
+  useEffect(() => {
+    async function loadAdjustBatches() {
+      setAdjustBatch("");
+      setIsCustomAdjustBatch(false);
+      if (!adjustStoreId || !adjustProductId || adjustStoreType !== "sales") {
+        setAdjustBatchesList([]);
+        return;
+      }
+      setLoadingAdjustBatches(true);
+      try {
+        const res = await api.get("/sales-stock", {
+          params: { sales_store_id: adjustStoreId }
+        });
+        const stocks = res.data?.data || [];
+        const filtered = stocks.filter((s: any) => s.product_id === adjustProductId);
+        setAdjustBatchesList(filtered);
+      } catch (err) {
+        console.error("Failed to load adjust batches:", err);
+        setAdjustBatchesList([]);
+      } finally {
+        setLoadingAdjustBatches(false);
+      }
+    }
+    if (activeTab === "inventory" && inventorySubView === "damages" && adjustStoreId && adjustProductId) {
+      loadAdjustBatches();
+    }
+  }, [adjustStoreId, adjustProductId, adjustStoreType, activeTab, inventorySubView]);
+
+  const startDrawing = (e: any) => {
+    if (e.cancelable) e.preventDefault();
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.strokeStyle = "#132A1C"; // brand forest
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+
+    const pos = getEventPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setAdjustDrawing(true);
+  };
+
+  const draw = (e: any) => {
+    if (!adjustDrawing) return;
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const pos = getEventPos(e, canvas);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setAdjustDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  const getEventPos = (e: any, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  };
+
+  const handleAdjustmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const canvas = adjustCanvasRef.current;
+    if (!canvas) return;
+
+    const signatureData = canvas.toDataURL("image/png");
+
+    if (!adjustStoreId || !adjustProductId || !adjustQty || !adjustReason) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+
+    if (adjustStoreType === "sales" && !adjustBatch) {
+      alert("Please select or enter a batch reference.");
+      return;
+    }
+
+    setIsSubmittingAdjustment(true);
+    try {
+      const formData = new FormData();
+      formData.append("store_type", adjustStoreType);
+      if (adjustStoreType === "production") {
+        formData.append("production_store_id", adjustStoreId);
+        formData.append("batch_reference", "PDN-BATCH"); // Default placeholder for production batch
+      } else {
+        formData.append("sales_store_id", adjustStoreId);
+        formData.append("batch_reference", adjustBatch);
+      }
+      formData.append("product_id", adjustProductId);
+      formData.append("quantity", adjustQty);
+      formData.append("reason", adjustReason);
+      formData.append("signature_data", signatureData);
+      
+      if (adjustImageFile) {
+        formData.append("image_file", adjustImageFile);
+      }
+
+      const res = await api.post("/store-adjustments", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      if (res.data?.success) {
+        alert("Stock adjustment request submitted successfully for approval!");
+        setAdjustQty("");
+        setAdjustReason("");
+        setAdjustImageFile(null);
+        clearSignature();
+        fetchAdjustments();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to submit stock adjustment request.");
+    } finally {
+      setIsSubmittingAdjustment(false);
+    }
+  };
 
   useEffect(() => {
     if (showDriverModal) {
@@ -1077,110 +1302,472 @@ export default function OrderManagerDashboard() {
               transition={{ duration: 0.15 }}
               className="space-y-4"
             >
-              <div className="space-y-3">
-                <h3 className="text-sm font-black text-brand-forest font-heading uppercase tracking-wider flex items-center gap-1.5">
-                  <Warehouse size={16} className="text-brand-mid" />
-                  Warehouse Inventory
-                </h3>
+              {inventorySubView === "list" ? (
+                <>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <h3 className="text-sm font-black text-brand-forest font-heading uppercase tracking-wider flex items-center gap-1.5">
+                        <Warehouse size={16} className="text-brand-mid" />
+                        Warehouse Inventory
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setInventorySubView("damages");
+                          fetchAdjustments();
+                        }}
+                        className="text-[10px] font-black uppercase text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200/50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <AlertTriangle size={12} />
+                        Report Damages
+                      </button>
+                    </div>
 
-                {/* Sub-tabs for Store Type selection */}
-                <div className="flex bg-brand-sage/10 p-1 rounded-xl border border-brand-sage/20">
-                  <button 
-                    onClick={() => setStoreType("sales")}
-                    className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
-                      storeType === "sales" 
-                        ? "bg-brand-forest text-white shadow-sm" 
-                        : "text-brand-forest hover:bg-brand-sage/20"
-                    }`}
-                  >
-                    Sales Store
-                  </button>
-                  <button 
-                    onClick={() => setStoreType("production")}
-                    className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
-                      storeType === "production" 
-                        ? "bg-brand-forest text-white shadow-sm" 
-                        : "text-brand-forest hover:bg-brand-sage/20"
-                    }`}
-                  >
-                    Production Store
-                  </button>
-                </div>
+                    {/* Sub-tabs for Store Type selection */}
+                    <div className="flex bg-brand-sage/10 p-1 rounded-xl border border-brand-sage/20">
+                      <button 
+                        onClick={() => setStoreType("sales")}
+                        className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                          storeType === "sales" 
+                            ? "bg-brand-forest text-white shadow-sm" 
+                            : "text-brand-forest hover:bg-brand-sage/20"
+                        }`}
+                      >
+                        Sales Store
+                      </button>
+                      <button 
+                        onClick={() => setStoreType("production")}
+                        className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                          storeType === "production" 
+                            ? "bg-brand-forest text-white shadow-sm" 
+                            : "text-brand-forest hover:bg-brand-sage/20"
+                        }`}
+                      >
+                        Production Store
+                      </button>
+                    </div>
 
-                {/* Store Dropdown selector */}
-                <Select
-                  label="Select Location Store"
-                  value={selectedStoreId}
-                  onChange={(e) => setSelectedStoreId(e.target.value)}
-                  options={storesList.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
-                  required
-                />
+                    {/* Store Dropdown selector */}
+                    <Select
+                      label="Select Location Store"
+                      value={selectedStoreId}
+                      onChange={(e) => setSelectedStoreId(e.target.value)}
+                      options={storesList.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
+                      required
+                    />
 
-                {/* Batch Dropdown selector */}
-                {uniqueBatches.length > 0 && (
-                  <Select
-                    label="Filter by Batch Number"
-                    value={selectedBatch}
-                    onChange={(e) => setSelectedBatch(e.target.value)}
-                    options={batchOptions}
-                  />
-                )}
+                    {/* Batch Dropdown selector */}
+                    {uniqueBatches.length > 0 && (
+                      <Select
+                        label="Filter by Batch Number"
+                        value={selectedBatch}
+                        onChange={(e) => setSelectedBatch(e.target.value)}
+                        options={batchOptions}
+                      />
+                    )}
 
-                {/* Stock Search Bar */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search inventory..."
-                    value={stockSearchQuery}
-                    onChange={(e) => setStockSearchQuery(e.target.value)}
-                    className="w-full text-xs pl-9 pr-4 py-2 h-9 rounded-xl border border-brand-sage/60 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                  />
-                </div>
-              </div>
-
-              {/* Stock Items list */}
-              <div className="space-y-2">
-                {loadingStock ? (
-                  <div className="bg-white border border-brand-sage/40 rounded-2xl p-6 text-center text-gray-400 animate-pulse flex flex-col items-center gap-2">
-                    <Loader2 className="animate-spin text-brand-forest" size={24} />
-                    <p className="text-xs font-bold text-gray-500">Loading stock listing...</p>
+                    {/* Stock Search Bar */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search inventory..."
+                        value={stockSearchQuery}
+                        onChange={(e) => setStockSearchQuery(e.target.value)}
+                        className="w-full text-xs pl-9 pr-4 py-2 h-9 rounded-xl border border-brand-sage/60 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                      />
+                    </div>
                   </div>
-                ) : filteredStock.length === 0 ? (
-                  <div className="bg-white border border-brand-sage/30 rounded-2xl p-6 text-center text-gray-500 text-xs italic">
-                    No inventory records found
+
+                  {/* Stock Items list */}
+                  <div className="space-y-2">
+                    {loadingStock ? (
+                      <div className="bg-white border border-brand-sage/40 rounded-2xl p-6 text-center text-gray-400 animate-pulse flex flex-col items-center gap-2">
+                        <Loader2 className="animate-spin text-brand-forest" size={24} />
+                        <p className="text-xs font-bold text-gray-500">Loading stock listing...</p>
+                      </div>
+                    ) : filteredStock.length === 0 ? (
+                      <div className="bg-white border border-brand-sage/30 rounded-2xl p-6 text-center text-gray-550 text-xs italic">
+                        No inventory records found
+                      </div>
+                    ) : (
+                      filteredStock.map((item) => (
+                        <div key={item.id} className="bg-white border border-brand-sage/30 p-3.5 rounded-xl shadow-sm flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-bold text-gray-900">{item.product?.name}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-400 font-semibold uppercase">
+                              <span>{item.product?.code}</span>
+                              {item.batch_reference && (
+                                <>
+                                  <span className="h-1 w-1 bg-gray-300 rounded-full" />
+                                  <span className="text-brand-amber font-mono">Batch: {item.batch_reference}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`text-sm font-black font-heading ${
+                              parseFloat(item.current_quantity) <= 0 
+                                ? "text-red-600" 
+                                : parseFloat(item.current_quantity) <= 20 
+                                ? "text-brand-amber" 
+                                : "text-brand-forest"
+                            }`}>
+                              {parseFloat(item.current_quantity).toLocaleString()}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-extrabold uppercase ml-1 block">{item.product?.unit_of_measure}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
-                ) : (
-                  filteredStock.map((item) => (
-                    <div key={item.id} className="bg-white border border-brand-sage/30 p-3.5 rounded-xl shadow-sm flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-gray-900">{item.product?.name}</p>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-400 font-semibold uppercase">
-                          <span>{item.product?.code}</span>
-                          {item.batch_reference && (
-                            <>
-                              <span className="h-1 w-1 bg-gray-300 rounded-full" />
-                              <span className="text-brand-amber font-mono">Batch: {item.batch_reference}</span>
-                            </>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setInventorySubView("list")}
+                      className="text-xs font-bold text-brand-forest hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      ← Back to Inventory List
+                    </button>
+                    <button
+                      onClick={fetchAdjustments}
+                      className="p-1.5 rounded-lg bg-brand-sage/10 text-brand-forest hover:bg-brand-sage/20 border border-brand-sage/20"
+                      title="Refresh Logs"
+                    >
+                      <RefreshCw size={12} className={loadingAdjustments ? "animate-spin" : ""} />
+                    </button>
+                  </div>
+
+                  <Card className="border border-brand-sage/40 shadow-xl rounded-2xl bg-white">
+                    <CardContent className="p-4 space-y-4">
+                      <div className="flex items-center gap-2 pb-2 border-b border-brand-sage/20">
+                        <span className="h-2 w-2 rounded-full bg-brand-yellow" />
+                        <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-forest">New Damage / Loss Request</h4>
+                      </div>
+                      <form onSubmit={handleAdjustmentSubmit} className="space-y-3.5 text-xs">
+                        {/* Store Type Selection */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Store Type *</label>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setAdjustStoreType("sales")}
+                              className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                adjustStoreType === "sales"
+                                  ? "bg-brand-forest/5 text-brand-forest border-brand-forest"
+                                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                              }`}
+                            >
+                              Sales Store
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAdjustStoreType("production")}
+                              className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                                adjustStoreType === "production"
+                                  ? "bg-brand-forest/5 text-brand-forest border-brand-forest"
+                                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                              }`}
+                            >
+                              Production Store
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Store Selection */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Select Store *</label>
+                          <select
+                            required
+                            value={adjustStoreId}
+                            onChange={(e) => setAdjustStoreId(e.target.value)}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          >
+                            <option value="">-- Choose Store --</option>
+                            {adjustStoresList.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Product Selection */}
+                        <div className="space-y-1 relative">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Search/Select Product *</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              required={!adjustProductId}
+                              placeholder="Type product name or code..."
+                              value={productSearchText}
+                              onChange={(e) => {
+                                setProductSearchText(e.target.value);
+                                setShowProductSuggestions(true);
+                              }}
+                              onFocus={() => setShowProductSuggestions(true)}
+                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                            />
+                            {showProductSuggestions && (
+                              <div className="absolute left-0 right-0 mt-1 bg-white border border-brand-sage/35 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto text-xs divide-y divide-gray-100">
+                                {getFilteredProductsForForm().length === 0 ? (
+                                  <div className="p-3 text-gray-400 text-center font-bold">No matching products</div>
+                                ) : (
+                                  getFilteredProductsForForm().map(p => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setAdjustProductId(p.id);
+                                        setProductSearchText(p.name);
+                                        setShowProductSuggestions(false);
+                                      }}
+                                      className="w-full text-left p-3 hover:bg-brand-forest/5 hover:text-brand-forest transition-colors font-bold flex justify-between items-center"
+                                    >
+                                      <span>{p.name}</span>
+                                      <span className="text-[9px] text-gray-400 font-mono">{p.code}</span>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {adjustProductId && (
+                            <div className="mt-1.5 p-2 bg-brand-forest/5 rounded-xl border border-brand-forest/15 text-[10px] text-brand-forest font-bold flex justify-between items-center">
+                              <span>Selected: {getFilteredAdjustProducts().find(p => p.id === adjustProductId)?.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdjustProductId("");
+                                  setProductSearchText("");
+                                }}
+                                className="text-red-500 hover:text-red-750 font-bold"
+                              >
+                                Clear
+                              </button>
+                            </div>
                           )}
                         </div>
+
+                        {/* Batch Number Selection */}
+                        {adjustStoreType === "sales" && (
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Batch Number *</label>
+                            {isCustomAdjustBatch ? (
+                              <div className="space-y-1">
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Batch B-001-A"
+                                  value={adjustBatch}
+                                  onChange={(e) => setAdjustBatch(e.target.value)}
+                                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsCustomAdjustBatch(false);
+                                    setAdjustBatch("");
+                                  }}
+                                  className="text-[9px] text-brand-forest font-bold hover:underline bg-transparent border-none p-0 cursor-pointer block mt-0.5"
+                                >
+                                  ← Choose existing batch in stock
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <select
+                                  required
+                                  value={adjustBatch}
+                                  onChange={(e) => {
+                                    if (e.target.value === "__custom__") {
+                                      setIsCustomAdjustBatch(true);
+                                      setAdjustBatch("");
+                                    } else {
+                                      setAdjustBatch(e.target.value);
+                                    }
+                                  }}
+                                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                  disabled={loadingAdjustBatches}
+                                >
+                                  <option value="">{loadingAdjustBatches ? "Loading..." : "-- Select Batch --"}</option>
+                                  {adjustBatchesList.map(b => (
+                                    <option key={b.batch_reference || 'unbatched'} value={b.batch_reference || ""}>
+                                      {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
+                                    </option>
+                                  ))}
+                                  <option value="__custom__">➕ Enter Custom...</option>
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsCustomAdjustBatch(true);
+                                    setAdjustBatch("");
+                                  }}
+                                  className="text-[9px] text-brand-forest font-bold hover:underline bg-transparent border-none p-0 cursor-pointer block mt-0.5 text-left"
+                                >
+                                  Or enter new batch reference →
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                          {/* Quantity */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase block">Quantity *</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              required
+                              placeholder="e.g. 5.00"
+                              value={adjustQty}
+                              onChange={(e) => setAdjustQty(e.target.value)}
+                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                            />
+                          </div>
+
+                          {/* Image Upload */}
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase block">Upload Photo Proof</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                  setAdjustImageFile(e.target.files[0]);
+                                }
+                              }}
+                              className="w-full text-[10px] text-gray-500 font-semibold file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-brand-sage/10 file:text-brand-forest file:cursor-pointer hover:file:bg-brand-sage/20"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Reason */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Reason / Details *</label>
+                          <textarea
+                            required
+                            placeholder="Provide details about the damage (breakage, rotting, spoilage)..."
+                            value={adjustReason}
+                            onChange={(e) => setAdjustReason(e.target.value)}
+                            className="w-full min-h-[60px] p-2.5 text-xs font-semibold rounded-xl border border-brand-sage/50 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                          />
+                        </div>
+
+                        {/* Signature Drawing */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Signature *</label>
+                            <button
+                              type="button"
+                              onClick={clearSignature}
+                              className="text-[10px] text-red-600 hover:text-red-700 font-bold bg-transparent border-none cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                          <div className="border border-brand-sage/40 rounded-xl overflow-hidden shadow-inner bg-white">
+                            <canvas
+                              ref={adjustCanvasRef}
+                              width={600}
+                              height={150}
+                              onMouseDown={startDrawing}
+                              onMouseMove={draw}
+                              onMouseUp={stopDrawing}
+                              onMouseLeave={stopDrawing}
+                              onTouchStart={startDrawing}
+                              onTouchMove={draw}
+                              onTouchEnd={stopDrawing}
+                              className="w-full h-[100px] cursor-crosshair block"
+                            />
+                          </div>
+                        </div>
+
+                        <Button
+                          type="submit"
+                          isLoading={isSubmittingAdjustment}
+                          className="w-full h-11 bg-brand-forest hover:bg-brand-forest/90 text-white font-black tracking-widest text-xs uppercase rounded-xl border-none shadow-md mt-2 cursor-pointer"
+                        >
+                          Submit For Approval
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  {/* Adjustments Registry list */}
+                  <div className="space-y-3">
+                    <h4 className="text-[10px] text-brand-forest font-black uppercase tracking-wider">Adjustment Request Logs</h4>
+                    {loadingAdjustments ? (
+                      <div className="py-8 text-center text-xs text-gray-400">Loading request logs...</div>
+                    ) : adjustmentsList.length === 0 ? (
+                      <div className="bg-white p-6 text-center text-xs text-gray-400 border border-brand-sage/40 rounded-2xl">
+                        No stock adjustments submitted yet.
                       </div>
-                      <div className="text-right">
-                        <span className={`text-sm font-black font-heading ${
-                          parseFloat(item.current_quantity) <= 0 
-                            ? "text-red-600" 
-                            : parseFloat(item.current_quantity) <= 20 
-                            ? "text-brand-amber" 
-                            : "text-brand-forest"
-                        }`}>
-                          {parseFloat(item.current_quantity).toLocaleString()}
-                        </span>
-                        <span className="text-[9px] text-gray-400 font-extrabold uppercase ml-1 block">{item.product?.unit_of_measure}</span>
+                    ) : (
+                      <div className="space-y-4">
+                        {adjustmentsList.map((adj) => {
+                          const qty = Math.abs(parseFloat(adj.quantity_change));
+                          return (
+                            <div key={adj.id} className="bg-white rounded-2xl border border-brand-sage/40 p-4 shadow-sm space-y-3 text-xs">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h5 className="font-extrabold text-brand-forest text-xs">{adj.product?.name}</h5>
+                                  <p className="text-[9px] text-gray-500 mt-0.5">
+                                    Store: {adj.store_type === 'production' ? adj.production_store?.name : adj.sales_store?.name} 
+                                    {adj.store_type === 'sales' && adj.batch_reference && ` (Batch: ${adj.batch_reference})`}
+                                  </p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                                  adj.status === 'approved' ? 'bg-green-50 text-green-700' :
+                                  adj.status === 'rejected' ? 'bg-red-50 text-red-700' :
+                                  'bg-amber-50 text-amber-700 animate-pulse'
+                                }`}>
+                                  {adj.status}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4 text-[10px] bg-gray-50/50 p-2.5 rounded-xl border border-gray-150">
+                                <div>
+                                  <span className="text-gray-400 font-bold block">Quantity</span>
+                                  <span className="font-extrabold text-brand-forest">{qty} {adj.product?.unit_of_measure}</span>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400 font-bold block">Adjustment Date</span>
+                                  <span className="font-semibold text-gray-700">{adj.adjustment_date}</span>
+                                </div>
+                              </div>
+
+                              <div className="text-[10px] text-gray-650 bg-amber-50/10 p-2 rounded-lg border border-brand-sage/10 font-medium">
+                                <strong>Reason:</strong> {adj.reason}
+                              </div>
+
+                              <div className="flex gap-4 pt-1 items-center">
+                                {adj.image_url && (
+                                  <div className="flex-1 space-y-1">
+                                    <span className="text-[8px] text-gray-400 font-bold uppercase block">Photo Proof</span>
+                                    <a href={adj.image_url} target="_blank" rel="noreferrer" className="inline-block border border-brand-sage/20 rounded-lg overflow-hidden bg-white p-0.5 max-h-16">
+                                      <img src={adj.image_url} alt="Photo proof" className="max-h-14 object-contain rounded" />
+                                    </a>
+                                  </div>
+                                )}
+                                {adj.signature_url && (
+                                  <div className="flex-1 space-y-1">
+                                    <span className="text-[8px] text-gray-400 font-bold uppercase block">Signature</span>
+                                    <div className="inline-block border border-brand-sage/20 rounded-lg overflow-hidden bg-white p-0.5 max-h-16">
+                                      <img src={adj.signature_url} alt="Signature" className="max-h-14 object-contain rounded bg-gray-50/50" />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -1860,7 +2447,10 @@ export default function OrderManagerDashboard() {
 
         {/* TAB 2: INVENTORY BUTTON */}
         <button 
-          onClick={() => setActiveTab("inventory")}
+          onClick={() => {
+            setActiveTab("inventory");
+            setInventorySubView("list");
+          }}
           className={`flex flex-col items-center gap-1 py-1.5 px-4 rounded-xl transition-all relative ${
             activeTab === "inventory" 
               ? "text-brand-forest font-black" 
@@ -1895,6 +2485,8 @@ export default function OrderManagerDashboard() {
             />
           )}
         </button>
+
+
 
         {/* TAB 3: ALERTS BUTTON */}
         <button 

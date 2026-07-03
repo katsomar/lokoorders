@@ -21,6 +21,7 @@ class SalesStoreStock extends Model
             $model->sold_quantity = $model->sold_quantity ?? 0;
             $model->transferred_out = $model->transferred_out ?? 0;
             $model->replacements = $model->replacements ?? 0;
+            $model->damages = $model->damages ?? 0;
 
             if ($model->opening_stock === null || $model->opening_stock == 0) {
                 if ($model->transferred_in == 0 && $model->conversions_in == 0 && $model->current_quantity != 0) {
@@ -40,9 +41,10 @@ class SalesStoreStock extends Model
                 $model->sold_quantity = $model->sold_quantity ?? 0;
                 $model->transferred_out = $model->transferred_out ?? 0;
                 $model->replacements = $model->replacements ?? 0;
+                $model->damages = $model->damages ?? 0;
 
                 $model->opening_stock = $model->conversions_in;
-                $exits = $model->conversions_out + $model->sold_quantity + $model->transferred_out;
+                $exits = $model->conversions_out + $model->sold_quantity + $model->transferred_out + $model->damages;
                 $model->closing_stock = $model->opening_stock + $model->transferred_in - ($exits + $model->replacements);
                 $model->current_quantity = $model->closing_stock;
             }
@@ -60,6 +62,7 @@ class SalesStoreStock extends Model
         $this->sold_quantity = $this->sold_quantity ?? 0;
         $this->transferred_out = $this->transferred_out ?? 0;
         $this->replacements = $this->replacements ?? 0;
+        $this->damages = $this->damages ?? 0;
 
         if ($type === 'transfer_in' || $type === 'add') {
             $this->transferred_in += $qty;
@@ -73,6 +76,8 @@ class SalesStoreStock extends Model
             $this->transferred_out += $qty;
         } elseif ($type === 'replace') {
             $this->replacements += $qty;
+        } elseif ($type === 'damage' || $type === 'wastage') {
+            $this->damages += $qty;
         }
 
         if ($price !== null) {
@@ -80,7 +85,7 @@ class SalesStoreStock extends Model
         }
 
         $this->opening_stock = $this->conversions_in;
-        $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out;
+        $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out + $this->damages;
         $this->closing_stock = $this->opening_stock + $this->transferred_in - ($exits + $this->replacements);
         $this->current_quantity = $this->closing_stock;
         $this->save();

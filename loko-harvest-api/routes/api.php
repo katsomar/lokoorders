@@ -135,6 +135,12 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/vehicle-logs', [App\Http\Controllers\Api\V1\VehicleLogController::class, 'index']);
         Route::post('/vehicle-logs', [App\Http\Controllers\Api\V1\VehicleLogController::class, 'store']);
 
+        // Store Adjustments
+        Route::get('/store-adjustments', [App\Http\Controllers\Api\V1\StoreAdjustmentController::class, 'index']);
+        Route::post('/store-adjustments', [App\Http\Controllers\Api\V1\StoreAdjustmentController::class, 'store']);
+        Route::post('/store-adjustments/{id}/approve', [App\Http\Controllers\Api\V1\StoreAdjustmentController::class, 'approve']);
+        Route::post('/store-adjustments/{id}/reject', [App\Http\Controllers\Api\V1\StoreAdjustmentController::class, 'reject']);
+
         // Other module routes will go here
     });
 });
