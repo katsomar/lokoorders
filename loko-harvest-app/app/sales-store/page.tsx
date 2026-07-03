@@ -238,6 +238,8 @@ export default function SalesStorePage() {
     fetchData();
   }, []);
 
+  const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
+ 
   const handleUpdatePrice = async (productId: string, priceType: "production" | "sales", newPrice: number) => {
     try {
       const payload = priceType === "production" 
@@ -246,9 +248,37 @@ export default function SalesStorePage() {
       
       await api.put(`/products/${productId}`, payload);
       alert("Product price updated successfully!");
+      setEditingPrices(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to update product price.");
+    }
+  };
+ 
+  const handleUpdateAllPrices = async () => {
+    const changedIds = Object.keys(editingPrices);
+    if (changedIds.length === 0) return;
+ 
+    setIsUpdatingAllPrices(true);
+    try {
+      const promises = changedIds.map(async (id) => {
+        const val = parseFloat(editingPrices[id]);
+        const priceVal = isNaN(val) ? 0 : val;
+        return api.put(`/products/${id}`, { sales_unit_price: priceVal });
+      });
+ 
+      await Promise.all(promises);
+      alert("All product prices updated successfully!");
+      setEditingPrices({});
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update some or all product prices.");
+    } finally {
+      setIsUpdatingAllPrices(false);
     }
   };
 
@@ -1529,7 +1559,7 @@ export default function SalesStorePage() {
         ) : (
           <div className="space-y-6">
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4">
+              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
                     <DollarSign size={18} className="text-brand-forest" />
@@ -1539,6 +1569,15 @@ export default function SalesStorePage() {
                     Set the public/selling unit prices for products. These are used when calculating sales inventory worth and customer billing.
                   </CardDescription>
                 </div>
+                {Object.keys(editingPrices).length > 0 && (
+                  <Button
+                    onClick={handleUpdateAllPrices}
+                    isLoading={isUpdatingAllPrices}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-10 px-5 text-sm border-none cursor-pointer flex items-center gap-1.5"
+                  >
+                    Save All Changes ({Object.keys(editingPrices).length})
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <Table>

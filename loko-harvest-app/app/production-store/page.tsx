@@ -354,6 +354,8 @@ export default function ProductionStorePage() {
     fetchData();
   }, []);
 
+  const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
+ 
   const handleUpdatePrice = async (productId: string, priceType: "production" | "sales", newPrice: number) => {
     try {
       const payload = priceType === "production" 
@@ -362,9 +364,37 @@ export default function ProductionStorePage() {
       
       await api.put(`/products/${productId}`, payload);
       alert("Product price updated successfully!");
+      setEditingPrices(prev => {
+        const copy = { ...prev };
+        delete copy[productId];
+        return copy;
+      });
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to update product price.");
+    }
+  };
+ 
+  const handleUpdateAllPrices = async () => {
+    const changedIds = Object.keys(editingPrices);
+    if (changedIds.length === 0) return;
+ 
+    setIsUpdatingAllPrices(true);
+    try {
+      const promises = changedIds.map(async (id) => {
+        const val = parseFloat(editingPrices[id]);
+        const priceVal = isNaN(val) ? 0 : val;
+        return api.put(`/products/${id}`, { production_unit_price: priceVal });
+      });
+ 
+      await Promise.all(promises);
+      alert("All product prices updated successfully!");
+      setEditingPrices({});
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update some or all product prices.");
+    } finally {
+      setIsUpdatingAllPrices(false);
     }
   };
 
@@ -1218,7 +1248,7 @@ export default function ProductionStorePage() {
         ) : (
           <div className="space-y-6">
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4">
+              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
                     <DollarSign size={18} className="text-brand-forest" />
@@ -1228,6 +1258,15 @@ export default function ProductionStorePage() {
                     Set the internal production/valuation unit prices for products. These are used when calculating production inventory worth and transfer valuations.
                   </CardDescription>
                 </div>
+                {Object.keys(editingPrices).length > 0 && (
+                  <Button
+                    onClick={handleUpdateAllPrices}
+                    isLoading={isUpdatingAllPrices}
+                    className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-10 px-5 text-sm border-none cursor-pointer flex items-center gap-1.5"
+                  >
+                    Save All Changes ({Object.keys(editingPrices).length})
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
@@ -1242,47 +1281,62 @@ export default function ProductionStorePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-10 text-gray-400 font-medium">
-                          No products found.
-                        </TableCell>
-                      </TableRow>
-                    ) : products.map((product) => {
-                      const currentVal = editingPrices[product.id] !== undefined
-                        ? editingPrices[product.id]
-                        : (product.production_unit_price !== undefined ? product.production_unit_price : product.default_unit_price).toString();
+                    {(() => {
+                      const allowedCodes = [
+                        'EGG-WHT', 'EGG-BRN', 'EGG-CRM',
+                        'EGG-WHT-D1', 'EGG-WHT-D2', 'EGG-WHT-D3', 'EGG-WHT-SHL',
+                        'EGG-CRM-D1', 'EGG-CRM-D2', 'EGG-CRM-D3', 'EGG-CRM-SHL',
+                        'EGG-BRN-D1', 'EGG-BRN-D2', 'EGG-BRN-D3', 'EGG-BRN-SHL',
+                        'POU-DRS', 'POU-LVE', 'BY-MNR'
+                      ];
+                      const filteredProds = products.filter(p => allowedCodes.includes(p.code));
                       
-                      return (
-                        <TableRow key={product.id} className="hover:bg-brand-sage/5 transition-colors">
-                          <TableCell className="pl-6 font-mono text-xs font-bold text-gray-505">{product.code}</TableCell>
-                          <TableCell className="font-bold text-sm text-brand-forest">{product.name}</TableCell>
-                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.category}</TableCell>
-                          <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.unit_of_measure}</TableCell>
-                          <TableCell className="text-right pr-4">
-                            <Input
-                              type="number"
-                              value={currentVal}
-                              onChange={(e) => setEditingPrices({
-                                ...editingPrices,
-                                [product.id]: e.target.value
-                              })}
-                              className="text-right h-9 w-40 ml-auto border-brand-sage rounded-xl font-bold"
-                              placeholder="0.00"
-                            />
-                          </TableCell>
-                          <TableCell className="text-center pr-6">
-                            <Button
-                              onClick={() => handleUpdatePrice(product.id, "production", parseFloat(currentVal) || 0)}
-                              className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-9 px-4 text-xs border-none cursor-pointer"
-                              disabled={parseFloat(currentVal) === (product.production_unit_price !== undefined ? parseFloat(product.production_unit_price) : parseFloat(product.default_unit_price))}
-                            >
-                              Save
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                      if (filteredProds.length === 0) {
+                        return (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-10 text-gray-400 font-medium">
+                              No products found.
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }
+ 
+                      return filteredProds.map((product) => {
+                        const currentVal = editingPrices[product.id] !== undefined
+                          ? editingPrices[product.id]
+                          : (product.production_unit_price !== undefined ? product.production_unit_price : product.default_unit_price).toString();
+                        
+                        return (
+                          <TableRow key={product.id} className="hover:bg-brand-sage/5 transition-colors">
+                            <TableCell className="pl-6 font-mono text-xs font-bold text-gray-500">{product.code}</TableCell>
+                            <TableCell className="font-bold text-sm text-brand-forest">{product.name}</TableCell>
+                            <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.category}</TableCell>
+                            <TableCell className="text-xs text-gray-500 font-semibold uppercase">{product.unit_of_measure}</TableCell>
+                            <TableCell className="text-right pr-4">
+                              <Input
+                                type="number"
+                                value={currentVal}
+                                onChange={(e) => setEditingPrices({
+                                  ...editingPrices,
+                                  [product.id]: e.target.value
+                                })}
+                                className="text-right h-9 w-40 ml-auto border-brand-sage rounded-xl font-bold"
+                                placeholder="0.00"
+                              />
+                            </TableCell>
+                            <TableCell className="text-center pr-6">
+                              <Button
+                                onClick={() => handleUpdatePrice(product.id, "production", parseFloat(currentVal) || 0)}
+                                className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-9 px-4 text-xs border-none cursor-pointer"
+                                disabled={parseFloat(currentVal) === (product.production_unit_price !== undefined ? parseFloat(product.production_unit_price) : parseFloat(product.default_unit_price))}
+                              >
+                                Save
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      });
+                    })()}
                   </TableBody>
                 </Table>
               </CardContent>
