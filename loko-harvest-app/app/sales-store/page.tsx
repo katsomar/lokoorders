@@ -740,9 +740,9 @@ export default function SalesStorePage() {
                                 const worthClosing = item.closing_stock * item.unit_price;
                                 const isLow = item.status === 'low' || item.closing_stock < 50;
 
-                                // Cross-check validation: Opening - (Exits + Replacements + Closing)
+                                // Cross-check validation: (Opening + Transferred In) - (Exits + Replacements + Closing)
                                 const exits = item.conversions_out + item.sold_quantity + item.transferred_out;
-                                const crossCheckSum = item.opening_stock - (exits + item.replacements + item.closing_stock);
+                                const crossCheckSum = (item.opening_stock + item.transferred_in) - (exits + item.replacements + item.closing_stock);
                                 const isAudited = Math.abs(crossCheckSum) < 0.01;
 
                                 return (

@@ -15,20 +15,35 @@ class SalesStoreStock extends Model
         parent::boot();
 
         static::creating(function ($model) {
+            $model->transferred_in = $model->transferred_in ?? 0;
+            $model->conversions_in = $model->conversions_in ?? 0;
+            $model->conversions_out = $model->conversions_out ?? 0;
+            $model->sold_quantity = $model->sold_quantity ?? 0;
+            $model->transferred_out = $model->transferred_out ?? 0;
+            $model->replacements = $model->replacements ?? 0;
+
             if ($model->opening_stock === null || $model->opening_stock == 0) {
                 if ($model->transferred_in == 0 && $model->conversions_in == 0 && $model->current_quantity != 0) {
                     $model->transferred_in = $model->current_quantity;
                 }
-                $model->opening_stock = $model->transferred_in + $model->conversions_in;
-                $model->closing_stock = $model->current_quantity;
+                $model->opening_stock = $model->conversions_in;
+                $model->closing_stock = $model->opening_stock + $model->transferred_in;
+                $model->current_quantity = $model->closing_stock;
             }
         });
 
         static::saving(function ($model) {
             if ($model->exists) {
-                $model->opening_stock = $model->transferred_in + $model->conversions_in;
+                $model->transferred_in = $model->transferred_in ?? 0;
+                $model->conversions_in = $model->conversions_in ?? 0;
+                $model->conversions_out = $model->conversions_out ?? 0;
+                $model->sold_quantity = $model->sold_quantity ?? 0;
+                $model->transferred_out = $model->transferred_out ?? 0;
+                $model->replacements = $model->replacements ?? 0;
+
+                $model->opening_stock = $model->conversions_in;
                 $exits = $model->conversions_out + $model->sold_quantity + $model->transferred_out;
-                $model->closing_stock = $model->opening_stock - ($exits + $model->replacements);
+                $model->closing_stock = $model->opening_stock + $model->transferred_in - ($exits + $model->replacements);
                 $model->current_quantity = $model->closing_stock;
             }
         });
@@ -39,6 +54,13 @@ class SalesStoreStock extends Model
 
     public function updateStock(string $type, float $qty, ?float $price = null)
     {
+        $this->transferred_in = $this->transferred_in ?? 0;
+        $this->conversions_in = $this->conversions_in ?? 0;
+        $this->conversions_out = $this->conversions_out ?? 0;
+        $this->sold_quantity = $this->sold_quantity ?? 0;
+        $this->transferred_out = $this->transferred_out ?? 0;
+        $this->replacements = $this->replacements ?? 0;
+
         if ($type === 'transfer_in' || $type === 'add') {
             $this->transferred_in += $qty;
         } elseif ($type === 'conversion_in') {
@@ -57,9 +79,9 @@ class SalesStoreStock extends Model
             $this->unit_price = $price;
         }
 
-        $this->opening_stock = $this->transferred_in + $this->conversions_in;
+        $this->opening_stock = $this->conversions_in;
         $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out;
-        $this->closing_stock = $this->opening_stock - ($exits + $this->replacements);
+        $this->closing_stock = $this->opening_stock + $this->transferred_in - ($exits + $this->replacements);
         $this->current_quantity = $this->closing_stock;
         $this->save();
     }
