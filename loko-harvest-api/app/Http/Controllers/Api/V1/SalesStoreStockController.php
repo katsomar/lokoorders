@@ -19,6 +19,7 @@ class SalesStoreStockController extends Controller
             ->when($request->sales_store_id, fn($q) => $q->where('sales_store_id', $request->sales_store_id));
 
         if ($date && $date !== now()->toDateString()) {
+            $stockQuery->where('created_at', '<=', $date . ' 23:59:59');
             $stock = $stockQuery->get()->map(function ($item) use ($date) {
                 // 1. Transfers In (production -> sales and sales -> sales in)
                 $transfersProdQuery = \Illuminate\Support\Facades\DB::table('store_transfers')

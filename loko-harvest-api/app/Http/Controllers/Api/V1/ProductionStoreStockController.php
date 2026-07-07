@@ -19,6 +19,7 @@ class ProductionStoreStockController extends Controller
             ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id));
 
         if ($date && $date !== now()->toDateString()) {
+            $stockQuery->where('created_at', '<=', $date . ' 23:59:59');
             $stock = $stockQuery->get()->map(function ($item) use ($date) {
                 // 1. Intakes
                 $intakesQuery = \App\Models\ProductionStoreIntake::where('production_store_id', $item->production_store_id)
