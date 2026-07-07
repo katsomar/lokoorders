@@ -177,6 +177,13 @@ export default function ProductionStorePage() {
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
   const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   // Transfer to Sales state
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -372,7 +379,7 @@ export default function ProductionStorePage() {
     setIsLoading(true);
     try {
       const [stockRes, intakeRes, storesRes, interRes, productsRes, salesStoresRes] = await Promise.all([
-        api.get('/production-stock'),
+        api.get('/production-stock', { params: { date: selectedDate } }),
         api.get('/production-intakes'),
         api.get('/production-stores'),
         api.get('/production-store-transfers'),
@@ -421,11 +428,11 @@ export default function ProductionStorePage() {
           batch_reference: item.batch_reference || 'N/A',
           production_store_id: item.production_store_id,
           production_store_name: item.production_store?.name || 'N/A',
-          incoming: safeIncoming,
-          opening_stock: Math.max(0, (isNaN(parseFloat(item.opening_stock)) ? 0 : parseFloat(item.opening_stock)) - safeIncoming),
-          stock_taken: isNaN(parseFloat(item.stock_taken)) ? 0 : parseFloat(item.stock_taken),
-          replacements: isNaN(parseFloat(item.replacements)) ? 0 : parseFloat(item.replacements),
-          closing_stock: isNaN(parseFloat(item.closing_stock)) ? 0 : parseFloat(item.closing_stock),
+          incoming: item.incoming !== undefined ? parseFloat(item.incoming) : safeIncoming,
+          opening_stock: item.opening_stock !== undefined ? parseFloat(item.opening_stock) : Math.max(0, (isNaN(parseFloat(item.opening_stock)) ? 0 : parseFloat(item.opening_stock)) - safeIncoming),
+          stock_taken: item.stock_taken !== undefined ? parseFloat(item.stock_taken) : (isNaN(parseFloat(item.stock_taken)) ? 0 : parseFloat(item.stock_taken)),
+          replacements: item.replacements !== undefined ? parseFloat(item.replacements) : (isNaN(parseFloat(item.replacements)) ? 0 : parseFloat(item.replacements)),
+          closing_stock: item.closing_stock !== undefined ? parseFloat(item.closing_stock) : (isNaN(parseFloat(item.closing_stock)) ? 0 : parseFloat(item.closing_stock)),
           unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
           egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
         };
@@ -493,7 +500,7 @@ export default function ProductionStorePage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedDate]);
 
   const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
  
@@ -1075,6 +1082,12 @@ export default function ProductionStorePage() {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-36 cursor-pointer"
+                  />
                   {/* Store Filter Dropdown */}
                   <select
                     value={selectedStoreFilter}

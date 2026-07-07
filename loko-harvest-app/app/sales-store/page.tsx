@@ -81,6 +81,13 @@ export default function SalesStorePage() {
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
   const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   const getUniqueBatches = () => {
     const filteredStock = stockItems.filter(item => selectedStoreFilter === "all" || item.sales_store_id === selectedStoreFilter);
@@ -152,7 +159,7 @@ export default function SalesStorePage() {
     setIsLoading(true);
     try {
       const [stockRes, movementsRes, storesRes, interRes, productsRes] = await Promise.all([
-        api.get('/sales-stock'),
+        api.get('/sales-stock', { params: { date: selectedDate } }),
         api.get('/sales-movements'),
         api.get('/sales-stores'),
         api.get('/sales-store-transfers'),
@@ -238,7 +245,7 @@ export default function SalesStorePage() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [selectedDate]);
 
   const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
  
@@ -850,6 +857,12 @@ export default function SalesStorePage() {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-36 cursor-pointer"
+                  />
                   {/* Store Filter Dropdown */}
                   <select
                     value={selectedStoreFilter}

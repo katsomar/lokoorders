@@ -14,9 +14,111 @@ class ProductionStoreStockController extends Controller
 
     public function index(Request $request)
     {
-        $stock = ProductionStoreStock::with(['product', 'productionStore'])
-            ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id))
-            ->get();
+        $date = $request->date;
+        $stockQuery = ProductionStoreStock::with(['product', 'productionStore'])
+            ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id));
+
+        if ($date && $date !== now()->toDateString()) {
+            $stock = $stockQuery->get()->map(function ($item) use ($date) {
+                // 1. Intakes
+                $intakesQuery = \App\Models\ProductionStoreIntake::where('production_store_id', $item->production_store_id)
+                    ->where('product_id', $item->product_id)
+                    ->where(function ($q) use ($item) {
+                        if ($item->batch_reference === null) {
+                            $q->whereNull('batch_reference');
+                        } else {
+                            $q->where('batch_reference', $item->batch_reference);
+                        }
+                    });
+                $intakesAfter = (float) (clone $intakesQuery)->where('intake_date', '>', $date)->sum('quantity');
+                $intakesOn = (float) (clone $intakesQuery)->where('intake_date', '=', $date)->sum('quantity');
+
+                // 2. Transfers Out (to other prod stores)
+                $transfersProdQuery = \Illuminate\Support\Facades\DB::table('production_store_transfers')
+                    ->where('from_production_store_id', $item->production_store_id)
+                    ->where('product_id', $item->product_id)
+                    ->where(function ($q) use ($item) {
+                        if ($item->batch_reference === null) {
+                            $q->whereNull('batch_reference');
+                        } else {
+                            $q->where('batch_reference', $item->batch_reference);
+                        }
+                    });
+                $transfersProdAfter = (float) (clone $transfersProdQuery)->where('transfer_date', '>', $date)->sum('quantity');
+                $transfersProdOn = (float) (clone $transfersProdQuery)->where('transfer_date', '=', $date)->sum('quantity');
+
+                // 3. Transfers In (from other prod stores)
+                $transfersInQuery = \Illuminate\Support\Facades\DB::table('production_store_transfers')
+                    ->where('to_production_store_id', $item->production_store_id)
+                    ->where('product_id', $item->product_id)
+                    ->where(function ($q) use ($item) {
+                        if ($item->batch_reference === null) {
+                            $q->whereNull('batch_reference');
+                        } else {
+                            $q->where('batch_reference', $item->batch_reference);
+                        }
+                    });
+                $transfersInAfter = (float) (clone $transfersInQuery)->where('transfer_date', '>', $date)->sum('quantity');
+                $transfersInOn = (float) (clone $transfersInQuery)->where('transfer_date', '=', $date)->sum('quantity');
+
+                // 4. Transfers to Sales Stores
+                $transfersSalesQuery = \Illuminate\Support\Facades\DB::table('store_transfers')
+                    ->where('production_store_id', $item->production_store_id)
+                    ->where('product_id', $item->product_id)
+                    ->where(function ($q) use ($item) {
+                        if ($item->batch_reference === null) {
+                            $q->whereNull('batch_reference');
+                        } else {
+                            $q->where('batch_reference', $item->batch_reference);
+                        }
+                    });
+                $transfersSalesAfter = (float) (clone $transfersSalesQuery)->where('transfer_date', '>', $date)->sum('quantity');
+                $transfersSalesOn = (float) (clone $transfersSalesQuery)->where('transfer_date', '=', $date)->sum('quantity');
+
+                // 5. Adjustments
+                $adjustmentsQuery = \Illuminate\Support\Facades\DB::table('store_adjustments')
+                    ->where('store_type', 'production')
+                    ->where('production_store_id', $item->production_store_id)
+                    ->where('product_id', $item->product_id)
+                    ->where(function ($q) use ($item) {
+                        if ($item->batch_reference === null) {
+                            $q->whereNull('batch_reference');
+                        } else {
+                            $q->where('batch_reference', $item->batch_reference);
+                        }
+                    });
+                $adjustmentsAfter = (float) (clone $adjustmentsQuery)->where('created_at', '>', $date . ' 23:59:59')->sum('quantity');
+                $adjustmentsOn = (float) (clone $adjustmentsQuery)->whereDate('created_at', '=', $date)->sum('quantity');
+
+                // Rollback closing stock
+                $liveClosing = (float) $item->closing_stock;
+                $closingStockOnD = $liveClosing - ($intakesAfter + $transfersInAfter) + ($transfersProdAfter + $transfersSalesAfter + $adjustmentsAfter);
+
+                // Daily metrics
+                $incomingOnD = $intakesOn + $transfersInOn;
+                $takenOnD = $transfersProdOn + $transfersSalesOn;
+                $damagesOnD = $adjustmentsOn;
+                $replacementsOnD = 0.00;
+
+                // Current stock before exits on date D
+                $currentStockOnD = $closingStockOnD + $takenOnD + $replacementsOnD + $damagesOnD;
+                $openingStockOnD = $currentStockOnD - $incomingOnD;
+
+                // Override properties for response
+                $item->current_quantity = $closingStockOnD;
+                $item->opening_stock = $openingStockOnD;
+                $item->incoming = $incomingOnD;
+                $item->stock_taken = $takenOnD;
+                $item->damages = $damagesOnD;
+                $item->replacements = $replacementsOnD;
+                $item->closing_stock = $closingStockOnD;
+
+                return $item;
+            });
+        } else {
+            $stock = $stockQuery->get();
+        }
+
         return $this->success($stock);
     }
 
