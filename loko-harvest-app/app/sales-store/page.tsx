@@ -209,7 +209,7 @@ export default function SalesStorePage() {
       const movementsData = movementsRes.data.data.data || [];
       const mappedMovements = movementsData.map((move: any) => ({
         id: move.id,
-        date: new Date(move.movement_date || move.created_at).toLocaleString('en-US', { 
+        date: new Date(move.created_at || move.movement_date).toLocaleString('en-US', { 
             year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
         }),
         product: move.product?.name,
@@ -1482,7 +1482,7 @@ export default function SalesStorePage() {
                     ) : interTransfers.map((t) => (
                       <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors">
                         <TableCell className="pl-6 text-xs text-gray-500 font-bold">
-                          {new Date(t.transfer_date || t.created_at).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                          {new Date(t.created_at || t.transfer_date).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                         </TableCell>
                         <TableCell className="font-bold text-sm text-brand-forest">{t.product?.name}</TableCell>
                         <TableCell className="text-xs text-gray-600 font-bold">{t.from_store?.name}</TableCell>

@@ -564,7 +564,7 @@ export default function SalesStoreActivityPage() {
                       const uom = t.product?.unit_of_measure === 'trays' ? 'Trays' : t.product?.unit_of_measure === 'kg' ? 'Kg' : 'Units';
                       
                         if (activityTab === "transfers") {
-                          const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                          const dateStr = t.created_at || t.transfer_date;
                           const fromStore = t.from_store?.name || "Main Sales Store";
                           const toStore = t.to_store?.name || "Main Sales Store";
                           const unitPrice = parseFloat(t.product?.sales_unit_price || t.product?.default_unit_price || 0);
@@ -620,7 +620,7 @@ export default function SalesStoreActivityPage() {
                             </TableRow>
                           );
                         } else {
-                          const dateStr = t.order?.order_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                          const dateStr = t.created_at || t.order?.order_date;
                           const orderNum = t.order?.order_number || "N/A";
                           const customerName = t.order?.customer?.name || "N/A";
                           const salesStoreName = t.order?.sales_store?.name || "Main Sales Store";

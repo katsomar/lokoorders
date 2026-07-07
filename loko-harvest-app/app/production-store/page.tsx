@@ -432,18 +432,38 @@ export default function ProductionStorePage() {
       });
       setStockItems(mappedStock);
 
-      const mappedIntakes = (intakeRes.data.data.data || []).map((intake: any) => ({
-        id: intake.id,
-        date: new Date(intake.intake_date || intake.created_at).toLocaleString('en-US', { 
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-        }),
-        product: intake.product?.name,
-        quantity: parseFloat(intake.quantity),
-        unit: intake.product?.unit_of_measure === 'trays' ? 'Trays' : intake.product?.unit_of_measure === 'units' ? 'Units' : 'Kg',
-        batch: intake.batch_number || intake.batch_reference || 'N/A',
-        recorded_by: intake.user?.name || 'System',
-        store_name: intake.production_store?.name || 'N/A'
-      }));
+      const groupedMap: { [key: string]: any } = {};
+
+      (intakeRes.data.data.data || []).forEach((intake: any) => {
+        const createdAtTime = new Date(intake.created_at).getTime();
+        const roundedTime = Math.round(createdAtTime / 60000) * 60000;
+        const key = `${intake.intake_date}_${intake.production_store_id}_${intake.batch_reference || ''}_${roundedTime}`;
+
+        if (!groupedMap[key]) {
+          groupedMap[key] = {
+            id: intake.id,
+            date: new Date(intake.created_at || intake.intake_date).toLocaleString('en-US', { 
+              year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+            }),
+            store_name: intake.production_store?.name || 'N/A',
+            batch: intake.batch_reference || 'N/A',
+            recorded_by: intake.user?.name || 'System',
+            raw_created_at: intake.created_at,
+            items: []
+          };
+        }
+
+        groupedMap[key].items.push({
+          product: intake.product?.name || 'Unknown Product',
+          quantity: parseFloat(intake.quantity),
+          unit: intake.product?.unit_of_measure === 'trays' ? 'Trays' : intake.product?.unit_of_measure === 'units' ? 'Units' : 'Kg'
+        });
+      });
+
+      const mappedIntakes = Object.values(groupedMap).sort((a: any, b: any) => {
+        return new Date(b.raw_created_at).getTime() - new Date(a.raw_created_at).getTime();
+      });
+
       setIntakeLogs(mappedIntakes);
 
       setProductionStores(storesRes.data.data || []);
@@ -1228,8 +1248,8 @@ export default function ProductionStorePage() {
                 <div className="divide-y divide-brand-sage/30 max-h-[500px] overflow-y-auto">
                   {intakeLogs.length === 0 ? (
                     <div className="p-6 text-center text-gray-400 text-xs">No recent intake logs available.</div>
-                  ) : intakeLogs.map((log) => (
-                    <div key={log.id} className="p-4 hover:bg-brand-sage/5 transition-colors flex flex-col gap-1.5">
+                  ) : intakeLogs.map((log: any) => (
+                    <div key={log.id} className="p-4 hover:bg-brand-sage/5 transition-colors flex flex-col gap-2">
                       <div className="flex justify-between items-start">
                         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{log.date}</span>
                         <Badge className="border-none text-[9px] font-bold bg-green-50 text-green-600">
@@ -1237,16 +1257,24 @@ export default function ProductionStorePage() {
                         </Badge>
                       </div>
                       
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-brand-forest">{log.product}</span>
-                        <span className="font-black text-xs text-green-600">
-                          +{log.quantity.toLocaleString()} {log.unit.toLowerCase()}
-                        </span>
+                      {/* Grouped Products */}
+                      <div className="space-y-1 bg-gray-50/50 p-2 rounded-lg border border-brand-sage/10">
+                        {log.items.map((item: any, idx: number) => (
+                          <div key={idx} className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-brand-forest">{item.product}</span>
+                            <span className="font-black text-xs text-green-600">
+                              +{item.quantity.toLocaleString()} {item.unit.toLowerCase()}
+                            </span>
+                          </div>
+                        ))}
                       </div>
 
                       <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
                         <span>Store: <strong className="text-brand-forest">{log.store_name}</strong></span>
                         <span className="font-mono">Batch: {log.batch}</span>
+                      </div>
+                      <div className="text-[9px] text-gray-400 font-medium">
+                        Logged by: <span className="font-semibold text-gray-650">{log.recorded_by}</span>
                       </div>
                     </div>
                   ))}
@@ -1382,7 +1410,7 @@ export default function ProductionStorePage() {
                     ) : interTransfers.map((t) => (
                       <TableRow key={t.id} className="hover:bg-brand-sage/5 transition-colors">
                         <TableCell className="pl-6 text-xs text-gray-500 font-bold">
-                          {new Date(t.transfer_date || t.created_at).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                          {new Date(t.created_at || t.transfer_date).toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                         </TableCell>
                         <TableCell className="font-bold text-sm text-brand-forest">{t.product?.name}</TableCell>
                         <TableCell className="text-xs text-gray-600 font-bold">{t.from_store?.name}</TableCell>

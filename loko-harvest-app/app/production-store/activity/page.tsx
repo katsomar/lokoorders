@@ -464,7 +464,7 @@ export default function ProductionStoreActivityPage() {
                     </TableRow>
                   ) : (
                     transfers.map((t) => {
-                      const dateStr = t.transfer_date || format(new Date(t.created_at), "yyyy-MM-dd");
+                      const dateStr = t.created_at || t.transfer_date;
                       const prodName = t.product?.name || "Unknown Product";
                       const prodCode = t.product?.code || "N/A";
                       const fromStore = t.production_store?.name || "Main Production Store";
