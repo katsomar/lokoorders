@@ -378,6 +378,15 @@ export default function ProductionStorePage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
+      const todayStr = (() => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      })();
+      const isHistorical = selectedDate !== todayStr;
+
       const [stockRes, intakeRes, storesRes, interRes, productsRes, salesStoresRes] = await Promise.all([
         api.get('/production-stock', { params: { date: selectedDate } }),
         api.get('/production-intakes'),
@@ -428,11 +437,11 @@ export default function ProductionStorePage() {
           batch_reference: item.batch_reference || 'N/A',
           production_store_id: item.production_store_id,
           production_store_name: item.production_store?.name || 'N/A',
-          incoming: item.incoming !== undefined ? parseFloat(item.incoming) : safeIncoming,
-          opening_stock: item.opening_stock !== undefined ? parseFloat(item.opening_stock) : Math.max(0, (isNaN(parseFloat(item.opening_stock)) ? 0 : parseFloat(item.opening_stock)) - safeIncoming),
-          stock_taken: item.stock_taken !== undefined ? parseFloat(item.stock_taken) : (isNaN(parseFloat(item.stock_taken)) ? 0 : parseFloat(item.stock_taken)),
-          replacements: item.replacements !== undefined ? parseFloat(item.replacements) : (isNaN(parseFloat(item.replacements)) ? 0 : parseFloat(item.replacements)),
-          closing_stock: item.closing_stock !== undefined ? parseFloat(item.closing_stock) : (isNaN(parseFloat(item.closing_stock)) ? 0 : parseFloat(item.closing_stock)),
+          incoming: parseFloat(item.incoming || 0),
+          opening_stock: parseFloat(item.opening_stock || 0),
+          stock_taken: parseFloat(item.stock_taken || 0),
+          replacements: parseFloat(item.replacements || 0),
+          closing_stock: parseFloat(item.closing_stock || 0),
           unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
           egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
         };
