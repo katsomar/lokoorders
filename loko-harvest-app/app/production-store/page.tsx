@@ -50,12 +50,116 @@ interface ProductionStockItem {
   batch_reference?: string;
   production_store_id: string;
   production_store_name: string;
+  incoming: number;
   opening_stock: number;
   stock_taken: number;
   replacements: number;
   closing_stock: number;
   unit_price: number;
+  egg_unit_price?: number;
 }
+
+const formatQuantityGlobal = (qty: number, unit: string, isTotal: boolean = false) => {
+  const val = isNaN(qty) ? 0 : qty;
+  if (unit.toLowerCase() === "trays") {
+    if (isTotal) {
+      return `${val.toFixed(2)} Trays`;
+    } else {
+      const trays = Math.floor(val);
+      const decimal = val - trays;
+      const eggs = Math.round(decimal * 30);
+      return `${trays} Trays & ${eggs} Eggs`;
+    }
+  }
+  return `${val.toLocaleString()} ${unit}`;
+};
+
+const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" | "incoming" | "current" | "taken" | "replacements" | "closing" | "price"; unit: string }) => {
+  if (!group.isEgg) {
+    const item = group.other;
+    if (field === "price") {
+      return <span className="font-bold text-xs text-gray-500 whitespace-nowrap">UGX {item.price.toLocaleString()}</span>;
+    }
+    return <span className="font-bold text-xs text-gray-750 whitespace-nowrap">{formatQuantityGlobal(item[field], unit)}</span>;
+  }
+
+  const categories = [
+    { label: "Good", key: "good", colorClass: "text-green-700 bg-green-50/80 border border-green-200/50" },
+    { label: "D1", key: "d1", colorClass: "text-amber-700 bg-amber-50/80 border border-amber-200/50" },
+    { label: "D2", key: "d2", colorClass: "text-orange-700 bg-orange-50/80 border border-orange-200/50" },
+    { label: "D3", key: "d3", colorClass: "text-gray-700 bg-gray-50/80 border border-gray-200" },
+    { label: "Shell", key: "shell", colorClass: "text-blue-700 bg-blue-50/80 border border-blue-200/50" }
+  ];
+
+  return (
+    <div className="space-y-1.5 py-1.5 text-left min-w-[145px] whitespace-nowrap">
+      {categories.map((cat) => {
+        const catData = group[cat.key];
+        const val = catData[field];
+        if (field !== "price" && val === 0) {
+          return (
+            <div key={cat.key} className="flex justify-between items-center text-[10px] font-semibold text-gray-300 whitespace-nowrap">
+              <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
+              <span className="font-bold whitespace-nowrap">0</span>
+            </div>
+          );
+        }
+
+        return (
+          <div key={cat.key} className="flex justify-between items-center gap-3 text-[10px] whitespace-nowrap">
+            <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
+            <span className="font-extrabold text-gray-700 whitespace-nowrap">
+              {field === "price" 
+                ? `UGX ${val.toLocaleString()}` 
+                : formatQuantityGlobal(val, unit, false)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const RenderActions = ({ group, onAdjust, onEdit, onDelete }: { group: any; onAdjust: any; onEdit: any; onDelete: any }) => {
+  if (!group.isEgg) {
+    const item = group.other.item;
+    if (!item) return null;
+    return (
+      <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+        <button type="button" onClick={() => onAdjust(item)} className="p-1.5 text-gray-500 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border-none bg-transparent" title="Report Damage"><AlertTriangle size={14} /></button>
+        <button type="button" onClick={() => onEdit(item)} className="p-1.5 text-gray-500 hover:text-brand-forest hover:bg-gray-100 rounded-lg transition-colors cursor-pointer border-none bg-transparent" title="Edit Stock"><Edit2 size={14} /></button>
+        <button type="button" onClick={() => onDelete(item)} className="p-1.5 text-gray-500 hover:text-red-605 hover:bg-red-50 rounded-lg transition-colors cursor-pointer border-none bg-transparent" title="Delete Record"><Trash2 size={14} /></button>
+      </div>
+    );
+  }
+
+  const categories = [
+    { label: "Good", key: "good", colorClass: "text-green-700 bg-green-50/80 border border-green-200/50" },
+    { label: "D1", key: "d1", colorClass: "text-amber-700 bg-amber-50/80 border border-amber-200/50" },
+    { label: "D2", key: "d2", colorClass: "text-orange-700 bg-orange-50/80 border border-orange-200/50" },
+    { label: "D3", key: "d3", colorClass: "text-gray-700 bg-gray-50/80 border border-gray-200" },
+    { label: "Shell", key: "shell", colorClass: "text-blue-700 bg-blue-50/80 border border-blue-200/50" }
+  ];
+
+  return (
+    <div className="space-y-1.5 py-1 text-left min-w-[130px] whitespace-nowrap">
+      {categories.map((cat) => {
+        const item = group[cat.key].item;
+        if (!item) return null;
+        return (
+          <div key={cat.key} className="flex justify-between items-center text-[10px] whitespace-nowrap">
+            <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
+            <div className="flex items-center gap-1.5 whitespace-nowrap">
+              <button type="button" onClick={() => onAdjust(item)} className="p-0.5 text-gray-400 hover:text-red-600 rounded transition-colors cursor-pointer border-none bg-transparent" title="Report Damage"><AlertTriangle size={11} /></button>
+              <button type="button" onClick={() => onEdit(item)} className="p-0.5 text-gray-400 hover:text-brand-forest rounded transition-colors cursor-pointer border-none bg-transparent" title="Edit Stock"><Edit2 size={11} /></button>
+              <button type="button" onClick={() => onDelete(item)} className="p-0.5 text-gray-400 hover:text-red-605 rounded transition-colors cursor-pointer border-none bg-transparent" title="Delete Record"><Trash2 size={11} /></button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 export default function ProductionStorePage() {
   const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
@@ -277,6 +381,7 @@ export default function ProductionStorePage() {
       ]);
       
       const stockData = stockRes.data.data || [];
+      const intakesList = intakeRes.data?.data?.data || intakeRes.data?.data || [];
       const mappedStock: ProductionStockItem[] = stockData.map((item: any) => {
         let cat = "damaged";
         if (item.product.code.includes("WHT")) cat = "white";
@@ -289,6 +394,19 @@ export default function ProductionStorePage() {
         else if (cat === "cream") cap = 3000;
         else if (cat === "brown") cap = 2000;
         else if (cat === "damaged") cap = 10000;
+
+        const incoming = intakesList
+          .filter((log: any) => 
+            log.product_id === item.product_id && 
+            log.production_store_id === item.production_store_id &&
+            (log.batch_number === item.batch_reference || log.batch_reference === item.batch_reference)
+          )
+          .reduce((sum: number, log: any) => {
+            const val = parseFloat(log.quantity);
+            return sum + (isNaN(val) ? 0 : val);
+          }, 0);
+
+        const safeIncoming = isNaN(incoming) ? 0 : incoming;
 
         return {
           id: item.id,
@@ -303,10 +421,11 @@ export default function ProductionStorePage() {
           batch_reference: item.batch_reference || 'N/A',
           production_store_id: item.production_store_id,
           production_store_name: item.production_store?.name || 'N/A',
-          opening_stock: parseFloat(item.opening_stock || 0),
-          stock_taken: parseFloat(item.stock_taken || 0),
-          replacements: parseFloat(item.replacements || 0),
-          closing_stock: parseFloat(item.closing_stock || 0),
+          incoming: safeIncoming,
+          opening_stock: Math.max(0, (isNaN(parseFloat(item.opening_stock)) ? 0 : parseFloat(item.opening_stock)) - safeIncoming),
+          stock_taken: isNaN(parseFloat(item.stock_taken)) ? 0 : parseFloat(item.stock_taken),
+          replacements: isNaN(parseFloat(item.replacements)) ? 0 : parseFloat(item.replacements),
+          closing_stock: isNaN(parseFloat(item.closing_stock)) ? 0 : parseFloat(item.closing_stock),
           unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
           egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
         };
@@ -451,20 +570,14 @@ export default function ProductionStorePage() {
     return getFilteredStock().reduce((acc, item) => acc + getStockItemValuation(item), 0);
   };
 
-  const formatQuantity = (qty: number, unit: string) => {
-    if (unit.toLowerCase() === "trays") {
-      const trays = Math.floor(qty);
-      const decimal = qty - trays;
-      const eggs = Math.round(decimal * 30);
-      return `${trays} Trays & ${eggs} Eggs`;
-    }
-    return `${qty.toLocaleString()} ${unit}`;
+  const formatQuantity = (qty: number, unit: string, isBaseEgg: boolean = false) => {
+    return formatQuantityGlobal(qty, unit, isBaseEgg);
   };
 
   const formatTotalQuantity = (qty: number) => {
     const allTrays = getFilteredStock().every(item => item.unit.toLowerCase() === "trays");
     if (allTrays) {
-      return formatQuantity(qty, "trays");
+      return formatQuantity(qty, "trays", true);
     }
     return qty.toLocaleString();
   };
@@ -483,6 +596,113 @@ export default function ProductionStorePage() {
       const matchesStore = selectedStoreFilter === "all" || item.production_store_id === selectedStoreFilter;
       return matchesSearch && matchesBatch && matchesStore;
     });
+  };
+
+  const getGroupedStock = () => {
+    const filtered = getFilteredStock();
+    const groups: { [key: string]: any } = {};
+
+    filtered.forEach(item => {
+      let baseCode = item.code;
+      let baseName = item.product;
+      let type: "good" | "d1" | "d2" | "d3" | "shell" | "other" = "other";
+      
+      if (item.code.startsWith("EGG-WHT")) {
+        baseCode = "EGG-WHT";
+        baseName = "White Eggs";
+        if (item.code.endsWith("-D1")) type = "d1";
+        else if (item.code.endsWith("-D2")) type = "d2";
+        else if (item.code.endsWith("-D3")) type = "d3";
+        else if (item.code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      } else if (item.code.startsWith("EGG-BRN")) {
+        baseCode = "EGG-BRN";
+        baseName = "Brown Eggs";
+        if (item.code.endsWith("-D1")) type = "d1";
+        else if (item.code.endsWith("-D2")) type = "d2";
+        else if (item.code.endsWith("-D3")) type = "d3";
+        else if (item.code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      } else if (item.code.startsWith("EGG-CRM")) {
+        baseCode = "EGG-CRM";
+        baseName = "Cream Eggs";
+        if (item.code.endsWith("-D1")) type = "d1";
+        else if (item.code.endsWith("-D2")) type = "d2";
+        else if (item.code.endsWith("-D3")) type = "d3";
+        else if (item.code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      }
+
+      const key = `${item.production_store_id}_${item.batch_reference}_${baseCode}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          production_store_id: item.production_store_id,
+          production_store_name: item.production_store_name,
+          batch_reference: item.batch_reference,
+          product: baseName,
+          code: baseCode,
+          unit: item.unit,
+          isEgg: baseCode.startsWith("EGG-"),
+          good: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d1: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d2: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d3: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          shell: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          other: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+        };
+      }
+
+      const subData = {
+        opening: item.opening_stock,
+        incoming: item.incoming,
+        current: item.opening_stock + item.incoming,
+        taken: item.stock_taken,
+        replacements: item.replacements,
+        closing: item.opening_stock + item.incoming - item.stock_taken - item.replacements,
+        price: item.unit_price,
+        egg_price: item.egg_unit_price,
+        item: item
+      };
+
+      if (type === "good") groups[key].good = subData;
+      else if (type === "d1") groups[key].d1 = subData;
+      else if (type === "d2") groups[key].d2 = subData;
+      else if (type === "d3") groups[key].d3 = subData;
+      else if (type === "shell") groups[key].shell = subData;
+      else groups[key].other = subData;
+    });
+
+    return Object.values(groups);
+  };
+
+  const getGroupWorthTaken = (group: any) => {
+    let sum = 0;
+    if (group.isEgg) {
+      if (group.good.item) sum += getStockItemValuationTaken(group.good.item);
+      if (group.d1.item) sum += getStockItemValuationTaken(group.d1.item);
+      if (group.d2.item) sum += getStockItemValuationTaken(group.d2.item);
+      if (group.d3.item) sum += getStockItemValuationTaken(group.d3.item);
+      if (group.shell.item) sum += getStockItemValuationTaken(group.shell.item);
+    } else {
+      if (group.other.item) sum += getStockItemValuationTaken(group.other.item);
+    }
+    return sum;
+  };
+
+  const getGroupWorthClosing = (group: any) => {
+    let sum = 0;
+    if (group.isEgg) {
+      if (group.good.item) sum += getStockItemValuation(group.good.item);
+      if (group.d1.item) sum += getStockItemValuation(group.d1.item);
+      if (group.d2.item) sum += getStockItemValuation(group.d2.item);
+      if (group.d3.item) sum += getStockItemValuation(group.d3.item);
+      if (group.shell.item) sum += getStockItemValuation(group.shell.item);
+    } else {
+      if (group.other.item) sum += getStockItemValuation(group.other.item);
+    }
+    return sum;
   };
 
   // Get active batches for a selected product at a source store
@@ -665,7 +885,7 @@ export default function ProductionStorePage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="space-y-6 max-w-[1550px] mx-auto px-4 sm:px-6">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -735,10 +955,13 @@ export default function ProductionStorePage() {
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Bulk Egg Trays</p>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
-                {getFilteredStock()
-                  .filter(item => item.unit === "Trays")
-                  .reduce((acc, item) => acc + item.closing_stock, 0)
-                  .toLocaleString()} Trays
+                {formatQuantityGlobal(
+                  getFilteredStock()
+                    .filter(item => item.unit === "Trays")
+                    .reduce((acc, item) => acc + item.closing_stock, 0),
+                  "trays",
+                  true
+                )}
               </h3>
               <p className="text-[10px] text-gray-400 font-bold mt-4 flex items-center gap-1">
                 <CheckCircle size={12} className="text-green-500" />
@@ -751,14 +974,16 @@ export default function ProductionStorePage() {
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Loose Damaged Eggs</p>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
-                {getFilteredStock()
-                  .filter(item => item.code.includes("EGG-DMG"))
-                  .reduce((acc, item) => acc + item.closing_stock, 0)
-                  .toLocaleString()} Eggs
+                {formatQuantityGlobal(
+                  getFilteredStock()
+                    .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
+                    .reduce((acc, item) => acc + item.closing_stock, 0),
+                  "trays"
+                )}
               </h3>
               <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1">
                 Worth UGX {(getFilteredStock()
-                  .filter(item => item.code.includes("EGG-DMG"))
+                  .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
                   .reduce((acc, item) => acc + getStockItemValuation(item), 0)).toLocaleString()}
               </p>
             </CardContent>
@@ -816,10 +1041,10 @@ export default function ProductionStorePage() {
             <div className="w-10 h-10 border-4 border-brand-forest border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : activeTab === "inventory" ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             
             {/* Live Inventory Breakdown Table */}
-            <Card className="lg:col-span-2 border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+            <Card className="lg:col-span-3 border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
               <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                   <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
@@ -876,6 +1101,8 @@ export default function ProductionStorePage() {
                       <TableHead className="text-xs font-bold text-brand-forest">Batch No</TableHead>
                       <TableHead className="text-xs font-bold text-brand-forest">Bulk Product</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Opening Stock</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest">Incoming</TableHead>
+                      <TableHead className="text-right text-xs font-bold text-brand-forest bg-gray-50/50">Current Stock</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Stock Taken</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Replacements</TableHead>
                       <TableHead className="text-right text-xs font-bold text-brand-forest">Closing Stock</TableHead>
@@ -886,75 +1113,64 @@ export default function ProductionStorePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {getFilteredStock().length === 0 ? (
+                    {getGroupedStock().length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-10 text-gray-400 font-medium">
+                        <TableCell colSpan={13} className="text-center py-10 text-gray-400 font-medium">
                           No stock records found matching filters.
                         </TableCell>
                       </TableRow>
                     ) : (
                       <>
-                        {getFilteredStock().map((item) => {
-                          const worthTaken = getStockItemValuationTaken(item);
-                          const worthClosing = getStockItemValuation(item);
+                        {getGroupedStock().map((group: any) => {
+                          const worthTaken = getGroupWorthTaken(group);
+                          const worthClosing = getGroupWorthClosing(group);
                           return (
-                            <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors">
-                              <TableCell className="pl-6 font-bold text-brand-forest text-xs">
-                                {item.production_store_name}
+                            <TableRow key={group.key} className="hover:bg-brand-sage/5 transition-colors border-b border-brand-sage/20 align-top">
+                              <TableCell className="pl-6 font-bold text-brand-forest text-xs pt-4">
+                                {group.production_store_name}
                               </TableCell>
-                              <TableCell className="font-mono text-xs text-gray-700 font-bold">
+                              <TableCell className="font-mono text-xs text-gray-700 font-bold pt-4">
                                 <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
-                                  {item.batch_reference || "N/A"}
+                                  {group.batch_reference || "N/A"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="font-bold text-brand-forest text-sm">
-                                {item.product}
+                              <TableCell className="font-bold text-brand-forest text-sm pt-4">
+                                {group.product}
                               </TableCell>
-                              <TableCell className="text-right font-semibold text-brand-forest text-xs">
-                                {formatQuantity(item.opening_stock, item.unit)}
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="opening" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-semibold text-amber-600 text-xs">
-                                {formatQuantity(item.stock_taken, item.unit)}
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="incoming" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-semibold text-blue-600 text-xs">
-                                {formatQuantity(item.replacements, item.unit)}
+                              <TableCell className="text-right bg-gray-50/50">
+                                <RenderBreakdown group={group} field="current" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-black text-brand-forest text-xs">
-                                {formatQuantity(item.closing_stock, item.unit)}
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="taken" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-bold text-xs text-gray-550">
-                                UGX {item.unit_price.toLocaleString()}
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="replacements" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-extrabold text-amber-700 text-xs">
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="closing" unit={group.unit} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="price" unit={group.unit} />
+                              </TableCell>
+                              <TableCell className="text-right font-extrabold text-amber-700 text-xs pt-4">
                                 UGX {worthTaken.toLocaleString()}
                               </TableCell>
-                              <TableCell className="text-right font-black text-brand-forest font-heading text-xs">
+                              <TableCell className="text-right font-black text-brand-forest font-heading text-xs pt-4">
                                 UGX {worthClosing.toLocaleString()}
                               </TableCell>
-                              <TableCell className="text-center pr-6">
-                                <div className="flex items-center justify-center gap-2">
-                                  <button
-                                    onClick={() => handleStartAdjustment(item)}
-                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Report Damage/Loss"
-                                  >
-                                    <AlertTriangle size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleStartEdit(item)}
-                                    className="p-1.5 text-gray-500 hover:text-brand-forest hover:bg-gray-100 rounded-lg transition-colors"
-                                    title="Edit Stock"
-                                  >
-                                    <Edit2 size={14} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteStock(item)}
-                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                    title="Delete Record"
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
+                              <TableCell className="text-center pr-6 pt-3">
+                                <RenderActions 
+                                  group={group} 
+                                  onAdjust={handleStartAdjustment} 
+                                  onEdit={handleStartEdit} 
+                                  onDelete={handleDeleteStock} 
+                                />
                               </TableCell>
                             </TableRow>
                           );
@@ -967,6 +1183,12 @@ export default function ProductionStorePage() {
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-black">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0))}
+                          </TableCell>
+                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.incoming, 0))}
+                          </TableCell>
+                          <TableCell className="text-right text-brand-forest text-xs font-black bg-gray-50/50">
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock + item.incoming, 0))}
                           </TableCell>
                           <TableCell className="text-right text-amber-600 text-xs font-black">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.stock_taken, 0))}

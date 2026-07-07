@@ -23,38 +23,106 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import api from "@/lib/api";
 import { useAuth } from "@/store/useAuth";
 
+const optionalNumeric = z.any()
+  .transform((val): number => {
+    if (val === "" || val === undefined || val === null || val === "NaN" || (typeof val === "number" && isNaN(val))) {
+      return 0;
+    }
+    const parsed = Number(val);
+    return isNaN(parsed) ? 0 : parsed;
+  });
+
 const intakeSchema = z.object({
   production_store_id: z.string().min(1, "Production store is required"),
   product_id: z.string().min(1, "Product is required"),
-  quantity: z.number().min(0).optional(),
+  quantity: z.any()
+    .transform((val): number | undefined => {
+      if (val === "" || val === undefined || val === null || val === "NaN" || (typeof val === "number" && isNaN(val))) {
+        return undefined;
+      }
+      const parsed = Number(val);
+      return isNaN(parsed) ? undefined : parsed;
+    }),
   intake_date: z.string(),
-  valuation_price: z.number().min(0, "Valuation price must be >= 0"),
+  valuation_price: optionalNumeric,
   batch_number: z.string().optional(),
   notes: z.string().optional(),
-  good_stacks: z.number().min(0).optional(),
-  good_extra_trays: z.number().min(0).optional(),
-  good_extra_eggs: z.number().min(0).optional(),
-  d1_trays: z.number().min(0).optional(),
-  d1_extra_eggs: z.number().min(0).optional(),
-  d2_trays: z.number().min(0).optional(),
-  d2_extra_eggs: z.number().min(0).optional(),
-  d3_trays: z.number().min(0).optional(),
-  d3_extra_eggs: z.number().min(0).optional(),
-  shell_trays: z.number().min(0).optional(),
-  shell_extra_eggs: z.number().min(0).optional(),
-  good_valuation_price: z.number().min(0).optional(),
-  good_egg_valuation_price: z.number().min(0).optional(),
-  d1_valuation_price: z.number().min(0).optional(),
-  d1_egg_valuation_price: z.number().min(0).optional(),
-  d2_valuation_price: z.number().min(0).optional(),
-  d2_egg_valuation_price: z.number().min(0).optional(),
-  d3_valuation_price: z.number().min(0).optional(),
-  d3_egg_valuation_price: z.number().min(0).optional(),
-  shell_valuation_price: z.number().min(0).optional(),
-  shell_egg_valuation_price: z.number().min(0).optional(),
+  good_stacks: optionalNumeric,
+  good_extra_trays: optionalNumeric,
+  good_extra_eggs: optionalNumeric,
+  d1_trays: optionalNumeric,
+  d1_extra_eggs: optionalNumeric,
+  d2_trays: optionalNumeric,
+  d2_extra_eggs: optionalNumeric,
+  d3_trays: optionalNumeric,
+  d3_extra_eggs: optionalNumeric,
+  shell_trays: optionalNumeric,
+  shell_extra_eggs: optionalNumeric,
+  good_valuation_price: optionalNumeric,
+  good_egg_valuation_price: optionalNumeric,
+  d1_valuation_price: optionalNumeric,
+  d1_egg_valuation_price: optionalNumeric,
+  d2_valuation_price: optionalNumeric,
+  d2_egg_valuation_price: optionalNumeric,
+  d3_valuation_price: optionalNumeric,
+  d3_egg_valuation_price: optionalNumeric,
+  shell_valuation_price: optionalNumeric,
+  shell_egg_valuation_price: optionalNumeric,
 });
 
-type IntakeFormValues = z.infer<typeof intakeSchema>;
+type IntakeFormValues = {
+  production_store_id: string;
+  product_id: string;
+  quantity?: number;
+  intake_date: string;
+  valuation_price: number;
+  batch_number?: string;
+  notes?: string;
+  good_stacks?: number;
+  good_extra_trays?: number;
+  good_extra_eggs?: number;
+  d1_trays?: number;
+  d1_extra_eggs?: number;
+  d2_trays?: number;
+  d2_extra_eggs?: number;
+  d3_trays?: number;
+  d3_extra_eggs?: number;
+  shell_trays?: number;
+  shell_extra_eggs?: number;
+  good_valuation_price?: number;
+  good_egg_valuation_price?: number;
+  d1_valuation_price?: number;
+  d1_egg_valuation_price?: number;
+  d2_valuation_price?: number;
+  d2_egg_valuation_price?: number;
+  d3_valuation_price?: number;
+  d3_egg_valuation_price?: number;
+  shell_valuation_price?: number;
+  shell_egg_valuation_price?: number;
+};
+
+const formatQuantityGlobal = (qty: number, unit: string, isBaseEgg: boolean = false) => {
+  const val = isNaN(qty) ? 0 : qty;
+  if (unit.toLowerCase() === "trays") {
+    if (isBaseEgg) {
+      const stacks = Math.floor(val / 30);
+      const trays = Math.floor(val % 30);
+      const eggs = Math.round((val - Math.floor(val)) * 30);
+      
+      const parts = [];
+      if (stacks > 0) parts.push(`${stacks} Stacks`);
+      if (trays > 0 || (stacks === 0 && eggs === 0)) parts.push(`${trays} Trays`);
+      if (eggs > 0) parts.push(`${eggs} Eggs`);
+      return parts.join(", ");
+    } else {
+      const trays = Math.floor(val);
+      const decimal = val - trays;
+      const eggs = Math.round(decimal * 30);
+      return `${trays} Trays & ${eggs} Eggs`;
+    }
+  }
+  return `${val.toLocaleString()} ${unit}`;
+};
 
 export default function ProductionIntakePage() {
   const router = useRouter();
@@ -88,7 +156,7 @@ export default function ProductionIntakePage() {
     setValue,
     formState: { errors },
   } = useForm<IntakeFormValues>({
-    resolver: zodResolver(intakeSchema),
+    resolver: zodResolver(intakeSchema as any),
     defaultValues: {
       intake_date: new Date().toISOString().split("T")[0],
       valuation_price: 0,
@@ -144,12 +212,55 @@ export default function ProductionIntakePage() {
   const watchShellEggValuationPrice = watch("shell_egg_valuation_price") || 0;
   
   const lastProductIdRef = React.useRef("");
+  const [existingBatches, setExistingBatches] = useState<string[]>([]);
+  const [batchSource, setBatchSource] = useState<'existing' | 'new'>('new');
+  const watchStoreId = watch("production_store_id");
 
   useEffect(() => {
     if (productionStores.length > 0) {
       setValue("production_store_id", productionStores[0].id);
     }
   }, [productionStores, setValue]);
+
+  useEffect(() => {
+    if (!watchStoreId) return;
+    const fetchStoreStocks = async () => {
+      try {
+        const res = await api.get(`/production-stock?production_store_id=${watchStoreId}`);
+        const stocks = res.data.data || [];
+        const batches: string[] = Array.from(
+          new Set(
+            stocks
+              .map((s: any) => s.batch_reference)
+              .filter((b: any) => b && b.trim() !== "")
+          )
+        ) as string[];
+        setExistingBatches(batches);
+      } catch (err) {
+        console.error("Failed to fetch store stocks for batch numbers", err);
+      }
+    };
+    fetchStoreStocks();
+  }, [watchStoreId]);
+
+  useEffect(() => {
+    if (existingBatches.length > 0) {
+      setBatchSource('existing');
+      setValue("batch_number", existingBatches[0]);
+    } else {
+      setBatchSource('new');
+      setValue("batch_number", "");
+    }
+  }, [existingBatches, setValue]);
+
+  const handleBatchSourceChange = (source: 'existing' | 'new') => {
+    setBatchSource(source);
+    if (source === 'existing' && existingBatches.length > 0) {
+      setValue("batch_number", existingBatches[0]);
+    } else {
+      setValue("batch_number", "");
+    }
+  };
 
   const allowedIntakeCodes = ["EGG-WHT", "EGG-BRN", "EGG-CRM", "POU-DRS", "POU-LVE", "BY-MNR"];
   const filteredProducts = products.filter((p) => allowedIntakeCodes.includes(p.code));
@@ -283,7 +394,7 @@ export default function ProductionIntakePage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-2 space-y-6">
+          <form onSubmit={handleSubmit(onSubmit, (errors) => console.error("Validation Errors:", errors))} className="lg:col-span-2 space-y-6">
             <Card className="border-none shadow-xl rounded-2xl overflow-hidden">
               <CardHeader className="bg-brand-sage/20 border-b border-brand-sage flex flex-row items-center gap-3 py-5 px-6">
                  <ArrowDownToLine className="text-brand-forest" size={24} />
@@ -474,8 +585,58 @@ export default function ProductionIntakePage() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Input label="Batch Number" placeholder="e.g. B-0516-A" {...register("batch_number")} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                  {existingBatches.length > 0 ? (
+                    <div className="w-full space-y-1.5">
+                      <label className="text-sm font-medium text-gray-700 font-body block">
+                        Batch Number <span className="text-xs text-gray-400 font-normal">(Select existing or enter new)</span>
+                      </label>
+                      <div className="flex rounded-lg bg-gray-100 p-0.5 w-full mb-1">
+                        <button
+                          type="button"
+                          onClick={() => handleBatchSourceChange('existing')}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all border-none cursor-pointer ${
+                            batchSource === 'existing'
+                              ? "bg-white text-brand-forest shadow-sm"
+                              : "text-gray-500 hover:text-gray-700 bg-transparent"
+                          }`}
+                        >
+                          Choose Existing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleBatchSourceChange('new')}
+                          className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-all border-none cursor-pointer ${
+                            batchSource === 'new'
+                              ? "bg-white text-brand-forest shadow-sm"
+                              : "text-gray-500 hover:text-gray-700 bg-transparent"
+                          }`}
+                        >
+                          Create New
+                        </button>
+                      </div>
+                      {batchSource === 'existing' ? (
+                        <Select
+                          options={existingBatches.map((b) => ({ label: b, value: b }))}
+                          {...register("batch_number")}
+                          error={errors.batch_number?.message}
+                        />
+                      ) : (
+                        <Input
+                          placeholder="e.g. B-0516-A"
+                          {...register("batch_number")}
+                          error={errors.batch_number?.message}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    <Input
+                      label="Batch Number"
+                      placeholder="e.g. B-0516-A"
+                      {...register("batch_number")}
+                      error={errors.batch_number?.message}
+                    />
+                  )}
                   <Input label="Notes / Observations" placeholder="Any quality notes or specific details..." {...register("notes")} />
                 </div>
 
@@ -510,7 +671,7 @@ export default function ProductionIntakePage() {
                   <div className="flex justify-between items-center">
                     <span className="text-white/60">Quantity:</span>
                     <span className="font-bold text-white">
-                      {isEggProduct ? `${calculatedQty.toFixed(2)} Trays` : `${calculatedQty.toLocaleString()} ${selectedProduct?.unit_of_measure || ""}`}
+                      {isEggProduct ? formatQuantityGlobal(calculatedQty, "trays", true) : `${calculatedQty.toLocaleString()} ${selectedProduct?.unit_of_measure || ""}`}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -528,29 +689,29 @@ export default function ProductionIntakePage() {
                 {isEggProduct && (
                   <div className="border-t border-white/10 pt-4 space-y-2.5 text-xs font-body">
                     <div className="flex justify-between items-center text-brand-yellow font-black">
-                      <span>Total Intake Trays:</span>
-                      <span>{calculated.total.toFixed(2)} Trays</span>
+                      <span>Total Intake:</span>
+                      <span>{formatQuantityGlobal(calculated.total, "trays", true)}</span>
                     </div>
                     <div className="pl-2 space-y-1 text-[11px] text-white/80">
                       <div className="flex justify-between">
-                        <span>- Good Trays:</span>
-                        <span>{calculated.good.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchGoodValuationPrice.toLocaleString()}/T)</span></span>
+                        <span>- Good:</span>
+                        <span>{formatQuantityGlobal(calculated.good, "trays", true)} <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchGoodValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Class 1 Damages:</span>
-                        <span>{calculated.d1.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD1ValuationPrice.toLocaleString()}/T)</span></span>
+                        <span>{formatQuantityGlobal(calculated.d1, "trays", false)} <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD1ValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Class 2 Damages:</span>
-                        <span>{calculated.d2.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD2ValuationPrice.toLocaleString()}/T)</span></span>
+                        <span>{formatQuantityGlobal(calculated.d2, "trays", false)} <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchD2ValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                       <div className="flex justify-between text-red-300">
                         <span>- Class 3 Damages (Waste):</span>
-                        <span>{calculated.d3.toFixed(2)} Trays <span className="text-[10px] text-red-400 font-mono">(UGX 0/T)</span></span>
+                        <span>{formatQuantityGlobal(calculated.d3, "trays", false)} <span className="text-[10px] text-red-400 font-mono">(UGX 0/T)</span></span>
                       </div>
                       <div className="flex justify-between">
                         <span>- Shell Eggs:</span>
-                        <span>{calculated.shell.toFixed(2)} Trays <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchShellValuationPrice.toLocaleString()}/T)</span></span>
+                        <span>{formatQuantityGlobal(calculated.shell, "trays", false)} <span className="text-[10px] text-brand-yellow font-mono">(UGX {watchShellValuationPrice.toLocaleString()}/T)</span></span>
                       </div>
                     </div>
                   </div>

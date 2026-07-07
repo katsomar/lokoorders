@@ -54,7 +54,7 @@ class ProductionStoreIntakeController extends Controller
             // Check if it is a raw egg intake (White, Cream, Brown)
             if (in_array($productCode, ['EGG-WHT', 'EGG-BRN', 'EGG-CRM'])) {
                 // Parse the detailed quantities
-                $goodQty = ($request->good_stacks ?? 0) * 30 + ($request->good_extra_trays ?? 0) + ($request->good_extra_eggs ?? 0) / 30;
+                $goodQty = ($request->good_stacks ?? 0) + ($request->good_extra_trays ?? 0) + ($request->good_extra_eggs ?? 0) / 30;
 
                 // Fallback to legacy single quantity field if no detailed fields were provided
                 if ($goodQty <= 0 && $request->has('quantity')) {
