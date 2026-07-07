@@ -15,7 +15,7 @@ class ProductionStoreIntakeController extends Controller
 
     public function index(Request $request)
     {
-        $intakes = ProductionStoreIntake::with(['product', 'user'])
+        $intakes = ProductionStoreIntake::with(['product', 'user', 'productionStore'])
             ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
             ->latest()
             ->paginate($request->per_page ?? 15);
