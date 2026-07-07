@@ -78,9 +78,9 @@ const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" 
   if (!group.isEgg) {
     const item = group.other;
     if (field === "price") {
-      return <span className="font-bold text-xs text-gray-500 whitespace-nowrap">UGX {item.price.toLocaleString()}</span>;
+      return <span className="font-semibold text-xs text-gray-500 whitespace-nowrap">UGX {item.price.toLocaleString()}</span>;
     }
-    return <span className="font-bold text-xs text-gray-750 whitespace-nowrap">{formatQuantityGlobal(item[field], unit)}</span>;
+    return <span className="font-semibold text-xs text-gray-700 whitespace-nowrap">{formatQuantityGlobal(item[field], unit)}</span>;
   }
 
   const categories = [
@@ -98,9 +98,9 @@ const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" 
         const val = catData[field];
         if (field !== "price" && val === 0) {
           return (
-            <div key={cat.key} className="flex justify-between items-center text-[10px] font-semibold text-gray-300 whitespace-nowrap">
+            <div key={cat.key} className="flex justify-between items-center text-[10px] font-medium text-gray-400 whitespace-nowrap">
               <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
-              <span className="font-bold whitespace-nowrap">0</span>
+              <span className="font-medium whitespace-nowrap">0</span>
             </div>
           );
         }
@@ -108,7 +108,7 @@ const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" 
         return (
           <div key={cat.key} className="flex justify-between items-center gap-3 text-[10px] whitespace-nowrap">
             <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
-            <span className="font-extrabold text-gray-700 whitespace-nowrap">
+            <span className="font-semibold text-gray-700 whitespace-nowrap">
               {field === "price" 
                 ? `UGX ${val.toLocaleString()}` 
                 : formatQuantityGlobal(val, unit, false)}
@@ -1072,21 +1072,23 @@ export default function ProductionStorePage() {
             
             {/* Live Inventory Breakdown Table */}
             <Card className="lg:col-span-3 border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
-              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
-                    <Warehouse size={18} className="text-brand-forest" />
-                    Bulk Stock Inventory & Sales Valuation
-                  </CardTitle>
-                  <CardDescription className="text-xs">Real-time stock list and corresponding monetary valuation sheet</CardDescription>
+              <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-base font-bold text-brand-forest flex items-center gap-2">
+                      <Warehouse size={18} className="text-brand-forest" />
+                      Bulk Stock Inventory & Sales Valuation
+                    </CardTitle>
+                    <CardDescription className="text-xs">Real-time stock list and corresponding monetary valuation sheet</CardDescription>
+                  </div>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-2.5 w-full sm:w-auto">
+                <div className="flex flex-wrap gap-2.5 items-center w-full">
                   <input
                     type="date"
                     value={selectedDate}
                     onChange={(e) => setSelectedDate(e.target.value)}
-                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-36 cursor-pointer"
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest min-w-[130px] cursor-pointer"
                   />
                   {/* Store Filter Dropdown */}
                   <select
@@ -1095,7 +1097,7 @@ export default function ProductionStorePage() {
                       setSelectedStoreFilter(e.target.value);
                       setSelectedBatchFilter("all");
                     }}
-                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-40"
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest min-w-[140px]"
                   >
                     <option value="all">All Stores</option>
                     {productionStores.map(store => (
@@ -1106,7 +1108,7 @@ export default function ProductionStorePage() {
                   <select
                     value={selectedBatchFilter}
                     onChange={(e) => setSelectedBatchFilter(e.target.value)}
-                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest w-full sm:w-45"
+                    className="h-9 text-xs font-semibold text-gray-600 border border-brand-sage rounded-xl px-3 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest min-w-[150px]"
                   >
                     <option value="all">All Batches</option>
                     {getUniqueBatches().filter(b => b !== "all").map(batch => (
@@ -1114,11 +1116,11 @@ export default function ProductionStorePage() {
                     ))}
                   </select>
 
-                  <div className="relative w-full sm:w-50">
+                  <div className="relative flex-1 min-w-[200px] max-w-[320px] sm:ml-auto">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                     <Input 
                       placeholder="Search bulk products..." 
-                      className="pl-9 h-9 text-xs border-brand-sage rounded-xl" 
+                      className="pl-9 h-9 text-xs border-brand-sage rounded-xl w-full" 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1130,19 +1132,19 @@ export default function ProductionStorePage() {
                 <Table>
                   <TableHeader className="bg-gray-50/60 border-b border-brand-sage/30">
                     <TableRow>
-                      <TableHead className="text-xs font-bold text-brand-forest pl-6">Production Store</TableHead>
-                      <TableHead className="text-xs font-bold text-brand-forest">Batch No</TableHead>
-                      <TableHead className="text-xs font-bold text-brand-forest">Bulk Product</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Opening Stock</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Incoming</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest bg-gray-50/50">Current Stock</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Stock Taken</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Replacements</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Closing Stock</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Unit Price</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Value Taken</TableHead>
-                      <TableHead className="text-right text-xs font-bold text-brand-forest">Value Closing</TableHead>
-                      <TableHead className="text-center text-xs font-bold text-brand-forest pr-6">Actions</TableHead>
+                      <TableHead className="text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 pl-6">Production Store</TableHead>
+                      <TableHead className="text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Batch No</TableHead>
+                      <TableHead className="text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Bulk Product</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Opening Stock</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Incoming</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 bg-gray-50/30">Current Stock</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Stock Taken</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Replacements</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Closing Stock</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Unit Price</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Value Taken</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Value Closing</TableHead>
+                      <TableHead className="text-center text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 pr-6">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1159,15 +1161,15 @@ export default function ProductionStorePage() {
                           const worthClosing = getGroupWorthClosing(group);
                           return (
                             <TableRow key={group.key} className="hover:bg-brand-sage/5 transition-colors border-b border-brand-sage/20 align-top">
-                              <TableCell className="pl-6 font-bold text-brand-forest text-xs pt-4">
+                              <TableCell className="pl-6 font-medium text-gray-800 text-xs pt-4">
                                 {group.production_store_name}
                               </TableCell>
-                              <TableCell className="font-mono text-xs text-gray-700 font-bold pt-4">
-                                <Badge className="border border-brand-sage bg-gray-50 text-brand-forest font-bold">
+                              <TableCell className="font-mono text-xs text-gray-600 pt-4">
+                                <Badge className="border border-brand-sage/50 bg-gray-50/50 text-gray-600 font-semibold text-[10px] px-2 py-0.5 shadow-none">
                                   {group.batch_reference || "N/A"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="font-bold text-brand-forest text-sm pt-4">
+                              <TableCell className="font-semibold text-gray-800 text-xs pt-4">
                                 {group.product}
                               </TableCell>
                               <TableCell className="text-right">
@@ -1191,10 +1193,10 @@ export default function ProductionStorePage() {
                               <TableCell className="text-right">
                                 <RenderBreakdown group={group} field="price" unit={group.unit} />
                               </TableCell>
-                              <TableCell className="text-right font-extrabold text-amber-700 text-xs pt-4">
+                              <TableCell className="text-right font-semibold text-amber-700 text-xs pt-4">
                                 UGX {worthTaken.toLocaleString()}
                               </TableCell>
-                              <TableCell className="text-right font-black text-brand-forest font-heading text-xs pt-4">
+                              <TableCell className="text-right font-bold text-brand-forest text-xs pt-4">
                                 UGX {worthClosing.toLocaleString()}
                               </TableCell>
                               <TableCell className="text-center pr-6 pt-3">
@@ -1210,33 +1212,33 @@ export default function ProductionStorePage() {
                         })}
 
                         {/* Summary Total Row */}
-                        <TableRow className="bg-gray-100/50 font-black border-t-2 border-brand-sage/40">
-                          <TableCell colSpan={3} className="pl-6 text-brand-forest text-xs font-black uppercase tracking-wider">
+                        <TableRow className="bg-gray-100/50 font-bold border-t-2 border-brand-sage/40">
+                          <TableCell colSpan={3} className="pl-6 text-brand-forest text-xs font-bold uppercase tracking-wider">
                             Total
                           </TableCell>
-                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                          <TableCell className="text-right text-brand-forest text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                          <TableCell className="text-right text-brand-forest text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.incoming, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-brand-forest text-xs font-black bg-gray-50/50">
+                          <TableCell className="text-right text-brand-forest text-xs font-bold bg-gray-50/50">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock + item.incoming, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-amber-600 text-xs font-black">
+                          <TableCell className="text-right text-amber-600 text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.stock_taken, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-blue-600 text-xs font-black">
+                          <TableCell className="text-right text-blue-600 text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.replacements, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-brand-forest text-xs font-black">
+                          <TableCell className="text-right text-brand-forest text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0))}
                           </TableCell>
                           <TableCell className="text-right text-gray-500 text-xs font-medium">—</TableCell>
-                          <TableCell className="text-right text-amber-700 text-xs font-black">
+                          <TableCell className="text-right text-amber-700 text-xs font-bold">
                             UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuationTaken(item), 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-black text-brand-forest font-heading text-xs">
+                          <TableCell className="text-right font-bold text-brand-forest text-xs">
                             UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuation(item), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center pr-6">—</TableCell>
@@ -1273,9 +1275,11 @@ export default function ProductionStorePage() {
                       {/* Grouped Products */}
                       <div className="space-y-1 bg-gray-50/50 p-2 rounded-lg border border-brand-sage/10">
                         {log.items.map((item: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-brand-forest">{item.product}</span>
-                            <span className="font-black text-xs text-green-600">
+                          <div key={idx} className="flex justify-between items-center gap-2 text-[11px] py-0.5">
+                            <span className="font-medium text-gray-700 truncate" title={item.product}>
+                              {item.product}
+                            </span>
+                            <span className="font-semibold text-green-600 shrink-0 whitespace-nowrap">
                               +{item.quantity.toLocaleString()} {item.unit.toLowerCase()}
                             </span>
                           </div>
