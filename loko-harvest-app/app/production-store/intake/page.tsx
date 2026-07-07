@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
-  DollarSign
+  DollarSign,
+  AlertCircle
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -269,8 +270,8 @@ export default function ProductionIntakePage() {
     if (watchProductId && products.length > 0 && watchProductId !== lastProductIdRef.current) {
       const selected = products.find((p) => p.id === watchProductId);
       if (selected) {
-        const basePrice = parseFloat(selected.production_unit_price || selected.default_unit_price) || 0;
-        const eggBasePrice = parseFloat(selected.production_egg_unit_price) || (basePrice / 30);
+        const basePrice = parseFloat(selected.production_unit_price) || 0;
+        const eggBasePrice = parseFloat(selected.production_egg_unit_price) || 0;
         setValue("valuation_price", basePrice);
         setValue("good_valuation_price", basePrice);
         setValue("good_egg_valuation_price", eggBasePrice);
@@ -280,19 +281,64 @@ export default function ProductionIntakePage() {
         const d3Prod = products.find(p => p.code === `${selected.code}-D3`);
         const shlProd = products.find(p => p.code === `${selected.code}-SHL`);
  
-        setValue("d1_valuation_price", d1Prod ? parseFloat(d1Prod.production_unit_price || d1Prod.default_unit_price) : 5000);
-        setValue("d1_egg_valuation_price", d1Prod ? parseFloat(d1Prod.production_egg_unit_price) : 5000 / 30);
-        setValue("d2_valuation_price", d2Prod ? parseFloat(d2Prod.production_unit_price || d2Prod.default_unit_price) : 3000);
-        setValue("d2_egg_valuation_price", d2Prod ? parseFloat(d2Prod.production_egg_unit_price) : 3000 / 30);
-        setValue("d3_valuation_price", d3Prod ? parseFloat(d3Prod.production_unit_price || d3Prod.default_unit_price) : 0);
-        setValue("d3_egg_valuation_price", d3Prod ? parseFloat(d3Prod.production_egg_unit_price) : 0);
-        setValue("shell_valuation_price", shlProd ? parseFloat(shlProd.production_unit_price || shlProd.default_unit_price) : 2000);
-        setValue("shell_egg_valuation_price", shlProd ? parseFloat(shlProd.production_egg_unit_price) : 2000 / 30);
+        setValue("d1_valuation_price", d1Prod ? (parseFloat(d1Prod.production_unit_price) || 0) : 0);
+        setValue("d1_egg_valuation_price", d1Prod ? (parseFloat(d1Prod.production_egg_unit_price) || 0) : 0);
+        setValue("d2_valuation_price", d2Prod ? (parseFloat(d2Prod.production_unit_price) || 0) : 0);
+        setValue("d2_egg_valuation_price", d2Prod ? (parseFloat(d2Prod.production_egg_unit_price) || 0) : 0);
+        setValue("d3_valuation_price", 0);
+        setValue("d3_egg_valuation_price", 0);
+        setValue("shell_valuation_price", shlProd ? (parseFloat(shlProd.production_unit_price) || 0) : 0);
+        setValue("shell_egg_valuation_price", shlProd ? (parseFloat(shlProd.production_egg_unit_price) || 0) : 0);
  
         lastProductIdRef.current = watchProductId;
       }
     }
   }, [watchProductId, products, setValue]);
+
+  const getMissingPriceDetails = () => {
+    if (!watchProductId || products.length === 0) return [];
+    const selected = products.find((p) => p.id === watchProductId);
+    if (!selected) return [];
+    
+    const isEgg = ["EGG-WHT", "EGG-BRN", "EGG-CRM"].includes(selected.code);
+    const missing = [];
+    
+    if (isEgg) {
+      // Check base
+      const basePrice = parseFloat(selected.production_unit_price) || 0;
+      const eggBasePrice = parseFloat(selected.production_egg_unit_price) || 0;
+      if (basePrice <= 0 || eggBasePrice <= 0) {
+        missing.push(`${selected.name} (Base)`);
+      }
+      
+      // Check D1
+      const d1Prod = products.find(p => p.code === `${selected.code}-D1`);
+      if (!d1Prod || (parseFloat(d1Prod.production_unit_price) || 0) <= 0 || (parseFloat(d1Prod.production_egg_unit_price) || 0) <= 0) {
+        missing.push(`${selected.name} - Class 1 Damages (D1)`);
+      }
+      
+      // Check D2
+      const d2Prod = products.find(p => p.code === `${selected.code}-D2`);
+      if (!d2Prod || (parseFloat(d2Prod.production_unit_price) || 0) <= 0 || (parseFloat(d2Prod.production_egg_unit_price) || 0) <= 0) {
+        missing.push(`${selected.name} - Class 2 Damages (D2)`);
+      }
+      
+      // Check SHL
+      const shlProd = products.find(p => p.code === `${selected.code}-SHL`);
+      if (!shlProd || (parseFloat(shlProd.production_unit_price) || 0) <= 0 || (parseFloat(shlProd.production_egg_unit_price) || 0) <= 0) {
+        missing.push(`${selected.name} - Shell Eggs (SHL)`);
+      }
+    } else {
+      const price = parseFloat(selected.production_unit_price) || 0;
+      if (price <= 0) {
+        missing.push(selected.name);
+      }
+    }
+    return missing;
+  };
+
+  const missingPrices = getMissingPriceDetails();
+  const hasMissingPrices = missingPrices.length > 0;
 
   const selectedProduct = filteredProducts.find((p) => p.id === watchProductId);
   const isEggProduct = selectedProduct && ["EGG-WHT", "EGG-BRN", "EGG-CRM"].includes(selectedProduct.code);
@@ -432,6 +478,23 @@ export default function ProductionIntakePage() {
                   />
                 </div>
 
+                {hasMissingPrices && (
+                  <div className="p-4 bg-red-50 border border-red-250 text-red-700 rounded-xl space-y-2">
+                    <div className="flex items-center gap-2 font-bold">
+                      <AlertCircle size={18} />
+                      <span>Missing Production Prices</span>
+                    </div>
+                    <p className="text-xs">
+                      You cannot record an intake for this product because production prices have not been set for the following items. Please go to the <strong>Prices</strong> tab in the Production Store to configure them first:
+                    </p>
+                    <ul className="list-disc list-inside text-xs pl-2 space-y-1">
+                      {missingPrices.map((item, idx) => (
+                        <li key={idx} className="font-semibold">{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {isEggProduct ? (
                   <div className="space-y-6 border border-brand-sage/40 p-5 rounded-2xl bg-gray-50/50">
                     <h3 className="text-xs font-black text-brand-forest uppercase tracking-wider border-b border-brand-sage/30 pb-2">
@@ -450,8 +513,8 @@ export default function ProductionIntakePage() {
                           label="Good Eggs Price (UGX) Per Tray" 
                           type="number" 
                           placeholder="12000" 
-                          readOnly={!isAdmin}
-                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          readOnly={true}
+                          className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                           {...register("good_valuation_price", { valueAsNumber: true })} 
                           error={errors.good_valuation_price?.message} 
                         />
@@ -459,8 +522,8 @@ export default function ProductionIntakePage() {
                           label="Good Eggs Price (UGX) Per Egg" 
                           type="number" 
                           placeholder="400" 
-                          readOnly={!isAdmin}
-                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          readOnly={true}
+                          className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                           {...register("good_egg_valuation_price", { valueAsNumber: true })} 
                           error={errors.good_egg_valuation_price?.message} 
                         />
@@ -480,8 +543,8 @@ export default function ProductionIntakePage() {
                             label="D1 Price (UGX) Per Tray" 
                             type="number" 
                             placeholder="5000" 
-                            readOnly={!isAdmin}
-                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            readOnly={true}
+                            className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                             {...register("d1_valuation_price", { valueAsNumber: true })} 
                             error={errors.d1_valuation_price?.message} 
                           />
@@ -489,8 +552,8 @@ export default function ProductionIntakePage() {
                             label="D1 Price (UGX) Per Egg" 
                             type="number" 
                             placeholder="167" 
-                            readOnly={!isAdmin}
-                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            readOnly={true}
+                            className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                             {...register("d1_egg_valuation_price", { valueAsNumber: true })} 
                             error={errors.d1_egg_valuation_price?.message} 
                           />
@@ -507,8 +570,8 @@ export default function ProductionIntakePage() {
                             label="D2 Price (UGX) Per Tray" 
                             type="number" 
                             placeholder="3000" 
-                            readOnly={!isAdmin}
-                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            readOnly={true}
+                            className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                             {...register("d2_valuation_price", { valueAsNumber: true })} 
                             error={errors.d2_valuation_price?.message} 
                           />
@@ -516,8 +579,8 @@ export default function ProductionIntakePage() {
                             label="D2 Price (UGX) Per Egg" 
                             type="number" 
                             placeholder="100" 
-                            readOnly={!isAdmin}
-                            className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                            readOnly={true}
+                            className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                             {...register("d2_egg_valuation_price", { valueAsNumber: true })} 
                             error={errors.d2_egg_valuation_price?.message} 
                           />
@@ -546,8 +609,8 @@ export default function ProductionIntakePage() {
                           label="Shell Price (UGX) Per Tray" 
                           type="number" 
                           placeholder="2000" 
-                          readOnly={!isAdmin}
-                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          readOnly={true}
+                          className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                           {...register("shell_valuation_price", { valueAsNumber: true })} 
                           error={errors.shell_valuation_price?.message} 
                         />
@@ -555,8 +618,8 @@ export default function ProductionIntakePage() {
                           label="Shell Price (UGX) Per Egg" 
                           type="number" 
                           placeholder="67" 
-                          readOnly={!isAdmin}
-                          className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                          readOnly={true}
+                          className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                           {...register("shell_egg_valuation_price", { valueAsNumber: true })} 
                           error={errors.shell_egg_valuation_price?.message} 
                         />
@@ -572,12 +635,12 @@ export default function ProductionIntakePage() {
                 {!isEggProduct && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Input 
-                      label="Valuation Price (UGX) Per Tray" 
+                      label={`Valuation Price (UGX) / ${selectedProduct?.unit_of_measure || 'unit'}`} 
                       type="number" 
                       step="1" 
                       placeholder="0" 
-                      readOnly={!isAdmin}
-                      className={!isAdmin ? "bg-gray-100 text-gray-500 cursor-not-allowed opacity-75" : ""}
+                      readOnly={true}
+                      className="bg-gray-100 text-gray-500 cursor-not-allowed opacity-75"
                       {...register("valuation_price", { valueAsNumber: true })} 
                       error={errors.valuation_price?.message} 
                       required 
@@ -641,7 +704,14 @@ export default function ProductionIntakePage() {
                 </div>
 
                 <div className="pt-4">
-                  <Button type="submit" className="w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md cursor-pointer border-none" isLoading={isLoading}>
+                  <Button 
+                    type="submit" 
+                    disabled={hasMissingPrices}
+                    className={`w-full h-12 text-base font-bold gap-2.5 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl shadow-md border-none ${
+                      hasMissingPrices ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                    }`}
+                    isLoading={isLoading}
+                  >
                     <Save size={18} />
                     Save Intake Record
                   </Button>
