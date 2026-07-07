@@ -80,6 +80,7 @@ class ProductionStoreStockController extends Controller
                     ->where('store_type', 'production')
                     ->where('production_store_id', $item->production_store_id)
                     ->where('product_id', $item->product_id)
+                    ->where('status', 'approved')
                     ->where(function ($q) use ($item) {
                         if ($item->batch_reference === null) {
                             $q->whereNull('batch_reference');
@@ -87,8 +88,8 @@ class ProductionStoreStockController extends Controller
                             $q->where('batch_reference', $item->batch_reference);
                         }
                     });
-                $adjustmentsAfter = (float) (clone $adjustmentsQuery)->where('created_at', '>', $date . ' 23:59:59')->sum('quantity');
-                $adjustmentsOn = (float) (clone $adjustmentsQuery)->whereDate('created_at', '=', $date)->sum('quantity');
+                $adjustmentsAfter = - (float) (clone $adjustmentsQuery)->where('created_at', '>', $date . ' 23:59:59')->sum('quantity_change');
+                $adjustmentsOn = - (float) (clone $adjustmentsQuery)->whereDate('created_at', '=', $date)->sum('quantity_change');
 
                 // Rollback closing stock
                 $liveClosing = (float) $item->closing_stock;
