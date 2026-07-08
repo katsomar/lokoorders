@@ -181,6 +181,7 @@ export default function OrderManagerDashboard() {
   const [loadingStock, setLoadingStock] = useState(false);
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [selectedBatch, setSelectedBatch] = useState<string>("all");
+  const [selectedInventoryDate, setSelectedInventoryDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   // Driver Assignment States
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -284,7 +285,7 @@ export default function OrderManagerDashboard() {
     }
   }, [storeType, activeTab]);
 
-  // Fetch Stock when selectedStoreId changes
+  // Fetch Stock when selectedStoreId or selectedInventoryDate changes
   useEffect(() => {
     async function loadStock() {
       if (!selectedStoreId) return;
@@ -298,8 +299,8 @@ export default function OrderManagerDashboard() {
       try {
         const endpoint = storeType === "production" ? "/production-stock" : "/sales-stock";
         const params = storeType === "production" 
-          ? { production_store_id: selectedStoreId } 
-          : { sales_store_id: selectedStoreId };
+          ? { production_store_id: selectedStoreId, date: selectedInventoryDate } 
+          : { sales_store_id: selectedStoreId, date: selectedInventoryDate };
         const res = await api.get(endpoint, { params });
         setStockItems(res.data?.data || []);
       } catch (err) {
@@ -312,7 +313,7 @@ export default function OrderManagerDashboard() {
       setSelectedBatch("all");
       loadStock();
     }
-  }, [selectedStoreId, storeType, activeTab, storesList]);
+  }, [selectedStoreId, storeType, activeTab, storesList, selectedInventoryDate]);
 
   // Fetch Drivers
   const fetchDrivers = async () => {
@@ -1094,6 +1095,170 @@ export default function OrderManagerDashboard() {
     return true;
   });
 
+  const getGroupedStockData = React.useMemo(() => {
+    const groups: Record<string, {
+      key: string;
+      batch_reference: string;
+      product_name: string;
+      unit: string;
+      isEgg: boolean;
+      good: Record<string, number>;
+      d1: Record<string, number>;
+      d2: Record<string, number>;
+      d3: Record<string, number>;
+      shell: Record<string, number>;
+      other: Record<string, number>;
+    }> = {};
+
+    filteredStock.forEach(item => {
+      const code = item.product?.code || "";
+      const name = item.product?.name || "Unknown Product";
+      const batch = item.batch_reference || "No Batch";
+      let baseCode = code;
+      let baseName = name;
+      let type: "good" | "d1" | "d2" | "d3" | "shell" | "other" = "other";
+
+      if (code.startsWith("EGG-WHT")) {
+        baseCode = "EGG-WHT";
+        baseName = "White Eggs";
+        if (code.endsWith("-D1")) type = "d1";
+        else if (code.endsWith("-D2")) type = "d2";
+        else if (code.endsWith("-D3")) type = "d3";
+        else if (code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      } else if (code.startsWith("EGG-BRN")) {
+        baseCode = "EGG-BRN";
+        baseName = "Brown Eggs";
+        if (code.endsWith("-D1")) type = "d1";
+        else if (code.endsWith("-D2")) type = "d2";
+        else if (code.endsWith("-D3")) type = "d3";
+        else if (code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      } else if (code.startsWith("EGG-CRM")) {
+        baseCode = "EGG-CRM";
+        baseName = "Cream Eggs";
+        if (code.endsWith("-D1")) type = "d1";
+        else if (code.endsWith("-D2")) type = "d2";
+        else if (code.endsWith("-D3")) type = "d3";
+        else if (code.endsWith("-SHL")) type = "shell";
+        else type = "good";
+      }
+
+      const key = `${batch}_${baseCode}`;
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          batch_reference: item.batch_reference || "",
+          product_name: baseName,
+          unit: item.product?.unit_of_measure || "",
+          isEgg: baseCode.startsWith("EGG-"),
+          good: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 },
+          d1: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 },
+          d2: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 },
+          d3: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 },
+          shell: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 },
+          other: { opening: 0, incoming: 0, taken_out: 0, replacements: 0, damages: 0, closing: 0 }
+        };
+      }
+
+      const g = groups[key];
+      const categoryData = g[type];
+
+      categoryData.opening += parseFloat(item.opening_stock) || 0;
+      categoryData.damages += parseFloat(item.damages) || 0;
+      categoryData.replacements += parseFloat(item.replacements) || 0;
+      categoryData.closing += parseFloat(item.closing_stock) || parseFloat(item.current_quantity) || 0;
+
+      if (storeType === "production") {
+        categoryData.incoming += parseFloat(item.incoming) || 0;
+        categoryData.taken_out += parseFloat(item.stock_taken) || 0;
+      } else {
+        const transIn = parseFloat(item.transferred_in) || 0;
+        const convIn = parseFloat(item.conversions_in) || 0;
+        const returns = parseFloat(item.returns) || 0;
+        categoryData.incoming += (transIn + convIn + returns);
+
+        const convOut = parseFloat(item.conversions_out) || 0;
+        const transOut = parseFloat(item.transferred_out) || 0;
+        const sold = parseFloat(item.sold_quantity) || 0;
+        categoryData.taken_out += (convOut + transOut + sold);
+      }
+    });
+
+    return Object.values(groups);
+  }, [filteredStock, storeType]);
+
+  const totals = React.useMemo(() => {
+    let opening = 0;
+    let incoming = 0;
+    let taken_out = 0;
+    let replacements = 0;
+    let damages = 0;
+    let closing = 0;
+
+    getGroupedStockData.forEach(g => {
+      const types: Array<"good" | "d1" | "d2" | "d3" | "shell" | "other"> = g.isEgg 
+        ? ["good", "d1", "d2", "d3", "shell"] 
+        : ["other"];
+      
+      types.forEach(t => {
+        const cat = g[t];
+        opening += cat.opening;
+        incoming += cat.incoming;
+        taken_out += cat.taken_out;
+        replacements += cat.replacements;
+        damages += cat.damages;
+        closing += cat.closing;
+      });
+    });
+
+    return { opening, incoming, taken_out, replacements, damages, closing };
+  }, [getGroupedStockData]);
+
+  const renderBreakdownCell = (group: any, field: "opening" | "incoming" | "taken_out" | "replacements" | "damages" | "closing", textColorClass?: string) => {
+    if (!group.isEgg) {
+      const val = group.other[field];
+      if (val === 0) return <span className="text-gray-400">0</span>;
+      return (
+        <span className={textColorClass || "text-gray-750 font-bold"}>
+          {formatQuantity(val.toString(), group.unit)}
+        </span>
+      );
+    }
+
+    const categories = [
+      { label: "Good", key: "good", colorClass: "text-green-700 bg-green-50/80 border border-green-200/50" },
+      { label: "D1", key: "d1", colorClass: "text-amber-700 bg-amber-50/80 border border-amber-200/50" },
+      { label: "D2", key: "d2", colorClass: "text-orange-700 bg-orange-50/80 border border-orange-200/50" },
+      { label: "D3", key: "d3", colorClass: "text-gray-700 bg-gray-50/80 border border-gray-200" },
+      { label: "Shell", key: "shell", colorClass: "text-blue-700 bg-blue-50/80 border border-blue-200/50" }
+    ];
+
+    const nonZeroCats = categories.filter(c => group[c.key][field] > 0);
+
+    if (nonZeroCats.length === 0) {
+      return <span className="text-gray-400">0</span>;
+    }
+
+    return (
+      <div className="space-y-1 py-0.5 text-right whitespace-nowrap">
+        {nonZeroCats.map(c => {
+          const val = group[c.key][field];
+          return (
+            <div key={c.key} className="flex items-center justify-end gap-1 text-[9px] whitespace-nowrap">
+              <span className={`px-1 py-0.2 rounded text-[7px] font-black uppercase tracking-wider ${c.colorClass} whitespace-nowrap`}>
+                {c.label}
+              </span>
+              <span className={textColorClass || "font-bold text-gray-750"}>
+                {formatQuantity(val.toString(), group.unit)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const uniqueBatches = Array.from(new Set(stockItems.map(item => item.batch_reference).filter(Boolean))) as string[];
   const batchOptions = [
     { label: "All Batch References", value: "all" },
@@ -1559,83 +1724,147 @@ export default function OrderManagerDashboard() {
                       </button>
                     </div>
 
-                    {/* Store Dropdown selector */}
-                    <Select
-                      label="Select Location Store"
-                      value={selectedStoreId}
-                      onChange={(e) => setSelectedStoreId(e.target.value)}
-                      options={storesList.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
-                      required
-                    />
-
-                    {/* Batch Dropdown selector */}
-                    {uniqueBatches.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Store Dropdown selector */}
                       <Select
-                        label="Filter by Batch Number"
-                        value={selectedBatch}
-                        onChange={(e) => setSelectedBatch(e.target.value)}
-                        options={batchOptions}
+                        label="Select Location Store"
+                        value={selectedStoreId}
+                        onChange={(e) => setSelectedStoreId(e.target.value)}
+                        options={storesList.map(s => ({ label: `${s.name} (${s.code})`, value: s.id }))}
+                        required
                       />
-                    )}
 
-                    {/* Stock Search Bar */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                      <input
-                        type="text"
-                        placeholder="Search inventory..."
-                        value={stockSearchQuery}
-                        onChange={(e) => setStockSearchQuery(e.target.value)}
-                        className="w-full text-xs pl-9 pr-4 py-2 h-9 rounded-xl border border-brand-sage/60 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-brand-forest"
-                      />
+                      {/* Date Filter */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-450 font-bold uppercase tracking-wider block leading-none mb-1">
+                          Filter by Date
+                        </label>
+                        <input
+                          type="date"
+                          value={selectedInventoryDate}
+                          onChange={(e) => setSelectedInventoryDate(e.target.value)}
+                          className="w-full h-10 px-3 text-xs font-bold rounded-lg border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Batch & Product Search bar */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {uniqueBatches.length > 0 && (
+                        <Select
+                          label="Filter by Batch Number"
+                          value={selectedBatch}
+                          onChange={(e) => setSelectedBatch(e.target.value)}
+                          options={batchOptions}
+                        />
+                      )}
+                      
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-gray-450 font-bold uppercase tracking-wider block leading-none mb-1">
+                          Search Product
+                        </label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Type product name or code..."
+                            value={stockSearchQuery}
+                            onChange={(e) => setStockSearchQuery(e.target.value)}
+                            className="w-full text-xs pl-9 pr-4 py-2 h-10 rounded-lg border border-brand-sage/60 bg-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Stock Items list */}
-                  <div className="space-y-2">
+                  {/* Stock Items list (Grouped table style) */}
+                  <div className="overflow-hidden rounded-xl border border-brand-sage/35 shadow-sm bg-white">
                     {loadingStock ? (
-                      <div className="bg-white border border-brand-sage/40 rounded-2xl p-6 text-center text-gray-400 animate-pulse flex flex-col items-center gap-2">
+                      <div className="p-10 text-center text-gray-400 animate-pulse flex flex-col items-center gap-2">
                         <Loader2 className="animate-spin text-brand-forest" size={24} />
-                        <p className="text-xs font-bold text-gray-500">Loading stock listing...</p>
+                        <p className="text-xs font-bold text-gray-500">Loading daily stock data...</p>
                       </div>
-                    ) : filteredStock.length === 0 ? (
-                      <div className="bg-white border border-brand-sage/30 rounded-2xl p-6 text-center text-gray-550 text-xs italic">
-                        No inventory records found
+                    ) : getGroupedStockData.length === 0 ? (
+                      <div className="p-8 text-center text-gray-550 text-xs italic bg-white">
+                        No inventory records found for this date.
                       </div>
                     ) : (
-                      filteredStock.map((item) => (
-                        <div key={item.id} className="bg-white border border-brand-sage/30 p-3.5 rounded-xl shadow-sm flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-bold text-gray-900">{item.product?.name}</p>
-                            <div className="flex items-center gap-2 text-[10px] text-gray-400 font-semibold uppercase">
-                              <span>{item.product?.code}</span>
-                              {item.batch_reference && (
-                                <>
-                                  <span className="h-1 w-1 bg-gray-300 rounded-full" />
-                                  <span className="text-brand-amber font-mono">Batch: {item.batch_reference}</span>
-                                </>
+                      <div className="overflow-x-auto scrollbar-thin">
+                        <table className="w-full text-[11px] text-left border-collapse min-w-[700px]">
+                          <thead>
+                            <tr className="bg-brand-forest text-white font-extrabold uppercase tracking-wider text-[9px] border-b border-brand-forest/20">
+                              <th className="py-2.5 px-3 whitespace-nowrap">Batch & Product</th>
+                              <th className="py-2.5 px-2 text-right whitespace-nowrap">Opening</th>
+                              <th className="py-2.5 px-2 text-right whitespace-nowrap">Incoming</th>
+                              <th className="py-2.5 px-2 text-right whitespace-nowrap">Taken / Out</th>
+                              {storeType === "sales" && (
+                                <th className="py-2.5 px-2 text-right whitespace-nowrap">Repl.</th>
                               )}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className={`text-sm font-black font-heading ${
-                              parseFloat(item.current_quantity) <= 0 
-                                ? "text-red-600" 
-                                : parseFloat(item.current_quantity) <= 20 
-                                ? "text-brand-amber" 
-                                : "text-brand-forest"
-                            }`}>
-                              {item.product?.unit_of_measure?.toLowerCase() === "trays" 
-                                ? formatQuantity(item.current_quantity, "trays")
-                                : parseFloat(item.current_quantity).toLocaleString()
-                              }
-                            </span>
-                            {item.product?.unit_of_measure?.toLowerCase() !== "trays" && (
-                              <span className="text-[9px] text-gray-400 font-extrabold uppercase ml-1 block">{item.product?.unit_of_measure}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))
+                              <th className="py-2.5 px-2 text-right whitespace-nowrap">Damages</th>
+                              <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Closing</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {getGroupedStockData.map((item) => (
+                              <tr key={item.key} className="hover:bg-gray-50/50 transition-colors align-top">
+                                <td className="py-3 px-3">
+                                  <div className="font-extrabold text-gray-900 leading-snug">{item.product_name}</div>
+                                  <div className="text-[9px] text-brand-amber font-mono font-black mt-0.5">
+                                    {item.batch_reference ? `Batch: ${item.batch_reference}` : "No Batch"}
+                                  </div>
+                                </td>
+                                <td className="py-3 px-2 text-right">
+                                  {renderBreakdownCell(item, "opening")}
+                                </td>
+                                <td className="py-3 px-2 text-right">
+                                  {renderBreakdownCell(item, "incoming", "text-blue-600 font-bold")}
+                                </td>
+                                <td className="py-3 px-2 text-right">
+                                  {renderBreakdownCell(item, "taken_out", "text-amber-700 font-bold")}
+                                </td>
+                                {storeType === "sales" && (
+                                  <td className="py-3 px-2 text-right">
+                                    {renderBreakdownCell(item, "replacements", "text-amber-600 font-bold")}
+                                  </td>
+                                )}
+                                <td className="py-3 px-2 text-right">
+                                  {renderBreakdownCell(item, "damages", "text-red-650 font-bold")}
+                                </td>
+                                <td className="py-3 px-2.5 text-right">
+                                  {renderBreakdownCell(item, "closing", "text-brand-forest font-black")}
+                                </td>
+                              </tr>
+                            ))}
+
+                            {/* Totals Row */}
+                            <tr className="bg-brand-sage/10 font-bold border-t border-brand-sage/40">
+                              <td className="py-3 px-3 font-black text-gray-900 uppercase tracking-wider text-[10px]">
+                                Totals
+                              </td>
+                              <td className="py-3 px-2 text-right text-gray-800 font-extrabold whitespace-nowrap">
+                                {formatQuantity(totals.opening.toString(), "trays")}
+                              </td>
+                              <td className="py-3 px-2 text-right text-blue-700 font-extrabold whitespace-nowrap">
+                                {totals.incoming > 0 ? `+${formatQuantity(totals.incoming.toString(), "trays")}` : "0"}
+                              </td>
+                              <td className="py-3 px-2 text-right text-amber-800 font-extrabold whitespace-nowrap">
+                                {totals.taken_out > 0 ? `-${formatQuantity(totals.taken_out.toString(), "trays")}` : "0"}
+                              </td>
+                              {storeType === "sales" && (
+                                <td className="py-3 px-2 text-right text-amber-600 font-extrabold whitespace-nowrap">
+                                  {totals.replacements > 0 ? `-${formatQuantity(totals.replacements.toString(), "trays")}` : "0"}
+                                </td>
+                              )}
+                              <td className="py-3 px-2 text-right text-red-650 font-extrabold whitespace-nowrap">
+                                {totals.damages > 0 ? `-${formatQuantity(totals.damages.toString(), "trays")}` : "0"}
+                              </td>
+                              <td className="py-3 px-2.5 text-right text-brand-forest font-black whitespace-nowrap">
+                                {formatQuantity(totals.closing.toString(), "trays")}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 </>

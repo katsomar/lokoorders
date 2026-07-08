@@ -92,6 +92,7 @@ graph TD
 * **Flow**:
   - Displays pending Transfers and Damages. Includes magnifier lightboxes for signatures and photo proof, and custom comment triggers for rejections.
   - Linked to a live sidebar badge counter showing active pending counts.
+
 ---
 
 ## 5. Summary of Recent Changes
@@ -103,6 +104,7 @@ graph TD
 | 2026-07-08 | **UI Layouts** | Created tabbed Admin Approval Panel & Sidebar badge. | Give Admin full control over queued manager requests. |
 | 2026-07-08 | **Layout Router** | Role-based interception inside `DashboardLayout`. | Keep Order Manager isolated within a mobile view. |
 | 2026-07-08 | **Inventory view** | Added store list check `storeExists` before `loadStock` fetches. | Prevent race conditions when swapping store types. |
+| 2026-07-08 | **Inventory view** | Category-grouped daily tracking table with batch headings & Totals row. | Group by batch and egg category, displaying a Totals row at the bottom. |
 
 ---
 
@@ -132,3 +134,6 @@ graph TD
     ```
     This prevents the app from firing a stock fetch with mismatched IDs while the store dropdown list is transitioning, completely eliminating the race condition.
 
+### 4. Batched Card Clutter & Missing Historical Lookup on Mobile Inventory
+* **The Gap/Problem**: The Order Manager inventory view displayed stock using individual cards for each batch. This cluttered the viewport when there were multiple batches of the same product. There was also no way to query historical records for a specific date (it only showed current balances).
+* **The Implementation & Rationale**: We restructured the layout into a unified, horizontally scrollable daily stock ledger table. It groups stock items in-memory by **Batch Reference** and **Base Product Name** (aggregating White Eggs, Brown Eggs, Cream Eggs, and non-egg items into clean category columns: Good, D1, D2, D3, Shell). The cells render small category badges for non-zero values, preventing table clutter. We also added a Date Selector input that triggers API queries with `date` parameters, and a dedicated **Totals Row** at the bottom of the table that sums all column values (formatted dynamically in trays). This lets managers track detailed daily movements and closing totals on their mobile devices.
