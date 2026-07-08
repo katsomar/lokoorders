@@ -18,13 +18,22 @@ class StoreAdjustmentController extends Controller
 
     public function index(Request $request)
     {
-        $adjustments = StoreAdjustment::with(['product', 'productionStore', 'salesStore', 'creator', 'approver'])
+        $perPage = $request->per_page;
+        $query = StoreAdjustment::with(['product', 'productionStore', 'salesStore', 'creator', 'approver'])
             ->when($request->status, fn($q) => $q->where('status', $request->status))
             ->when($request->store_type, fn($q) => $q->where('store_type', $request->store_type))
             ->when($request->production_store_id, fn($q) => $q->where('production_store_id', $request->production_store_id))
             ->when($request->sales_store_id, fn($q) => $q->where('sales_store_id', $request->sales_store_id))
-            ->latest()
-            ->paginate($request->per_page ?? 15);
+            ->when($request->product_id, fn($q) => $q->where('product_id', $request->product_id))
+            ->when($request->batch_reference, fn($q) => $q->where('batch_reference', $request->batch_reference))
+            ->when($request->adjustment_date, fn($q) => $q->whereDate('adjustment_date', $request->adjustment_date))
+            ->latest();
+
+        if ($perPage == -1) {
+            $adjustments = $query->get();
+        } else {
+            $adjustments = $query->paginate($perPage ?? 15);
+        }
 
         return $this->success($adjustments);
     }

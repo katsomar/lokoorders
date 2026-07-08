@@ -20,7 +20,9 @@ import {
   Layers,
   Plus,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  Loader2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -75,11 +77,27 @@ const formatQuantityGlobal = (qty: number, unit: string, isTotal: boolean = fals
   return `${val.toLocaleString()} ${unit}`;
 };
 
-const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" | "incoming" | "current" | "taken" | "replacements" | "damages" | "closing" | "price"; unit: string }) => {
+const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; field: "opening" | "incoming" | "current" | "taken" | "replacements" | "damages" | "closing" | "price"; unit: string; onViewDamage?: (item: any) => void }) => {
   if (!group.isEgg) {
     const item = group.other;
     if (field === "price") {
       return <span className="font-semibold text-xs text-gray-500 whitespace-nowrap">UGX {item.price.toLocaleString()}</span>;
+    }
+    if (field === "damages") {
+      const val = item.damages;
+      if (val > 0) {
+        return (
+          <button
+            type="button"
+            onClick={() => onViewDamage && onViewDamage(item.item)}
+            className="font-black text-xs text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap"
+            title="Click to view damage photo proof and details"
+          >
+            {formatQuantityGlobal(val, unit)}
+          </button>
+        );
+      }
+      return <span className="font-semibold text-xs text-red-655/50 whitespace-nowrap">0</span>;
     }
     return <span className="font-semibold text-xs text-gray-700 whitespace-nowrap">{formatQuantityGlobal(item[field], unit)}</span>;
   }
@@ -101,7 +119,7 @@ const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" 
           return (
             <div key={cat.key} className="flex justify-between items-center text-[10px] font-medium text-gray-400 whitespace-nowrap">
               <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
-              <span className="font-medium whitespace-nowrap">0</span>
+              <span className={field === "damages" ? "text-red-655/40 font-medium whitespace-nowrap" : "font-medium whitespace-nowrap"}>0</span>
             </div>
           );
         }
@@ -109,11 +127,22 @@ const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" 
         return (
           <div key={cat.key} className="flex justify-between items-center gap-3 text-[10px] whitespace-nowrap">
             <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
-            <span className="font-semibold text-gray-700 whitespace-nowrap">
-              {field === "price" 
-                ? `UGX ${val.toLocaleString()}` 
-                : formatQuantityGlobal(val, unit, false)}
-            </span>
+            {field === "damages" ? (
+              <button
+                type="button"
+                onClick={() => onViewDamage && onViewDamage(catData.item)}
+                className="font-bold text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap animate-pulse"
+                title="Click to view damage photo proof and details"
+              >
+                {formatQuantityGlobal(val, unit, false)}
+              </button>
+            ) : (
+              <span className="font-semibold text-gray-700 whitespace-nowrap">
+                {field === "price" 
+                  ? `UGX ${val.toLocaleString()}` 
+                  : formatQuantityGlobal(val, unit, false)}
+              </span>
+            )}
           </div>
         );
       })}
@@ -913,6 +942,38 @@ export default function ProductionStorePage() {
     }
   };
 
+  // Damages reference details modal
+  const [showDamageDetailsModal, setShowDamageDetailsModal] = useState(false);
+  const [damageDetailsLoading, setDamageDetailsLoading] = useState(false);
+  const [damageDetailsList, setDamageDetailsList] = useState<any[]>([]);
+  const [damageDetailsItem, setDamageDetailsItem] = useState<any | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const handleViewDamageDetails = async (stockItem: any) => {
+    if (!stockItem) return;
+    setDamageDetailsItem(stockItem);
+    setShowDamageDetailsModal(true);
+    setDamageDetailsLoading(true);
+    setDamageDetailsList([]);
+    try {
+      const res = await api.get("/store-adjustments", {
+        params: {
+          store_type: "production",
+          production_store_id: stockItem.production_store_id,
+          product_id: stockItem.product_id,
+          batch_reference: stockItem.batch_reference,
+          adjustment_date: selectedDate,
+          per_page: -1
+        }
+      });
+      setDamageDetailsList(res.data?.data || res.data?.data?.data || []);
+    } catch (err) {
+      console.error("Failed to load damage details:", err);
+    } finally {
+      setDamageDetailsLoading(false);
+    }
+  };
+
   // Get unique products in stock to populate the inter-store transfer product list
   const getUniqueProducts = () => {
     const productsMap = new Map();
@@ -1201,7 +1262,7 @@ export default function ProductionStorePage() {
                                 <RenderBreakdown group={group} field="replacements" unit={group.unit} />
                               </TableCell>
                               <TableCell className="text-right">
-                                <RenderBreakdown group={group} field="damages" unit={group.unit} />
+                                <RenderBreakdown group={group} field="damages" unit={group.unit} onViewDamage={handleViewDamageDetails} />
                               </TableCell>
                               <TableCell className="text-right">
                                 <RenderBreakdown group={group} field="closing" unit={group.unit} />
@@ -2108,6 +2169,146 @@ export default function ProductionStorePage() {
             </form>
 
           </div>
+        </div>
+      )}
+
+      {/* Damage Details / Reference Modal */}
+      {showDamageDetailsModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 font-body animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-brand-sage/20 flex flex-col max-h-[85vh]">
+            {/* Header */}
+            <div className="bg-brand-sage/10 px-6 py-4.5 border-b border-brand-sage/25 flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-black text-brand-forest font-heading tracking-wide uppercase">
+                  Damage Reference Justification
+                </h3>
+                <span className="text-[10px] text-gray-500 font-bold block mt-0.5">
+                  Logged on {selectedDate}
+                </span>
+              </div>
+              <button
+                onClick={() => setShowDamageDetailsModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100/50 transition-colors border-none bg-transparent cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {damageDetailsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400 text-xs font-bold gap-3.5">
+                  <Loader2 className="animate-spin text-brand-forest" size={28} />
+                  Fetching adjustments proof references...
+                </div>
+              ) : damageDetailsList.length === 0 ? (
+                <div className="text-center py-8 text-xs font-semibold text-gray-500">
+                  No adjustments found for this date.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {damageDetailsList.map((adj, idx) => {
+                    const price = parseFloat(damageDetailsItem?.unit_price || adj.product?.default_unit_price || "0");
+                    const qty = Math.abs(parseFloat(adj.quantity_change));
+                    const totalLossValue = qty * price;
+                    return (
+                      <div key={adj.id || idx} className="space-y-4 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
+                        {/* Summary metadata */}
+                        <div className="grid grid-cols-2 gap-4 text-[11px] font-semibold text-gray-700 bg-gray-50/50 p-3.5 rounded-2xl border border-gray-100">
+                          <div>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Product</span>
+                            <span className="font-extrabold text-gray-900">{adj.product?.name}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Batch Reference</span>
+                            <span className="font-mono text-gray-900">{adj.batch_reference}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Quantity Damaged</span>
+                            <span className="font-extrabold text-red-655">{formatQuantityGlobal(qty, adj.product?.unit_of_measure || "trays")}</span>
+                          </div>
+                          <div>
+                            <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Total Loss Value</span>
+                            <span className="font-extrabold text-red-655">UGX {totalLossValue.toLocaleString()}</span>
+                          </div>
+                        </div>
+
+                        {/* Person Details */}
+                        <div className="grid grid-cols-2 gap-4 text-[10px] text-gray-500 font-bold">
+                          <div>
+                            <span className="block text-gray-400 text-[8px] uppercase tracking-wider">Reported By</span>
+                            <span className="text-gray-700 font-extrabold">{adj.creator?.name || "Order Manager"}</span>
+                          </div>
+                          <div>
+                            <span className="block text-gray-400 text-[8px] uppercase tracking-wider">Approved By</span>
+                            <span className="text-gray-700 font-extrabold">{adj.approver?.name || "Admin"}</span>
+                          </div>
+                        </div>
+
+                        {/* Reason / Details */}
+                        <div className="p-3 bg-red-50/20 rounded-xl border border-red-200/20 text-[10px] text-gray-700 font-semibold leading-relaxed">
+                          <strong className="text-red-700 font-extrabold block mb-0.5">Justification Detail:</strong>
+                          {adj.reason}
+                        </div>
+
+                        {/* Proofs */}
+                        <div className="flex gap-4 pt-2">
+                          {adj.image_url && (
+                            <div className="flex-1 space-y-1">
+                              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Photo Proof</span>
+                              <div
+                                onClick={() => setLightboxUrl(adj.image_url)}
+                                className="border border-brand-sage/20 rounded-2xl overflow-hidden bg-white p-1 hover:border-brand-mid transition-colors cursor-zoom-in max-h-28 flex justify-center items-center shadow-inner"
+                              >
+                                <img src={adj.image_url} alt="Photo proof" className="max-h-24 object-contain rounded-xl" />
+                              </div>
+                            </div>
+                          )}
+                          {adj.signature_url && (
+                            <div className="flex-1 space-y-1">
+                              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Signature Proof</span>
+                              <div
+                                onClick={() => setLightboxUrl(adj.signature_url)}
+                                className="border border-brand-sage/20 rounded-2xl overflow-hidden bg-gray-50/50 p-1 hover:border-brand-mid transition-colors cursor-zoom-in max-h-28 flex justify-center items-center shadow-inner"
+                              >
+                                <img src={adj.signature_url} alt="Signature proof" className="max-h-24 object-contain rounded-xl bg-transparent" />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 border-t border-gray-150 px-6 py-4.5 flex justify-end">
+              <Button
+                onClick={() => setShowDamageDetailsModal(false)}
+                className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold border-none text-xs rounded-xl h-10 px-6 shadow-md cursor-pointer"
+              >
+                Close Reference
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Modal */}
+      {lightboxUrl && (
+        <div 
+          className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button 
+            className="absolute top-6 right-6 text-white hover:text-gray-300 p-2 rounded-full hover:bg-white/10 transition-colors border-none bg-transparent cursor-pointer"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X size={24} />
+          </button>
+          <img src={lightboxUrl} alt="Zoomed proof" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" />
         </div>
       )}
 
