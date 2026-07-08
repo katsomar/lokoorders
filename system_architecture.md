@@ -106,6 +106,7 @@ graph TD
 | 2026-07-08 | **Inventory view** | Added store list check `storeExists` before `loadStock` fetches. | Prevent race conditions when swapping store types. |
 | 2026-07-08 | **Inventory view** | Two-part Sales Store daily stock ledger with sub-row pack mappings. | Group Sales Store into Bulk Egg vs. Converted Pack columns side-by-side. |
 | 2026-07-08 | **Transfer Form** | Rounded transfer stock availabilities and max limits to 1 decimal place. | Prevent javascript floating-point arithmetic precision from showing excessive decimals. |
+| 2026-07-08 | **Conversions Approval** | Added approval fields migration, backend endpoints, Order Manager form, and Admin pending approvals UI. | Allow Order Managers to request conversions with Admin approval instead of immediate execution. |
 
 ---
 
@@ -140,3 +141,11 @@ graph TD
 * **The Implementation & Rationale**: We restructured the layout into a unified, horizontally scrollable daily stock ledger table.
   - **Production Store**: Groups stock items in-memory by **Batch Reference** and **Base Product Name** (aggregating White Eggs, Brown Eggs, Cream Eggs, and non-egg items into clean category columns: Good, D1, D2, D3, Shell). The cells render small category badges for non-zero values, preventing table clutter. We also added a Date Selector input that triggers API queries with `date` parameters, and a dedicated **Totals Row** at the bottom of the table that sums all column values (formatted dynamically in trays). This lets managers track detailed daily movements and closing totals on their mobile devices.
   - **Sales Store**: Groups stock items in-memory by category and batch into a **two-part split table** matching the Admin's structure: Bulk Egg Products (Product, Incoming, Opening, Closing) on the left side, and Converted Pack Products (Packs, Incoming, Opening, Current, Outgoing, Returns, Replacements, Closing) on the right side. Sub-rows are mapped cleanly using React rowspans for each batch. Includes a unified **Totals Row** at the bottom separating bulk trays sum from unit pack sums.
+
+### 5. Order Manager Sales Store Conversions with Admin Approval
+* **The Gap/Problem**: Previously, packaging conversions from bulk trays to cartons inside the Sales Store (for example, White Eggs trays to White Eggs 15-pack or 6-pack) executed immediately, updating live stock amounts. However, for audit compliance, Order Managers should only be able to request conversions, which require explicit Admin review and approval before they modify active inventory balances.
+* **The Implementation & Rationale**:
+  - **Database Migration**: Added status and approval audit fields (`status`, `approved_by`, `approved_at`, `rejected_by`, `rejected_at`, `rejection_reason`) to the `sales_store_conversions` table.
+  - **Refactored Backend Controller**: Updated `SalesStoreConversionController.php` so that requests submitted by users with the `order_manager` role are saved with a `pending` status and bypass immediate stock and movement logs. We also added `/sales-store-conversions/{id}/approve` and `/sales-store-conversions/{id}/reject` endpoints for the Admin to execute or cancel the conversions.
+  - **Order Manager conversion Form**: Integrated the "Request Conversion" button and form in `order-manager/page.tsx`, allowing managers to select source bulk products and target pack sizes, see live yield estimates based on conversion rates, select specific batch tags (or FIFO), and submit requests to the queue.
+  - **Admin Approval Interface**: Refactored `pending-requests/page.tsx` by adding a third "Conversions" requests tab displaying pending conversions. Admins can inspect the source trays vs yield output, batch specifications, requested dates, notes, and approve or reject them dynamically.

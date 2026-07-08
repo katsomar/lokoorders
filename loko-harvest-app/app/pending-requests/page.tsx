@@ -29,7 +29,7 @@ import api from "@/lib/api";
 
 export default function PendingRequestsPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"transfers" | "adjustments">("transfers");
+  const [activeTab, setActiveTab] = useState<"transfers" | "adjustments" | "conversions">("transfers");
   
   // Transfers state
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -38,12 +38,16 @@ export default function PendingRequestsPage() {
   // Adjustments state
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [loadingAdjustments, setLoadingAdjustments] = useState(true);
+
+  // Conversions state
+  const [conversions, setConversions] = useState<any[]>([]);
+  const [loadingConversions, setLoadingConversions] = useState(true);
   
   // Processing state
   const [processingId, setProcessingId] = useState<string | null>(null);
   
   // Reject Modal state
-  const [rejectingItem, setRejectingItem] = useState<{ id: string; type: "transfer" | "adjustment" } | null>(null);
+  const [rejectingItem, setRejectingItem] = useState<{ id: string; type: "transfer" | "adjustment" | "conversion" } | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
   // Lightbox modal state
@@ -77,9 +81,24 @@ export default function PendingRequestsPage() {
     }
   };
 
+  const fetchConversions = async () => {
+    setLoadingConversions(true);
+    try {
+      const res = await api.get("/sales-store-conversions", {
+        params: { status: "pending", per_page: 100 }
+      });
+      setConversions(res.data?.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch pending conversions:", err);
+    } finally {
+      setLoadingConversions(false);
+    }
+  };
+
   useEffect(() => {
     fetchTransfers();
     fetchAdjustments();
+    fetchConversions();
   }, []);
 
   const handleApproveTransfer = async (id: string) => {
@@ -92,6 +111,21 @@ export default function PendingRequestsPage() {
     } catch (err: any) {
       console.error(err);
       alert(err.response?.data?.message || "Failed to approve transfer.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleApproveConversion = async (id: string) => {
+    if (!confirm("Are you sure you want to approve this conversion request? This will deduct bulk stock and credit packaged units stock.")) return;
+    setProcessingId(id);
+    try {
+      await api.post(`/sales-store-conversions/${id}/approve`);
+      alert("Conversion request approved successfully!");
+      fetchConversions();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to approve conversion.");
     } finally {
       setProcessingId(null);
     }
@@ -112,7 +146,7 @@ export default function PendingRequestsPage() {
     }
   };
 
-  const openRejectModal = (id: string, type: "transfer" | "adjustment") => {
+  const openRejectModal = (id: string, type: "transfer" | "adjustment" | "conversion") => {
     setRejectingItem({ id, type });
     setRejectionReason("");
   };
@@ -134,6 +168,12 @@ export default function PendingRequestsPage() {
         });
         alert("Transfer request rejected successfully.");
         fetchTransfers();
+      } else if (rejectingItem.type === "conversion") {
+        await api.post(`/sales-store-conversions/${rejectingItem.id}/reject`, {
+          rejection_reason: rejectionReason
+        });
+        alert("Conversion request rejected successfully.");
+        fetchConversions();
       } else {
         await api.post(`/store-adjustments/${rejectingItem.id}/reject`, {
           rejection_reason: rejectionReason
@@ -173,17 +213,18 @@ export default function PendingRequestsPage() {
               onClick={() => {
                 fetchTransfers();
                 fetchAdjustments();
+                fetchConversions();
               }}
               className="px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
-              <RefreshCw size={12} className={loadingTransfers || loadingAdjustments ? "animate-spin" : ""} />
+              <RefreshCw size={12} className={loadingTransfers || loadingAdjustments || loadingConversions ? "animate-spin" : ""} />
               Sync Lists
             </button>
           </div>
         </div>
 
         {/* Tab Switching Menu */}
-        <div className="flex bg-[#F0F4F2] p-1 rounded-xl border border-brand-sage/20 max-w-xs shadow-inner">
+        <div className="flex bg-[#F0F4F2] p-1 rounded-xl border border-brand-sage/20 max-w-sm shadow-inner">
           <button
             onClick={() => setActiveTab("transfers")}
             className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
@@ -194,6 +235,17 @@ export default function PendingRequestsPage() {
           >
             <ArrowRightLeft size={12} />
             Transfers ({transfers.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("conversions")}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === "conversions"
+                ? "bg-brand-forest text-white shadow-sm"
+                : "text-brand-forest hover:bg-brand-sage/15"
+            }`}
+          >
+            <Layers size={12} />
+            Conversions ({conversions.length})
           </button>
           <button
             onClick={() => setActiveTab("adjustments")}
@@ -210,7 +262,7 @@ export default function PendingRequestsPage() {
 
         {/* Request Lists container */}
         <AnimatePresence mode="wait">
-          {activeTab === "transfers" ? (
+          {activeTab === "transfers" && (
             <motion.div
               key="transfers-tab-content"
               initial={{ opacity: 0, y: 10 }}
@@ -325,7 +377,122 @@ export default function PendingRequestsPage() {
                 </div>
               )}
             </motion.div>
-          ) : (
+          )}
+
+          {activeTab === "conversions" && (
+            <motion.div
+              key="conversions-tab-content"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-4"
+            >
+              {loadingConversions ? (
+                <div className="bg-white rounded-xl border border-brand-sage/20 p-10 text-center text-gray-400 font-bold flex flex-col items-center justify-center gap-3 shadow-sm">
+                  <RefreshCw className="animate-spin text-brand-mid" size={24} />
+                  <span className="text-xs">Loading pending conversion requests...</span>
+                </div>
+              ) : conversions.length === 0 ? (
+                <div className="bg-white rounded-xl border border-brand-sage/20 py-12 px-6 text-center text-gray-400 font-bold flex flex-col items-center justify-center gap-2 shadow-sm">
+                  <CheckCircle2 className="text-green-500 animate-pulse" size={30} />
+                  <span className="text-brand-forest text-xs font-extrabold mt-1">All Clear!</span>
+                  <span className="text-[11px] text-gray-500 font-medium">No pending conversion requests require approval.</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {conversions.map((req) => (
+                    <Card key={req.id} className="border border-brand-sage/35 shadow-sm rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-white flex flex-col justify-between">
+                      <div className="p-4 space-y-3">
+                        {/* Title and Badge */}
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="space-y-0.5">
+                            <h4 className="font-bold text-brand-forest text-xs leading-snug">
+                              {req.from_product?.name} → {req.to_product?.name}
+                            </h4>
+                            <span className="text-[9px] text-gray-400 font-bold font-mono tracking-wider">{req.from_product?.code} → {req.to_product?.code}</span>
+                          </div>
+                          <span className="px-2 py-0.5 bg-blue-50 text-blue-755 rounded text-[8px] font-black uppercase tracking-wider border border-blue-200/50 shrink-0">
+                            Conversion
+                          </span>
+                        </div>
+
+                        {/* Store Location */}
+                        <div className="bg-gray-50/70 p-2 rounded-lg border border-gray-150 flex items-center gap-1.5 text-[10px] font-bold text-gray-800">
+                          <Warehouse className="text-brand-mid shrink-0" size={12} />
+                          <div className="space-y-0.5">
+                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Location Store</span>
+                            <span>{req.sales_store?.name}</span>
+                          </div>
+                        </div>
+
+                        {/* Details Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-[10px] bg-gray-50/30 p-2.5 rounded-lg border border-brand-sage/10">
+                          <div className="space-y-0.5">
+                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">From Qty (Trays)</span>
+                            <span className="font-extrabold text-brand-forest">{parseFloat(req.from_quantity)} Trays</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">To Qty (Yield)</span>
+                            <span className="font-extrabold text-brand-forest">{parseFloat(req.to_quantity)} {req.to_product?.unit_of_measure === 'trays' ? 'Trays' : 'Packs'}</span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Batch Reference</span>
+                            <span className="font-extrabold font-mono text-brand-amber">
+                              {req.batch_reference || "FIFO Auto Allocation"}
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Date Requested</span>
+                            <span className="font-semibold text-gray-655">{req.conversion_date}</span>
+                          </div>
+                        </div>
+
+                        {/* Requester Info */}
+                        <div className="flex items-center gap-1.5 pt-1.5 border-t border-brand-sage/15 text-[10px] font-semibold text-gray-600">
+                          <User size={12} className="text-brand-mid shrink-0" />
+                          <span>Submitted by: <strong>{req.user?.name || "Order Manager"}</strong></span>
+                        </div>
+
+                        {/* Internal Notes */}
+                        {req.notes && (
+                          <div className="p-2 bg-brand-sage/5 rounded-lg border border-brand-sage/20 text-[10px] text-gray-600 font-medium leading-relaxed">
+                            <strong className="text-brand-forest">Notes:</strong> {req.notes}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Approval/Rejection Actions */}
+                      <div className="flex border-t border-brand-sage/20 bg-gray-50/50 p-2 gap-2 rounded-b-xl">
+                        <button
+                          onClick={() => openRejectModal(req.id, "conversion")}
+                          disabled={processingId !== null}
+                          className="flex-1 h-8 border border-red-200 text-red-650 hover:bg-red-50 disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer bg-white"
+                        >
+                          <X size={12} />
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => handleApproveConversion(req.id)}
+                          disabled={processingId !== null}
+                          className="flex-1 h-8 bg-brand-forest hover:bg-brand-forest/90 text-white disabled:opacity-50 text-[11px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer border-none"
+                        >
+                          {processingId === req.id ? (
+                            <RefreshCw className="animate-spin" size={12} />
+                          ) : (
+                            <Check size={12} />
+                          )}
+                          Approve
+                        </button>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {activeTab === "adjustments" && (
             <motion.div
               key="adjustments-tab-content"
               initial={{ opacity: 0, y: 10 }}
@@ -375,21 +542,21 @@ export default function PendingRequestsPage() {
                         {/* Details Grid */}
                         <div className="grid grid-cols-2 gap-2 text-[10px] bg-gray-50/30 p-2.5 rounded-lg border border-brand-sage/10">
                           <div className="space-y-0.5">
-                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Wastage Qty</span>
+                            <span className="text-[7px] text-gray-450 font-black uppercase block leading-none">Wastage Qty</span>
                             <span className="font-extrabold text-red-650">{Math.abs(parseFloat(req.quantity_change))} {req.product?.unit_of_measure}</span>
                           </div>
                           <div className="space-y-0.5">
-                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Batch Reference</span>
+                            <span className="text-[7px] text-gray-450 font-black uppercase block leading-none">Batch Reference</span>
                             <span className="font-extrabold font-mono text-brand-amber">
                               {req.batch_reference || "N/A"}
                             </span>
                           </div>
                           <div className="space-y-0.5">
-                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Requested Date</span>
+                            <span className="text-[7px] text-gray-450 font-black uppercase block leading-none">Requested Date</span>
                             <span className="font-semibold text-gray-650">{req.adjustment_date}</span>
                           </div>
                           <div className="space-y-0.5">
-                            <span className="text-[7px] text-gray-400 uppercase font-black block leading-none">Submitted by</span>
+                            <span className="text-[7px] text-gray-450 font-black uppercase block leading-none">Submitted by</span>
                             <span className="font-semibold text-gray-600">{req.creator?.name || "Order Manager"}</span>
                           </div>
                         </div>

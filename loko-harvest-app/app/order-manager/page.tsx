@@ -44,7 +44,7 @@ export default function OrderManagerDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "alerts" | "replacements">("orders");
-  const [inventorySubView, setInventorySubView] = useState<"list" | "damages" | "transfers">("list");
+  const [inventorySubView, setInventorySubView] = useState<"list" | "damages" | "transfers" | "conversions">("list");
   const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
  
@@ -185,6 +185,14 @@ export default function OrderManagerDashboard() {
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [selectedBatch, setSelectedBatch] = useState<string>("all");
   const [selectedInventoryDate, setSelectedInventoryDate] = useState(() => new Date().toISOString().split("T")[0]);
+
+  // Conversion Form states
+  const [convFromProductId, setConvFromProductId] = useState("");
+  const [convToProductId, setConvToProductId] = useState("");
+  const [convBatchRef, setConvBatchRef] = useState("");
+  const [convQty, setConvQty] = useState("");
+  const [convNotes, setConvNotes] = useState("");
+  const [isSubmittingConv, setIsSubmittingConv] = useState(false);
 
   // Driver Assignment States
   const [drivers, setDrivers] = useState<any[]>([]);
@@ -1392,6 +1400,153 @@ export default function OrderManagerDashboard() {
     return sums;
   }, [salesRowGroups]);
 
+  useEffect(() => {
+    if (activeTab === "inventory" && inventorySubView === "conversions") {
+      fetchAdjustProducts();
+    }
+  }, [activeTab, inventorySubView]);
+
+  const getBulkProductsForConversion = () => {
+    const isBulkProduct = (code: string) => {
+      return ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
+    };
+
+    const aggregated: Record<string, { product_id: string; product: string; code: string; quantity: number; unit: string }> = {};
+
+    stockItems.forEach(item => {
+      const prodCode = item.product?.code || item.code || "";
+      if (isBulkProduct(prodCode)) {
+        const prodId = item.product_id;
+        const qty = parseFloat(item.current_quantity) || 0;
+        if (aggregated[prodId]) {
+          aggregated[prodId].quantity += qty;
+        } else {
+          aggregated[prodId] = {
+            product_id: prodId,
+            product: item.product?.name || item.product_name || "Unknown Bulk",
+            code: prodCode,
+            quantity: qty,
+            unit: item.product?.unit_of_measure === 'trays' ? 'Trays' : 'Units'
+          };
+        }
+      }
+    });
+
+    return Object.values(aggregated).filter(p => p.quantity > 0);
+  };
+
+  const getAvailableBatchesForConversion = () => {
+    if (!convFromProductId) return [];
+    return stockItems.filter(
+      item => item.product_id === convFromProductId && (parseFloat(item.current_quantity) || 0) > 0
+    );
+  };
+
+  const getTargetPackagedProducts = () => {
+    if (!convFromProductId) return [];
+    const sourceProd = stockItems.find(item => item.product_id === convFromProductId)?.product;
+    const sourceCode = sourceProd?.code || stockItems.find(item => item.product_id === convFromProductId)?.code || "";
+    if (!sourceCode) return [];
+
+    const sourcePrefix = sourceCode.substring(0, 7); // e.g. EGG-WHT, EGG-CRM, EGG-BRN
+
+    return adjustProducts.filter(p => {
+      return p.code.startsWith(sourcePrefix) && p.id !== convFromProductId;
+    });
+  };
+
+  const getSelectedSourceStockItem = () => {
+    if (!convFromProductId) return null;
+
+    if (convBatchRef) {
+      const match = stockItems.find(
+        item => item.product_id === convFromProductId && item.batch_reference === convBatchRef
+      );
+      return match ? { quantity: Number((parseFloat(match.current_quantity) || 0).toFixed(1)) } : null;
+    }
+
+    const matchSum = stockItems
+      .filter(item => item.product_id === convFromProductId && (parseFloat(item.current_quantity) || 0) > 0)
+      .reduce((sum, item) => sum + (parseFloat(item.current_quantity) || 0), 0);
+
+    return { quantity: Number(matchSum.toFixed(1)) };
+  };
+
+  const getSelectedTargetProduct = () => {
+    return adjustProducts.find(p => p.id === convToProductId);
+  };
+
+  const getConversionYield = () => {
+    if (!convQty || !convToProductId) return 0;
+    const qty = parseFloat(convQty) || 0;
+    const targetProd = getSelectedTargetProduct();
+    if (!targetProd) return 0;
+
+    let ratio = 1.0;
+    if (targetProd.code.endsWith('-15P')) {
+      ratio = 2.0;
+    } else if (targetProd.code.endsWith('-06P')) {
+      ratio = 5.0;
+    } else if (targetProd.code.endsWith('-FAM')) {
+      ratio = 0.2;
+    } else if (targetProd.code.endsWith('-DBL')) {
+      ratio = 0.5;
+    } else if (targetProd.code.endsWith('-TPL')) {
+      ratio = 1.0 / 3.0;
+    } else if (targetProd.code === 'EGG-CRM-SGL') {
+      ratio = 0.5;
+    }
+
+    return Number((qty * ratio).toFixed(1));
+  };
+
+  const handlePostConversion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStoreId || !convFromProductId || !convToProductId || !convQty) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    const qty = parseFloat(convQty);
+    const availableObj = getSelectedSourceStockItem();
+    const availableQty = availableObj ? availableObj.quantity : 0;
+
+    if (qty > availableQty) {
+      alert("Requested quantity exceeds available stock");
+      return;
+    }
+
+    setIsSubmittingConv(true);
+    try {
+      await api.post('/sales-store-conversions', {
+        sales_store_id: selectedStoreId,
+        from_product_id: convFromProductId,
+        to_product_id: convToProductId,
+        from_quantity: qty,
+        batch_reference: convBatchRef || null,
+        notes: convNotes || `Conversion request by Order Manager`
+      });
+
+      alert("Conversion request submitted successfully! Pending admin approval.");
+      setConvFromProductId("");
+      setConvToProductId("");
+      setConvBatchRef("");
+      setConvQty("");
+      setConvNotes("");
+      setInventorySubView("list");
+      
+      const endpoint = "/sales-stock";
+      const params = { sales_store_id: selectedStoreId, date: selectedInventoryDate };
+      const res = await api.get(endpoint, { params });
+      setStockItems(res.data?.data || []);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.message || "Failed to submit conversion request. Please try again.");
+    } finally {
+      setIsSubmittingConv(false);
+    }
+  };
+
   const uniqueBatches = Array.from(new Set(stockItems.map(item => item.batch_reference).filter(Boolean))) as string[];
   const batchOptions = [
     { label: "All Batch References", value: "all" },
@@ -1819,6 +1974,22 @@ export default function OrderManagerDashboard() {
                               Request Transfer
                             </button>
                           </>
+                        )}
+                        {storeType === "sales" && (
+                          <button
+                            onClick={() => {
+                              setInventorySubView("conversions");
+                              setConvFromProductId("");
+                              setConvToProductId("");
+                              setConvBatchRef("");
+                              setConvQty("");
+                              setConvNotes("");
+                            }}
+                            className="text-[10px] font-black uppercase text-brand-forest hover:text-white bg-brand-sage/20 hover:bg-brand-forest border border-brand-sage/40 px-2 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
+                          >
+                            <ArrowRightLeft size={11} />
+                            Request Conversion
+                          </button>
                         )}
                         <button
                           onClick={() => {
@@ -2650,6 +2821,151 @@ export default function OrderManagerDashboard() {
                         <Button
                           type="submit"
                           isLoading={isSubmittingTransfer}
+                          className="w-full h-11 bg-brand-forest hover:bg-brand-forest/90 text-white font-black tracking-widest text-xs uppercase rounded-xl border-none shadow-md mt-2 cursor-pointer font-bold"
+                        >
+                          Submit Request
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {inventorySubView === "conversions" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setInventorySubView("list")}
+                      className="text-xs font-bold text-brand-forest hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      ← Back to Inventory List
+                    </button>
+                  </div>
+
+                  <Card className="border border-brand-sage/40 shadow-xl rounded-2xl bg-white">
+                    <CardContent className="p-4 space-y-4 text-xs">
+                      <div className="flex items-center gap-2 pb-2 border-b border-brand-sage/20">
+                        <span className="h-2 w-2 rounded-full bg-brand-forest" />
+                        <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-forest">Request Product Conversion</h4>
+                      </div>
+                      <form onSubmit={handlePostConversion} className="space-y-3.5">
+                        {/* Source Product (From) */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Convert From Product (Bulk Trays) *</label>
+                          <select
+                            required
+                            value={convFromProductId}
+                            onChange={(e) => {
+                              setConvFromProductId(e.target.value);
+                              setConvToProductId("");
+                              setConvBatchRef("");
+                              setConvQty("");
+                            }}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          >
+                            <option value="">Choose bulk product...</option>
+                            {getBulkProductsForConversion().map(p => (
+                              <option key={p.product_id} value={p.product_id}>
+                                {p.product} ({Number(p.quantity.toFixed(1))} Trays available)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Batch selection */}
+                        {convFromProductId && getAvailableBatchesForConversion().length > 0 && (
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Source Batch *</label>
+                            <select
+                              value={convBatchRef}
+                              onChange={(e) => {
+                                setConvBatchRef(e.target.value);
+                                setConvQty("");
+                              }}
+                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                            >
+                              <option value="">FIFO (First-In, First-Out) - Auto split across batches</option>
+                              {getAvailableBatchesForConversion().map(b => (
+                                <option key={b.id} value={b.batch_reference || ""}>
+                                  Batch: {b.batch_reference || "Unbatched"} ({Number((parseFloat(b.current_quantity) || 0).toFixed(1))} Trays available)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Destination Product (To) */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Convert To Product (Packaged Carton) *</label>
+                          <select
+                            required
+                            value={convToProductId}
+                            onChange={(e) => setConvToProductId(e.target.value)}
+                            disabled={!convFromProductId}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          >
+                            <option value="">Choose packaged product...</option>
+                            {getTargetPackagedProducts().map(p => (
+                              <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Quantity */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Number of Trays to Convert *</label>
+                          <input
+                            type="number"
+                            step="1"
+                            required
+                            min="1"
+                            max={getSelectedSourceStockItem() ? getSelectedSourceStockItem()?.quantity : undefined}
+                            placeholder="Enter tray count"
+                            value={convQty}
+                            onChange={(e) => setConvQty(e.target.value)}
+                            disabled={!convToProductId}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Live Yield Estimate */}
+                        {parseFloat(convQty) > 0 && getSelectedTargetProduct() && (
+                          <div className="bg-brand-sage/10 rounded-xl p-3 border border-brand-sage/20 space-y-1 text-xs">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500 font-semibold">Yield Output Estimate:</span>
+                              <strong className="text-brand-forest text-sm font-black">
+                                {getConversionYield().toLocaleString()} {getSelectedTargetProduct()?.unit_of_measure === 'trays' ? 'Trays' : 'Packs'}
+                              </strong>
+                            </div>
+                            <div className="text-[9px] text-gray-400 font-medium leading-normal">
+                              Formula: {
+                                getSelectedTargetProduct()?.code.endsWith('-15P') ? '1 tray yields 2 x 15-Packs' :
+                                getSelectedTargetProduct()?.code.endsWith('-06P') ? '1 tray yields 5 x 6-Packs' :
+                                getSelectedTargetProduct()?.code.endsWith('-FAM') ? '5 trays yield 1 x Family Pack' :
+                                getSelectedTargetProduct()?.code.endsWith('-DBL') ? '2 trays yield 1 x Double Pack' :
+                                getSelectedTargetProduct()?.code.endsWith('-TPL') ? '3 trays yield 1 x Triple Pack' :
+                                getSelectedTargetProduct()?.code === 'EGG-CRM-SGL' ? '2 trays yield 1 x Single Pack' :
+                                '1 tray yields 1 unit/pack/tray'
+                              }
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Notes */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Internal Notes / Reason *</label>
+                          <textarea
+                            required
+                            placeholder="Provide any details for this conversion request..."
+                            value={convNotes}
+                            onChange={(e) => setConvNotes(e.target.value)}
+                            className="w-full min-h-[60px] p-2.5 text-xs font-semibold rounded-xl border border-brand-sage/50 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          isLoading={isSubmittingConv}
                           className="w-full h-11 bg-brand-forest hover:bg-brand-forest/90 text-white font-black tracking-widest text-xs uppercase rounded-xl border-none shadow-md mt-2 cursor-pointer font-bold"
                         >
                           Submit Request

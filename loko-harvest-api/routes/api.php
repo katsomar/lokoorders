@@ -103,6 +103,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/sales-movements', [App\Http\Controllers\Api\V1\SalesStoreStockController::class, 'movements']);
         Route::get('/sales-store-conversions', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'index']);
         Route::post('/sales-store-conversions', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'store']);
+        Route::post('/sales-store-conversions/{id}/approve', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'approve']);
+        Route::post('/sales-store-conversions/{id}/reject', [App\Http\Controllers\Api\V1\SalesStoreConversionController::class, 'reject']);
         
         // Notifications
         Route::get('/notifications', [App\Http\Controllers\Api\V1\NotificationController::class, 'index']);
