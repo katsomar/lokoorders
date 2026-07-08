@@ -2338,7 +2338,7 @@ export default function OrderManagerDashboard() {
                               <td className="py-2.5 px-2 text-right text-gray-800 font-extrabold whitespace-nowrap align-middle">
                                 {formatQuantity(salesTotals.bulkOpening.toString(), "trays")}
                               </td>
-                              <td className="py-2.5 px-2 text-right text-red-655 font-extrabold whitespace-nowrap align-middle">
+                              <td className="py-2.5 px-2 text-right text-red-600 font-extrabold whitespace-nowrap align-middle">
                                 {salesTotals.bulkDamages > 0 ? `-${formatQuantity(salesTotals.bulkDamages.toString(), "trays")}` : "0"}
                               </td>
                               <td className="py-2.5 px-2 text-right text-brand-forest font-black whitespace-nowrap align-middle border-r border-brand-sage/25">
@@ -2367,7 +2367,7 @@ export default function OrderManagerDashboard() {
                               <td className="py-2.5 px-2 text-right text-amber-600 font-extrabold whitespace-nowrap align-middle">
                                 {salesTotals.packReplacements > 0 ? `-${formatQuantity(salesTotals.packReplacements.toString(), "units")}` : "0"}
                               </td>
-                              <td className="py-2.5 px-2 text-right text-red-655 font-extrabold whitespace-nowrap align-middle">
+                              <td className="py-2.5 px-2 text-right text-red-600 font-extrabold whitespace-nowrap align-middle">
                                 {salesTotals.packDamages > 0 ? `-${formatQuantity(salesTotals.packDamages.toString(), "units")}` : "0"}
                               </td>
                               <td className="py-2.5 px-2.5 text-right text-brand-forest font-black whitespace-nowrap align-middle">

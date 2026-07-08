@@ -1182,13 +1182,13 @@ export default function SalesStorePage() {
                                             <button
                                               type="button"
                                               onClick={() => handleViewDamageDetails(bulkItem)}
-                                              className="font-bold text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer"
+                                              className="font-bold text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer"
                                               title="Click to view damage photo proof and details"
                                             >
                                               {formatQuantity(bulkItem.damages, bulkItem.unit)}
                                             </button>
                                           ) : (
-                                            <span className="text-red-655/50 font-medium">0</span>
+                                            <span className="text-red-600/50 font-medium">0</span>
                                           )
                                         ) : (
                                           <span className="text-gray-300">—</span>
@@ -1226,13 +1226,13 @@ export default function SalesStorePage() {
                                             <button
                                               type="button"
                                               onClick={() => handleViewDamageDetails(convertedItem)}
-                                              className="font-bold text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer"
+                                              className="font-bold text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer"
                                               title="Click to view damage photo proof and details"
                                             >
                                               {formatQuantity(convertedItem.damages, convertedItem.unit)}
                                             </button>
                                           ) : (
-                                            <span className="text-red-655/50 font-medium">0</span>
+                                            <span className="text-red-600/50 font-medium">0</span>
                                           )
                                         ) : (
                                           <span className="text-gray-300">—</span>
@@ -1377,7 +1377,7 @@ export default function SalesStorePage() {
                           <TableCell className="text-right text-emerald-800 text-xs font-bold whitespace-nowrap">
                             {formatTotalQuantity(getFilteredStock().filter(i => isBulkProduct(i.code)).reduce((sum, item) => sum + (item.conversions_out + item.transferred_out), 0))}
                           </TableCell>
-                          <TableCell className="text-right text-red-655 text-xs font-bold whitespace-nowrap">
+                          <TableCell className="text-right text-red-600 text-xs font-bold whitespace-nowrap">
                             {formatTotalQuantity(getFilteredStock().filter(i => isBulkProduct(i.code)).reduce((sum, item) => sum + (item.damages || 0), 0))}
                           </TableCell>
                           <TableCell className="text-right text-emerald-800 text-xs font-bold border-r border-brand-sage/25 whitespace-nowrap">
@@ -1404,7 +1404,7 @@ export default function SalesStorePage() {
                           <TableCell className="text-right text-blue-800 text-xs font-bold whitespace-nowrap">
                             {formatTotalQuantity(getFilteredStock().filter(i => !isBulkProduct(i.code)).reduce((sum, item) => sum + (item.replacements || 0), 0))}
                           </TableCell>
-                          <TableCell className="text-right text-red-655 text-xs font-bold whitespace-nowrap">
+                          <TableCell className="text-right text-red-600 text-xs font-bold whitespace-nowrap">
                             {formatTotalQuantity(getFilteredStock().filter(i => !isBulkProduct(i.code)).reduce((sum, item) => sum + (item.damages || 0), 0))}
                           </TableCell>
                           <TableCell className="text-right text-blue-800 text-xs font-bold border-r border-brand-sage/25 whitespace-nowrap">
@@ -2296,11 +2296,11 @@ export default function SalesStorePage() {
                           </div>
                           <div>
                             <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Quantity Damaged</span>
-                            <span className="font-extrabold text-red-655">{formatQuantity(qty, adj.product?.unit_of_measure || "trays")}</span>
+                            <span className="font-extrabold text-red-600">{formatQuantity(qty, adj.product?.unit_of_measure || "trays")}</span>
                           </div>
                           <div>
                             <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Total Loss Value</span>
-                            <span className="font-extrabold text-red-655">UGX {totalLossValue.toLocaleString()}</span>
+                            <span className="font-extrabold text-red-600">UGX {totalLossValue.toLocaleString()}</span>
                           </div>
                         </div>
 

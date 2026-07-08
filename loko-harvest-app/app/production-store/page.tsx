@@ -90,14 +90,14 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
           <button
             type="button"
             onClick={() => onViewDamage && onViewDamage(item.item)}
-            className="font-black text-xs text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap"
+            className="font-black text-xs text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap"
             title="Click to view damage photo proof and details"
           >
             {formatQuantityGlobal(val, unit)}
           </button>
         );
       }
-      return <span className="font-semibold text-xs text-red-655/50 whitespace-nowrap">0</span>;
+      return <span className="font-semibold text-xs text-red-600/50 whitespace-nowrap">0</span>;
     }
     return <span className="font-semibold text-xs text-gray-700 whitespace-nowrap">{formatQuantityGlobal(item[field], unit)}</span>;
   }
@@ -119,7 +119,7 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
           return (
             <div key={cat.key} className="flex justify-between items-center text-[10px] font-medium text-gray-400 whitespace-nowrap">
               <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
-              <span className={field === "damages" ? "text-red-655/40 font-medium whitespace-nowrap" : "font-medium whitespace-nowrap"}>0</span>
+              <span className={field === "damages" ? "text-red-600/40 font-medium whitespace-nowrap" : "font-medium whitespace-nowrap"}>0</span>
             </div>
           );
         }
@@ -131,7 +131,7 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
               <button
                 type="button"
                 onClick={() => onViewDamage && onViewDamage(catData.item)}
-                className="font-bold text-red-655 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap animate-pulse"
+                className="font-bold text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer whitespace-nowrap animate-pulse"
                 title="Click to view damage photo proof and details"
               >
                 {formatQuantityGlobal(val, unit, false)}
@@ -1213,7 +1213,7 @@ export default function ProductionStorePage() {
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 bg-gray-50/30">Current Stock</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Stock Taken</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Replacements</TableHead>
-                      <TableHead className="text-right text-[10px] font-semibold text-red-655 tracking-wider uppercase h-10 py-2">Damages</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-red-600 tracking-wider uppercase h-10 py-2">Damages</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Closing Stock</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Unit Price</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Value Taken</TableHead>
@@ -1308,7 +1308,7 @@ export default function ProductionStorePage() {
                           <TableCell className="text-right text-blue-600 text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.replacements, 0))}
                           </TableCell>
-                          <TableCell className="text-right text-red-655 text-xs font-bold">
+                          <TableCell className="text-right text-red-600 text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.damages, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold">
@@ -2225,11 +2225,11 @@ export default function ProductionStorePage() {
                           </div>
                           <div>
                             <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Quantity Damaged</span>
-                            <span className="font-extrabold text-red-655">{formatQuantityGlobal(qty, adj.product?.unit_of_measure || "trays")}</span>
+                            <span className="font-extrabold text-red-600">{formatQuantityGlobal(qty, adj.product?.unit_of_measure || "trays")}</span>
                           </div>
                           <div>
                             <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider block">Total Loss Value</span>
-                            <span className="font-extrabold text-red-655">UGX {totalLossValue.toLocaleString()}</span>
+                            <span className="font-extrabold text-red-600">UGX {totalLossValue.toLocaleString()}</span>
                           </div>
                         </div>
 
