@@ -53,6 +53,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         // Store Transfers
         Route::get('/store-transfers', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'index']);
         Route::post('/store-transfers', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'store']);
+        Route::post('/store-transfers/{id}/approve', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'approve']);
+        Route::post('/store-transfers/{id}/reject', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'reject']);
         
         // Deliveries
         Route::get('/deliveries', [App\Http\Controllers\Api\V1\DeliveryController::class, 'index']);

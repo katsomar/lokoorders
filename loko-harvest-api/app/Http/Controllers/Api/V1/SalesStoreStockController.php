@@ -26,6 +26,7 @@ class SalesStoreStockController extends Controller
             $transfersProdQuery = \Illuminate\Support\Facades\DB::table('store_transfers')
                 ->where('sales_store_id', $item->sales_store_id)
                 ->where('product_id', $item->product_id)
+                ->where('status', 'approved')
                 ->where(function ($q) use ($item) {
                     if ($item->batch_reference === null) {
                         $q->whereNull('batch_reference');

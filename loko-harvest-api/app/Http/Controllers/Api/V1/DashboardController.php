@@ -258,7 +258,8 @@ class DashboardController extends Controller
         }
 
         // Recent stock transfers
-        $recentTransfers = StoreTransfer::with(['product'])
+        $recentTransfers = StoreTransfer::where('status', 'approved')
+            ->with(['product'])
             ->latest()
             ->take(5)
             ->get();

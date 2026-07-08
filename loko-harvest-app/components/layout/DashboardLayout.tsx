@@ -17,10 +17,11 @@ import {
   X, 
   LogOut,
   Warehouse,
-  ChevronRight
+  ChevronRight,
+  Clock
 } from "lucide-react";
 import { useAuth } from "@/store/useAuth";
-import { Button } from "@/components/ui/button";
+import api from "@/lib/api";
 
 const navItems = [
   { group: "General", items: [
@@ -29,6 +30,7 @@ const navItems = [
   { group: "Production & Sales", items: [
     { name: "Production Store", href: "/production-store", icon: Warehouse },
     { name: "Sales Store", href: "/sales-store", icon: ShoppingBag },
+    { name: "Pending Requests", href: "/pending-requests", icon: Clock },
   ]},
   { group: "Orders & Customers", items: [
     { name: "Orders", href: "/orders", icon: ShoppingBag },
@@ -58,11 +60,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { user, clearAuth } = useAuth();
 
+  const [pendingCount, setPendingCount] = useState(0);
+
   React.useEffect(() => {
     if (user && user.role === "order_manager" && pathname !== "/production-store/intake") {
       router.push("/order-manager");
     }
   }, [user, router, pathname]);
+
+  React.useEffect(() => {
+    async function fetchPendingCount() {
+      if (!user || user.role === "order_manager") return;
+      try {
+        const [transfersRes, adjustmentsRes] = await Promise.all([
+          api.get("/store-transfers", { params: { status: "pending", per_page: 1 } }),
+          api.get("/store-adjustments", { params: { status: "pending", per_page: 1 } })
+        ]);
+        const transfersCount = transfersRes.data?.data?.total || transfersRes.data?.data?.data?.length || 0;
+        const adjustmentsCount = adjustmentsRes.data?.data?.total || adjustmentsRes.data?.data?.data?.length || adjustmentsRes.data?.data?.length || 0;
+        setPendingCount(transfersCount + adjustmentsCount);
+      } catch (err) {
+        console.error("Failed to load pending requests count:", err);
+      }
+    }
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 45000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -133,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all group ${
+                      className={`relative flex items-center gap-3 rounded-lg px-3 py-2 transition-all group ${
                         isActive 
                           ? "bg-white/10 text-brand-yellow border-l-4 border-brand-yellow" 
                           : "text-white/70 hover:bg-white/5 hover:text-white"
@@ -141,7 +165,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     >
                       <item.icon size={20} className={isActive ? "text-brand-yellow" : ""} />
                       {isSidebarOpen && (
-                        <span className="text-sm font-medium">{item.name}</span>
+                        <span className="text-sm font-medium flex-1">{item.name}</span>
+                      )}
+                      {isSidebarOpen && item.name === "Pending Requests" && pendingCount > 0 && (
+                        <span className="bg-red-550 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
+                          {pendingCount}
+                        </span>
+                      )}
+                      {!isSidebarOpen && item.name === "Pending Requests" && pendingCount > 0 && (
+                        <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
                       )}
                       {!isSidebarOpen && isActive && (
                          <div className="absolute left-0 w-1 h-6 bg-brand-yellow rounded-r-full" />

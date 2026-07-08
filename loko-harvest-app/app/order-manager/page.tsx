@@ -28,7 +28,8 @@ import {
   Eye,
   Loader2,
   Truck,
-  ArrowDownToLine
+  ArrowDownToLine,
+  ArrowRightLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -43,7 +44,7 @@ export default function OrderManagerDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "alerts" | "replacements">("orders");
-  const [inventorySubView, setInventorySubView] = useState<"list" | "damages">("list");
+  const [inventorySubView, setInventorySubView] = useState<"list" | "damages" | "transfers">("list");
   const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
  
@@ -113,6 +114,53 @@ export default function OrderManagerDashboard() {
   const [adjustDrawing, setAdjustDrawing] = useState(false);
   const [productSearchText, setProductSearchText] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+
+  // Stock transfers states
+  const [transferProductionStores, setTransferProductionStores] = useState<any[]>([]);
+  const [transferSalesStores, setTransferSalesStores] = useState<any[]>([]);
+  const [transferProdStoreId, setTransferProdStoreId] = useState("");
+  const [transferSalesStoreId, setTransferSalesStoreId] = useState("");
+  const [transferProductId, setTransferProductId] = useState("");
+  const [transferBatch, setTransferBatch] = useState("");
+  const [transferQty, setTransferQty] = useState("");
+  const [transferNotes, setTransferNotes] = useState("");
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().split("T")[0]);
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+  const [transferProducts, setTransferProducts] = useState<any[]>([]);
+  const [rawTransferStockData, setRawTransferStockData] = useState<any[]>([]);
+  const [isLoadingTransferStock, setIsLoadingTransferStock] = useState(false);
+  const [transferProdSearchText, setTransferProdSearchText] = useState("");
+  const [showTransferProdSuggestions, setShowTransferProdSuggestions] = useState(false);
+
+  const selectedTransferProduct = transferProducts.find(p => p.id === transferProductId);
+  
+  const transferProductSupportsBatch = selectedTransferProduct && (
+    selectedTransferProduct.category === 'eggs' || 
+    (selectedTransferProduct.category === 'poultry' && selectedTransferProduct.code !== 'POU-LVE')
+  );
+
+  const transferAvailableBatches = React.useMemo(() => {
+    if (!transferProductId || !rawTransferStockData) return [];
+    return rawTransferStockData.filter(
+      (item: any) => item.product_id === transferProductId && (parseFloat(item.current_quantity) || 0) > 0
+    );
+  }, [transferProductId, rawTransferStockData]);
+
+  const selectedTransferBatchObj = transferBatch 
+    ? transferAvailableBatches.find((b: any) => b.batch_reference === transferBatch) 
+    : null;
+
+  const transferAvailableQty = selectedTransferBatchObj 
+    ? (parseFloat(selectedTransferBatchObj.current_quantity) || 0) 
+    : (selectedTransferProduct?.available || 0);
+
+  const getFilteredTransferProducts = () => {
+    if (!transferProdSearchText.trim()) return transferProducts;
+    return transferProducts.filter(p => 
+      p.name.toLowerCase().includes(transferProdSearchText.toLowerCase()) ||
+      p.code.toLowerCase().includes(transferProdSearchText.toLowerCase())
+    );
+  };
 
   const filteredOrderOptions = orders
     .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
@@ -710,6 +758,132 @@ export default function OrderManagerDashboard() {
       alert(err.response?.data?.message || "Failed to submit stock adjustment request.");
     } finally {
       setIsSubmittingAdjustment(false);
+    }
+  };
+
+  // Load stores and products for transfers form
+  useEffect(() => {
+    async function loadTransferStores() {
+      try {
+        const [prodRes, salesRes] = await Promise.all([
+          api.get("/production-stores"),
+          api.get("/sales-stores")
+        ]);
+        const prodList = prodRes.data?.data || [];
+        const salesList = salesRes.data?.data || [];
+        setTransferProductionStores(prodList);
+        setTransferSalesStores(salesList);
+        if (prodList.length > 0) setTransferProdStoreId(prodList[0].id);
+        if (salesList.length > 0) setTransferSalesStoreId(salesList[0].id);
+      } catch (err) {
+        console.error("Failed to load stores for transfer:", err);
+      }
+    }
+    if (activeTab === "inventory" && inventorySubView === "transfers") {
+      loadTransferStores();
+    }
+  }, [activeTab, inventorySubView]);
+
+  // Load production stock when source store changes
+  useEffect(() => {
+    if (!transferProdStoreId) {
+      setTransferProducts([]);
+      setRawTransferStockData([]);
+      return;
+    }
+    async function loadProductionStock() {
+      setIsLoadingTransferStock(true);
+      try {
+        const res = await api.get('/production-stock', {
+          params: { production_store_id: transferProdStoreId }
+        });
+        const stockData = res.data?.data || [];
+        setRawTransferStockData(stockData);
+        
+        // Aggregate by product
+        const aggregated: Record<string, { name: string; available: number; unit: string; rate: number; category: string; code: string }> = {};
+        stockData.forEach((item: any) => {
+          const prodId = item.product_id;
+          const qty = parseFloat(item.current_quantity) || 0;
+          const price = parseFloat(item.valuation_price) || parseFloat(item.product.production_unit_price) || parseFloat(item.product.default_unit_price) || 0;
+          if (aggregated[prodId]) {
+            aggregated[prodId].available += qty;
+          } else {
+            aggregated[prodId] = {
+              name: item.product.name,
+              available: qty,
+              unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
+              rate: price,
+              category: item.product.category,
+              code: item.product.code
+            };
+          }
+        });
+        
+        const list = Object.keys(aggregated).map((prodId) => ({
+          id: prodId,
+          name: aggregated[prodId].name,
+          available: aggregated[prodId].available,
+          unit: aggregated[prodId].unit,
+          rate: aggregated[prodId].rate,
+          category: aggregated[prodId].category,
+          code: aggregated[prodId].code
+        }));
+        setTransferProducts(list);
+        
+        // Reset selected product if not in list
+        if (transferProductId && !list.find(p => p.id === transferProductId)) {
+          setTransferProductId("");
+          setTransferProdSearchText("");
+        }
+      } catch (err) {
+        console.error("Failed to load production stock for transfer:", err);
+      } finally {
+        setIsLoadingTransferStock(false);
+      }
+    }
+    if (activeTab === "inventory" && inventorySubView === "transfers") {
+      loadProductionStock();
+    }
+  }, [transferProdStoreId, activeTab, inventorySubView]);
+
+  const handleTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferProdStoreId || !transferSalesStoreId || !transferProductId || !transferQty) {
+      alert("Please fill all required fields");
+      return;
+    }
+    
+    const qty = parseFloat(transferQty);
+    if (qty > transferAvailableQty) {
+      alert("Requested quantity exceeds available stock");
+      return;
+    }
+
+    setIsSubmittingTransfer(true);
+    try {
+      await api.post("/store-transfers", {
+        production_store_id: transferProdStoreId,
+        sales_store_id: transferSalesStoreId,
+        product_id: transferProductId,
+        quantity: qty,
+        transfer_date: transferDate,
+        batch_reference: transferBatch || null,
+        notes: transferNotes || `Transfer request to Sales Store`
+      });
+      
+      alert("Transfer request submitted successfully! Pending admin approval.");
+      // Reset form
+      setTransferProductId("");
+      setTransferProdSearchText("");
+      setTransferBatch("");
+      setTransferQty("");
+      setTransferNotes("");
+      setInventorySubView("list");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to submit transfer request.");
+    } finally {
+      setIsSubmittingTransfer(false);
     }
   };
 
@@ -1315,7 +1489,7 @@ export default function OrderManagerDashboard() {
               transition={{ duration: 0.15 }}
               className="space-y-4"
             >
-              {inventorySubView === "list" ? (
+              {inventorySubView === "list" && (
                 <>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
@@ -1325,13 +1499,22 @@ export default function OrderManagerDashboard() {
                       </h3>
                       <div className="flex gap-2">
                         {storeType === "production" && (
-                          <button
-                            onClick={() => router.push("/production-store/intake")}
-                            className="text-[10px] font-black uppercase text-brand-forest hover:text-white bg-brand-sage/20 hover:bg-brand-forest border border-brand-sage/40 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
-                          >
-                            <ArrowDownToLine size={12} />
-                            Record Intake
-                          </button>
+                          <>
+                            <button
+                              onClick={() => router.push("/production-store/intake")}
+                              className="text-[10px] font-black uppercase text-brand-forest hover:text-white bg-brand-sage/20 hover:bg-brand-forest border border-brand-sage/40 px-2 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
+                            >
+                              <ArrowDownToLine size={11} />
+                              Intake
+                            </button>
+                            <button
+                              onClick={() => setInventorySubView("transfers")}
+                              className="text-[10px] font-black uppercase text-brand-forest hover:text-white bg-brand-sage/20 hover:bg-brand-forest border border-brand-sage/40 px-2 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer font-bold"
+                            >
+                              <ArrowRightLeft size={11} />
+                              Request Transfer
+                            </button>
+                          </>
                         )}
                         <button
                           onClick={() => {
@@ -1450,7 +1633,9 @@ export default function OrderManagerDashboard() {
                     )}
                   </div>
                 </>
-              ) : (
+              )}
+
+              {inventorySubView === "damages" && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <button
@@ -1795,6 +1980,187 @@ export default function OrderManagerDashboard() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {inventorySubView === "transfers" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setInventorySubView("list")}
+                      className="text-xs font-bold text-brand-forest hover:underline flex items-center gap-1 cursor-pointer font-bold"
+                    >
+                      ← Back to Inventory List
+                    </button>
+                  </div>
+
+                  <Card className="border border-brand-sage/40 shadow-xl rounded-2xl bg-white">
+                    <CardContent className="p-4 space-y-4">
+                      <div className="flex items-center gap-2 pb-2 border-b border-brand-sage/20">
+                        <span className="h-2 w-2 rounded-full bg-brand-forest" />
+                        <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-forest">Request Stock Transfer</h4>
+                      </div>
+                      <form onSubmit={handleTransferSubmit} className="space-y-3.5 text-xs">
+                        {/* Source Production Store */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Source Store (Production) *</label>
+                          <select
+                            required
+                            value={transferProdStoreId}
+                            onChange={(e) => setTransferProdStoreId(e.target.value)}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          >
+                            {transferProductionStores.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Destination Sales Store */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Destination Store (Sales) *</label>
+                          <select
+                            required
+                            value={transferSalesStoreId}
+                            onChange={(e) => setTransferSalesStoreId(e.target.value)}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          >
+                            {transferSalesStores.map(s => (
+                              <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Transfer Date */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Transfer Date *</label>
+                          <input
+                            type="date"
+                            required
+                            value={transferDate}
+                            onChange={(e) => setTransferDate(e.target.value)}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Product Autocomplete / Search */}
+                        <div className="space-y-1 relative">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Select Product *</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              required={!transferProductId}
+                              placeholder={isLoadingTransferStock ? "Loading production stock..." : "Type product code or name..."}
+                              value={transferProdSearchText}
+                              onChange={(e) => {
+                                setTransferProdSearchText(e.target.value);
+                                setShowTransferProdSuggestions(true);
+                              }}
+                              onFocus={() => setShowTransferProdSuggestions(true)}
+                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                              disabled={isLoadingTransferStock}
+                            />
+                            {transferProdSearchText && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setTransferProductId("");
+                                  setTransferProdSearchText("");
+                                  setTransferBatch("");
+                                }}
+                                className="absolute right-3 top-3.5 text-gray-450 hover:text-gray-650 font-bold text-xs"
+                              >
+                                Clear
+                              </button>
+                            )}
+
+                            {showTransferProdSuggestions && getFilteredTransferProducts().length > 0 && (
+                              <div className="absolute z-50 w-full left-0 right-0 mt-1 bg-white border border-brand-sage/40 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                {getFilteredTransferProducts().map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setTransferProductId(p.id);
+                                      setTransferProdSearchText(p.name);
+                                      setShowTransferProdSuggestions(false);
+                                      setTransferBatch(""); // reset batch
+                                    }}
+                                    className="w-full text-left p-3 hover:bg-brand-forest/5 hover:text-brand-forest transition-colors font-bold flex justify-between items-center"
+                                  >
+                                    <span>{p.name}</span>
+                                    <span className="text-[9px] text-gray-400 font-mono">{p.code}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {transferProductId && (
+                            <div className="mt-1.5 p-2 bg-brand-forest/5 rounded-xl border border-brand-forest/15 text-[10px] text-brand-forest font-bold flex justify-between items-center">
+                              <span>Selected: {selectedTransferProduct?.name}</span>
+                              <span className="text-gray-500 font-medium">Available: {selectedTransferProduct?.available} {selectedTransferProduct?.unit}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Batch selection */}
+                        {transferProductId && transferProductSupportsBatch && (
+                          <div className="space-y-1">
+                            <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Batch Option (FIFO or Specific Batch) *</label>
+                            <select
+                              required
+                              value={transferBatch}
+                              onChange={(e) => setTransferBatch(e.target.value)}
+                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                            >
+                              <option value="">FIFO (First-In, First-Out) - Auto split across batches</option>
+                              {transferAvailableBatches.map(b => (
+                                <option key={b.id} value={b.batch_reference || ""}>
+                                  Specific Batch: {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Quantity */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Quantity *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            required
+                            min="0.01"
+                            max={transferAvailableQty}
+                            placeholder={`e.g. 10.00 (Max: ${transferAvailableQty})`}
+                            value={transferQty}
+                            onChange={(e) => setTransferQty(e.target.value)}
+                            className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Notes */}
+                        <div className="space-y-1">
+                          <label className="text-[9px] text-gray-400 font-bold uppercase block">Internal Notes / Reason *</label>
+                          <textarea
+                            required
+                            placeholder="Provide any details for this transfer request..."
+                            value={transferNotes}
+                            onChange={(e) => setTransferNotes(e.target.value)}
+                            className="w-full min-h-[60px] p-2.5 text-xs font-semibold rounded-xl border border-brand-sage/50 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          isLoading={isSubmittingTransfer}
+                          className="w-full h-11 bg-brand-forest hover:bg-brand-forest/90 text-white font-black tracking-widest text-xs uppercase rounded-xl border-none shadow-md mt-2 cursor-pointer font-bold"
+                        >
+                          Submit Request
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
                 </div>
               )}
             </motion.div>
