@@ -97,6 +97,7 @@ class StoreAdjustmentController extends Controller
                         [
                             'production_store_id' => $adjustment->production_store_id,
                             'product_id' => $adjustment->product_id,
+                            'batch_reference' => $adjustment->batch_reference,
                         ]
                     );
                     $stock->updateStock('damage', $qty);
@@ -151,6 +152,7 @@ class StoreAdjustmentController extends Controller
                     [
                         'production_store_id' => $adjustment->production_store_id,
                         'product_id' => $adjustment->product_id,
+                        'batch_reference' => $adjustment->batch_reference,
                     ]
                 );
                 $stock->updateStock('damage', $qty);

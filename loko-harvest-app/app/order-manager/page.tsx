@@ -104,6 +104,8 @@ export default function OrderManagerDashboard() {
   const [adjustProducts, setAdjustProducts] = useState<any[]>([]);
   const [adjustBatch, setAdjustBatch] = useState("");
   const [adjustQty, setAdjustQty] = useState("");
+  const [adjustTraysInput, setAdjustTraysInput] = useState("");
+  const [adjustEggsInput, setAdjustEggsInput] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustImageFile, setAdjustImageFile] = useState<File | null>(null);
   const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
@@ -645,15 +647,17 @@ export default function OrderManagerDashboard() {
     async function loadAdjustBatches() {
       setAdjustBatch("");
       setIsCustomAdjustBatch(false);
-      if (!adjustStoreId || !adjustProductId || adjustStoreType !== "sales") {
+      if (!adjustStoreId || !adjustProductId) {
         setAdjustBatchesList([]);
         return;
       }
       setLoadingAdjustBatches(true);
       try {
-        const res = await api.get("/sales-stock", {
-          params: { sales_store_id: adjustStoreId }
-        });
+        const endpoint = adjustStoreType === "production" ? "/production-stock" : "/sales-stock";
+        const params = adjustStoreType === "production"
+          ? { production_store_id: adjustStoreId }
+          : { sales_store_id: adjustStoreId };
+        const res = await api.get(endpoint, { params });
         const stocks = res.data?.data || [];
         const filtered = stocks.filter((s: any) => s.product_id === adjustProductId);
         setAdjustBatchesList(filtered);
@@ -668,6 +672,17 @@ export default function OrderManagerDashboard() {
       loadAdjustBatches();
     }
   }, [adjustStoreId, adjustProductId, adjustStoreType, activeTab, inventorySubView]);
+
+  useEffect(() => {
+    const selectedProd = adjustProducts.find(p => p.id === adjustProductId);
+    const isTrayProd = selectedProd?.unit_of_measure?.toLowerCase() === "trays" || selectedProd?.code?.startsWith("EGG-");
+    if (isTrayProd) {
+      const t = parseInt(adjustTraysInput) || 0;
+      const e = parseInt(adjustEggsInput) || 0;
+      const total = t + e / 30;
+      setAdjustQty(total > 0 ? total.toFixed(3) : "");
+    }
+  }, [adjustTraysInput, adjustEggsInput, adjustProductId, adjustProducts]);
 
   const startDrawing = (e: any) => {
     if (e.cancelable) e.preventDefault();
@@ -732,7 +747,7 @@ export default function OrderManagerDashboard() {
       return;
     }
 
-    if (adjustStoreType === "sales" && !adjustBatch) {
+    if (!adjustBatch) {
       alert("Please select or enter a batch reference.");
       return;
     }
@@ -743,11 +758,10 @@ export default function OrderManagerDashboard() {
       formData.append("store_type", adjustStoreType);
       if (adjustStoreType === "production") {
         formData.append("production_store_id", adjustStoreId);
-        formData.append("batch_reference", "PDN-BATCH"); // Default placeholder for production batch
       } else {
         formData.append("sales_store_id", adjustStoreId);
-        formData.append("batch_reference", adjustBatch);
       }
+      formData.append("batch_reference", adjustBatch);
       formData.append("product_id", adjustProductId);
       formData.append("quantity", adjustQty);
       formData.append("reason", adjustReason);
@@ -766,6 +780,8 @@ export default function OrderManagerDashboard() {
       if (res.data?.success) {
         alert("Stock adjustment request submitted successfully for approval!");
         setAdjustQty("");
+        setAdjustTraysInput("");
+        setAdjustEggsInput("");
         setAdjustReason("");
         setAdjustImageFile(null);
         clearSignature();
@@ -1367,6 +1383,7 @@ export default function OrderManagerDashboard() {
       bulkIncoming: 0,
       bulkCurrent: 0,
       bulkOutgoing: 0,
+      bulkDamages: 0,
       bulkClosing: 0,
       packConvIncoming: 0,
       packOpening: 0,
@@ -1383,6 +1400,7 @@ export default function OrderManagerDashboard() {
       sums.bulkIncoming += group.bulkItem.transferred_in;
       sums.bulkCurrent += (group.bulkItem.opening_stock + group.bulkItem.transferred_in);
       sums.bulkOutgoing += (group.bulkItem.conversions_out + group.bulkItem.transferred_out);
+      sums.bulkDamages += (group.bulkItem.damages || 0);
       sums.bulkClosing += group.bulkItem.closing_stock;
 
       group.convertedItems.forEach(pack => {
@@ -2164,10 +2182,10 @@ export default function OrderManagerDashboard() {
                           <thead>
                             {/* Category Sub-Headers */}
                             <tr className="bg-brand-forest/90 text-white font-extrabold text-[9px] uppercase tracking-wider border-b border-brand-forest/20">
-                              <th colSpan={4} className="py-2 px-3 text-center border-r border-white/20 bg-brand-forest">
+                              <th colSpan={5} className="py-2 px-3 text-center border-r border-white/20 bg-brand-forest">
                                 Sales Store Bulk Products
                               </th>
-                              <th colSpan={8} className="py-2 px-3 text-center bg-brand-forest/95">
+                              <th colSpan={9} className="py-2 px-3 text-center bg-brand-forest/95">
                                 Sales Store Converted Packs
                               </th>
                             </tr>
@@ -2176,6 +2194,7 @@ export default function OrderManagerDashboard() {
                               <th className="py-2 px-3 whitespace-nowrap">Product Name</th>
                               <th className="py-2 px-2 text-right whitespace-nowrap">Incoming</th>
                               <th className="py-2 px-2 text-right whitespace-nowrap">Opening</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Damages</th>
                               <th className="py-2 px-2 text-right whitespace-nowrap border-r border-white/20">Closing</th>
                               {/* Converted Headers */}
                               <th className="py-2 px-3 whitespace-nowrap pl-4">Product Packs</th>
@@ -2185,6 +2204,7 @@ export default function OrderManagerDashboard() {
                               <th className="py-2 px-2 text-right whitespace-nowrap">Outgoing</th>
                               <th className="py-2 px-2 text-right whitespace-nowrap">Returns</th>
                               <th className="py-2 px-2 text-right whitespace-nowrap">Repl.</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Damages</th>
                               <th className="py-2 px-2.5 text-right whitespace-nowrap">Closing</th>
                             </tr>
                           </thead>
@@ -2216,6 +2236,9 @@ export default function OrderManagerDashboard() {
                                         <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs ${bulkItem.opening_stock === 0 ? 'text-gray-300' : 'font-medium text-gray-650'}`}>
                                           {formatQuantity(bulkItem.opening_stock.toString(), bulkItem.unit)}
                                         </td>
+                                        <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs ${bulkItem.damages === 0 ? 'text-gray-300' : 'font-bold text-red-500'}`}>
+                                          {formatQuantity(bulkItem.damages.toString(), bulkItem.unit)}
+                                        </td>
                                         <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs border-r border-brand-sage/25 ${bulkItem.closing_stock === 0 ? 'text-gray-300' : 'font-black text-brand-forest'}`}>
                                           {formatQuantity(bulkItem.closing_stock.toString(), bulkItem.unit)}
                                         </td>
@@ -2244,6 +2267,9 @@ export default function OrderManagerDashboard() {
                                     <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.replacements || 0) === 0 ? 'text-gray-300' : 'font-bold text-amber-600'}`}>
                                       {convertedItem ? formatQuantity((convertedItem.replacements || 0).toString(), convertedItem.unit) : "—"}
                                     </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.damages || 0) === 0 ? 'text-gray-300' : 'font-bold text-red-500'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.damages || 0).toString(), convertedItem.unit) : "—"}
+                                    </td>
                                     <td className={`py-3 px-2.5 text-right ${!convertedItem ? 'text-gray-300' : convertedItem.closing_stock === 0 ? 'text-gray-300' : 'font-black text-brand-forest'}`}>
                                       {convertedItem ? formatQuantity(convertedItem.closing_stock.toString(), convertedItem.unit) : "—"}
                                     </td>
@@ -2263,6 +2289,9 @@ export default function OrderManagerDashboard() {
                               </td>
                               <td className="py-2.5 px-2 text-right text-gray-800 font-extrabold whitespace-nowrap align-middle">
                                 {formatQuantity(salesTotals.bulkOpening.toString(), "trays")}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-red-655 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.bulkDamages > 0 ? `-${formatQuantity(salesTotals.bulkDamages.toString(), "trays")}` : "0"}
                               </td>
                               <td className="py-2.5 px-2 text-right text-brand-forest font-black whitespace-nowrap align-middle border-r border-brand-sage/25">
                                 {formatQuantity(salesTotals.bulkClosing.toString(), "trays")}
@@ -2289,6 +2318,9 @@ export default function OrderManagerDashboard() {
                               </td>
                               <td className="py-2.5 px-2 text-right text-amber-600 font-extrabold whitespace-nowrap align-middle">
                                 {salesTotals.packReplacements > 0 ? `-${formatQuantity(salesTotals.packReplacements.toString(), "units")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-red-655 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.packDamages > 0 ? `-${formatQuantity(salesTotals.packDamages.toString(), "units")}` : "0"}
                               </td>
                               <td className="py-2.5 px-2.5 text-right text-brand-forest font-black whitespace-nowrap align-middle">
                                 {formatQuantity(salesTotals.packClosing.toString(), "units")}
@@ -2430,7 +2462,7 @@ export default function OrderManagerDashboard() {
                         </div>
 
                         {/* Batch Number Selection */}
-                        {adjustStoreType === "sales" && (
+                        {adjustProductId && (
                           <div className="space-y-1">
                             <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block">Batch Number *</label>
                             {isCustomAdjustBatch ? (
@@ -2495,21 +2527,64 @@ export default function OrderManagerDashboard() {
 
                         <div className="grid grid-cols-2 gap-3">
                           {/* Quantity */}
-                          <div className="space-y-1">
-                            <label className="text-[9px] text-gray-400 font-bold uppercase block">Quantity *</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              required
-                              placeholder="e.g. 5.00"
-                              value={adjustQty}
-                              onChange={(e) => setAdjustQty(e.target.value)}
-                              className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                            />
-                          </div>
+                          {(() => {
+                            const selectedProd = adjustProducts.find(p => p.id === adjustProductId);
+                            const isTrayProd = selectedProd?.unit_of_measure?.toLowerCase() === "trays" || selectedProd?.code?.startsWith("EGG-");
+                            if (isTrayProd) {
+                              return (
+                                <div className="space-y-1 col-span-2 bg-brand-sage/5 p-3 rounded-xl border border-brand-sage/20">
+                                  <label className="text-[9px] text-brand-forest font-bold uppercase tracking-wider block mb-1">Quantity (Trays & Eggs) *</label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        placeholder="Trays"
+                                        value={adjustTraysInput}
+                                        onChange={(e) => setAdjustTraysInput(e.target.value)}
+                                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                      />
+                                      <span className="text-[8px] text-gray-400 font-semibold mt-1 block">Full Trays</span>
+                                    </div>
+                                    <div>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        max="29"
+                                        placeholder="Eggs"
+                                        value={adjustEggsInput}
+                                        onChange={(e) => setAdjustEggsInput(e.target.value)}
+                                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                      />
+                                      <span className="text-[8px] text-gray-400 font-semibold mt-1 block">Loose Eggs (0-29)</span>
+                                    </div>
+                                  </div>
+                                  {adjustQty && (
+                                    <div className="text-[9px] text-brand-amber font-mono font-black mt-2 text-right">
+                                      Computed Quantity: {parseFloat(adjustQty).toFixed(3)} Trays
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="space-y-1 col-span-2">
+                                <label className="text-[9px] text-gray-400 font-bold uppercase block">Quantity *</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  required
+                                  placeholder="e.g. 5.00"
+                                  value={adjustQty}
+                                  onChange={(e) => setAdjustQty(e.target.value)}
+                                  className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
+                                />
+                              </div>
+                            );
+                          })()}
 
                           {/* Image Upload */}
-                          <div className="space-y-1">
+                          <div className="space-y-1 col-span-2 mt-2">
                             <label className="text-[9px] text-gray-400 font-bold uppercase block">Upload Photo Proof</label>
                             <input
                               type="file"

@@ -54,6 +54,7 @@ interface ProductionStockItem {
   opening_stock: number;
   stock_taken: number;
   replacements: number;
+  damages: number;
   closing_stock: number;
   unit_price: number;
   egg_unit_price?: number;
@@ -74,7 +75,7 @@ const formatQuantityGlobal = (qty: number, unit: string, isTotal: boolean = fals
   return `${val.toLocaleString()} ${unit}`;
 };
 
-const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" | "incoming" | "current" | "taken" | "replacements" | "closing" | "price"; unit: string }) => {
+const RenderBreakdown = ({ group, field, unit }: { group: any; field: "opening" | "incoming" | "current" | "taken" | "replacements" | "damages" | "closing" | "price"; unit: string }) => {
   if (!group.isEgg) {
     const item = group.other;
     if (field === "price") {
@@ -441,6 +442,7 @@ export default function ProductionStorePage() {
           opening_stock: parseFloat(item.opening_stock || 0),
           stock_taken: parseFloat(item.stock_taken || 0),
           replacements: parseFloat(item.replacements || 0),
+          damages: parseFloat(item.damages || 0),
           closing_stock: parseFloat(item.closing_stock || 0),
           unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
           egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
@@ -681,22 +683,23 @@ export default function ProductionStorePage() {
           code: baseCode,
           unit: item.unit,
           isEgg: baseCode.startsWith("EGG-"),
-          good: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
-          d1: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
-          d2: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
-          d3: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
-          shell: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
-          other: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          good: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d1: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d2: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          d3: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          shell: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
+          other: { opening: 0, incoming: 0, current: 0, taken: 0, replacements: 0, damages: 0, closing: 0, price: 0, egg_price: 0, item: null },
         };
       }
-
+ 
       const subData = {
         opening: item.opening_stock,
         incoming: item.incoming,
         current: item.opening_stock + item.incoming,
         taken: item.stock_taken,
         replacements: item.replacements,
-        closing: item.opening_stock + item.incoming - item.stock_taken - item.replacements,
+        damages: item.damages,
+        closing: item.opening_stock + item.incoming - item.stock_taken - item.replacements - item.damages,
         price: item.unit_price,
         egg_price: item.egg_unit_price,
         item: item
@@ -1149,6 +1152,7 @@ export default function ProductionStorePage() {
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 bg-gray-50/30">Current Stock</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Stock Taken</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Replacements</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-red-655 tracking-wider uppercase h-10 py-2">Damages</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Closing Stock</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Unit Price</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2">Value Taken</TableHead>
@@ -1159,7 +1163,7 @@ export default function ProductionStorePage() {
                   <TableBody>
                     {getGroupedStock().length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center py-10 text-gray-400 font-medium">
+                        <TableCell colSpan={14} className="text-center py-10 text-gray-400 font-medium">
                           No stock records found matching filters.
                         </TableCell>
                       </TableRow>
@@ -1195,6 +1199,9 @@ export default function ProductionStorePage() {
                               </TableCell>
                               <TableCell className="text-right">
                                 <RenderBreakdown group={group} field="replacements" unit={group.unit} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <RenderBreakdown group={group} field="damages" unit={group.unit} />
                               </TableCell>
                               <TableCell className="text-right">
                                 <RenderBreakdown group={group} field="closing" unit={group.unit} />
@@ -1239,6 +1246,9 @@ export default function ProductionStorePage() {
                           </TableCell>
                           <TableCell className="text-right text-blue-600 text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.replacements, 0))}
+                          </TableCell>
+                          <TableCell className="text-right text-red-655 text-xs font-bold">
+                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.damages, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold">
                             {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0))}
