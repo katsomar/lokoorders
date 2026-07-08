@@ -110,7 +110,7 @@ class SalesStoreStockController extends Controller
             $soldUpToD = (float) (clone $soldQuery)->where('orders.order_date', '<=', $date)->sum('order_items.quantity');
             $soldOn = (float) (clone $soldQuery)->where('orders.order_date', '=', $date)->sum('order_items.quantity');
 
-            // 6. Replacements
+            // 6. Replacements (removed from store for physical replacements)
             $replacementsQuery = \Illuminate\Support\Facades\DB::table('order_replacement_allocations')
                 ->where('sales_store_id', $item->sales_store_id)
                 ->where('product_id', $item->product_id)
@@ -121,10 +121,25 @@ class SalesStoreStockController extends Controller
                         $q->where('batch_reference', $item->batch_reference);
                     }
                 });
-            $replacementsUpToD = (float) (clone $replacementsQuery)->where('created_at', '<=', $date . ' 23:59:59')->selectRaw('SUM(allocated_quantity - returned_quantity) as total')->value('total') ?? 0;
-            $replacementsOn = (float) (clone $replacementsQuery)->whereDate('created_at', '=', $date)->selectRaw('SUM(allocated_quantity - returned_quantity) as total')->value('total') ?? 0;
+            $replacementsUpToD = (float) (clone $replacementsQuery)->where('created_at', '<=', $date . ' 23:59:59')->sum('allocated_quantity');
+            $replacementsOn = (float) (clone $replacementsQuery)->whereDate('created_at', '=', $date)->sum('allocated_quantity');
 
-            // 7. Damages / Adjustments
+            // 7. Returns (physical returns brought back to store)
+            $returnsQuery = \Illuminate\Support\Facades\DB::table('return_vouchers')
+                ->join('orders', 'return_vouchers.order_id', '=', 'orders.id')
+                ->where('orders.sales_store_id', $item->sales_store_id)
+                ->where('return_vouchers.product_id', $item->product_id)
+                ->where(function ($q) use ($item) {
+                    if ($item->batch_reference === null) {
+                        $q->whereNull('return_vouchers.batch_reference');
+                    } else {
+                        $q->where('return_vouchers.batch_reference', $item->batch_reference);
+                    }
+                });
+            $returnsUpToD = (float) (clone $returnsQuery)->where('return_vouchers.return_date', '<=', $date)->sum('return_vouchers.quantity');
+            $returnsOn = (float) (clone $returnsQuery)->where('return_vouchers.return_date', '=', $date)->sum('return_vouchers.quantity');
+
+            // 8. Damages / Adjustments
             $damagesQuery = \Illuminate\Support\Facades\DB::table('store_adjustments')
                 ->where('store_type', 'sales')
                 ->where('sales_store_id', $item->sales_store_id)
@@ -141,16 +156,21 @@ class SalesStoreStockController extends Controller
             $damagesOn = - (float) (clone $damagesQuery)->whereDate('created_at', '=', $date)->sum('quantity_change');
 
             // Calculate closing stock using transaction ledger cumulative sum up to D
-            $closingStockOnD = ($transfersInUpToD + $conversionsInUpToD) - ($conversionsOutUpToD + $transfersSalesOutUpToD + $soldUpToD + $replacementsUpToD + $damagesUpToD);
+            $closingStockOnD = ($transfersInUpToD + $conversionsInUpToD + $returnsUpToD) - ($conversionsOutUpToD + $transfersSalesOutUpToD + $soldUpToD + $replacementsUpToD + $damagesUpToD);
 
             // Override properties for response
+            $inflowOnD = $transfersInOn + $conversionsInOn + $returnsOn;
+            $outflowOnD = $conversionsOutOn + $transfersSalesOutOn + $soldOn + $replacementsOn + $damagesOn;
+            $openingStockOnD = $closingStockOnD - $inflowOnD + $outflowOnD;
+
             $item->current_quantity = $closingStockOnD;
-            $item->opening_stock = $conversionsInOn; // opening_stock is conversions_in
+            $item->opening_stock = $openingStockOnD;
             $item->transferred_in = $transfersInOn;
             $item->conversions_in = $conversionsInOn;
             $item->conversions_out = $conversionsOutOn;
             $item->transferred_out = $transfersSalesOutOn;
             $item->sold_quantity = $soldOn;
+            $item->returns = $returnsOn;
             $item->replacements = $replacementsOn;
             $item->damages = $damagesOn;
             $item->closing_stock = $closingStockOnD;
