@@ -288,6 +288,12 @@ export default function OrderManagerDashboard() {
   useEffect(() => {
     async function loadStock() {
       if (!selectedStoreId) return;
+      
+      // Guard: Only load stock if selectedStoreId exists in current storesList.
+      // This prevents race conditions during storeType tab switches.
+      const storeExists = storesList.some(s => s.id === selectedStoreId);
+      if (!storeExists) return;
+
       setLoadingStock(true);
       try {
         const endpoint = storeType === "production" ? "/production-stock" : "/sales-stock";
@@ -306,7 +312,7 @@ export default function OrderManagerDashboard() {
       setSelectedBatch("all");
       loadStock();
     }
-  }, [selectedStoreId, storeType, activeTab]);
+  }, [selectedStoreId, storeType, activeTab, storesList]);
 
   // Fetch Drivers
   const fetchDrivers = async () => {

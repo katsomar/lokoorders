@@ -19,80 +19,86 @@ class ProductionStoreStockController extends Controller
             ->when($request->production_store_id, function ($q) use ($request) {
                 return $q->where('production_store_id', $request->production_store_id);
             });
-
         $stockQuery->where('created_at', '<=', $date . ' 23:59:59');
-        $stock = $stockQuery->get()->map(function ($item) use ($date) {
-            // 1. Intakes
-            $intakesQuery = \App\Models\ProductionStoreIntake::where('production_store_id', $item->production_store_id)
-                ->where('product_id', $item->product_id)
-                ->where(function ($q) use ($item) {
-                    if ($item->batch_reference === null) {
-                        $q->whereNull('batch_reference');
-                    } else {
-                        $q->where('batch_reference', $item->batch_reference);
-                    }
-                });
-            $intakesUpToD = (float) (clone $intakesQuery)->where('intake_date', '<=', $date)->sum('quantity');
-            $intakesOn = (float) (clone $intakesQuery)->where('intake_date', '=', $date)->sum('quantity');
+        $stock = $stockQuery->get();
 
-            // 2. Transfers Out (to other prod stores)
-            $transfersProdQuery = \Illuminate\Support\Facades\DB::table('production_store_transfers')
-                ->where('from_production_store_id', $item->production_store_id)
-                ->where('product_id', $item->product_id)
-                ->where(function ($q) use ($item) {
-                    if ($item->batch_reference === null) {
-                        $q->whereNull('batch_reference');
-                    } else {
-                        $q->where('batch_reference', $item->batch_reference);
-                    }
-                });
-            $transfersProdUpToD = (float) (clone $transfersProdQuery)->where('transfer_date', '<=', $date)->sum('quantity');
-            $transfersProdOn = (float) (clone $transfersProdQuery)->where('transfer_date', '=', $date)->sum('quantity');
+        if ($stock->isEmpty()) {
+            return $this->success([]);
+        }
 
-            // 3. Transfers In (from other prod stores)
-            $transfersInQuery = \Illuminate\Support\Facades\DB::table('production_store_transfers')
-                ->where('to_production_store_id', $item->production_store_id)
-                ->where('product_id', $item->product_id)
-                ->where(function ($q) use ($item) {
-                    if ($item->batch_reference === null) {
-                        $q->whereNull('batch_reference');
-                    } else {
-                        $q->where('batch_reference', $item->batch_reference);
-                    }
-                });
-            $transfersInUpToD = (float) (clone $transfersInQuery)->where('transfer_date', '<=', $date)->sum('quantity');
-            $transfersInOn = (float) (clone $transfersInQuery)->where('transfer_date', '=', $date)->sum('quantity');
+        $storeId = $request->production_store_id;
+        $storeIds = $storeId ? [$storeId] : $stock->pluck('production_store_id')->unique()->toArray();
 
-            // 4. Transfers to Sales Stores
-            $transfersSalesQuery = \Illuminate\Support\Facades\DB::table('store_transfers')
-                ->where('production_store_id', $item->production_store_id)
-                ->where('product_id', $item->product_id)
-                ->where('status', 'approved')
-                ->where(function ($q) use ($item) {
-                    if ($item->batch_reference === null) {
-                        $q->whereNull('batch_reference');
-                    } else {
-                        $q->where('batch_reference', $item->batch_reference);
-                    }
-                });
-            $transfersSalesUpToD = (float) (clone $transfersSalesQuery)->where('transfer_date', '<=', $date)->sum('quantity');
-            $transfersSalesOn = (float) (clone $transfersSalesQuery)->where('transfer_date', '=', $date)->sum('quantity');
+        // Bulk load all Intakes for this store up to date D
+        $intakes = \App\Models\ProductionStoreIntake::whereIn('production_store_id', $storeIds)
+            ->where('intake_date', '<=', $date)
+            ->selectRaw('product_id, batch_reference, sum(quantity) as total, sum(case when intake_date = ? then quantity else 0 end) as total_on', [$date])
+            ->groupBy('product_id', 'batch_reference')
+            ->get()
+            ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
 
-            // 5. Adjustments
-            $adjustmentsQuery = \Illuminate\Support\Facades\DB::table('store_adjustments')
-                ->where('store_type', 'production')
-                ->where('production_store_id', $item->production_store_id)
-                ->where('product_id', $item->product_id)
-                ->where('status', 'approved')
-                ->where(function ($q) use ($item) {
-                    if ($item->batch_reference === null) {
-                        $q->whereNull('batch_reference');
-                    } else {
-                        $q->where('batch_reference', $item->batch_reference);
-                    }
-                });
-            $adjustmentsUpToD = - (float) (clone $adjustmentsQuery)->where('created_at', '<=', $date . ' 23:59:59')->sum('quantity_change');
-            $adjustmentsOn = - (float) (clone $adjustmentsQuery)->whereDate('created_at', '=', $date)->sum('quantity_change');
+        // Bulk load all Transfers Out (to other prod stores)
+        $transfersProdOut = \Illuminate\Support\Facades\DB::table('production_store_transfers')
+            ->whereIn('from_production_store_id', $storeIds)
+            ->where('transfer_date', '<=', $date)
+            ->selectRaw('product_id, batch_reference, sum(quantity) as total, sum(case when transfer_date = ? then quantity else 0 end) as total_on', [$date])
+            ->groupBy('product_id', 'batch_reference')
+            ->get()
+            ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
+
+        // Bulk load all Transfers In (from other prod stores)
+        $transfersProdIn = \Illuminate\Support\Facades\DB::table('production_store_transfers')
+            ->whereIn('to_production_store_id', $storeIds)
+            ->where('transfer_date', '<=', $date)
+            ->selectRaw('product_id, batch_reference, sum(quantity) as total, sum(case when transfer_date = ? then quantity else 0 end) as total_on', [$date])
+            ->groupBy('product_id', 'batch_reference')
+            ->get()
+            ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
+
+        // Bulk load all Transfers to Sales Stores (approved only)
+        $transfersSales = \Illuminate\Support\Facades\DB::table('store_transfers')
+            ->whereIn('production_store_id', $storeIds)
+            ->where('status', 'approved')
+            ->where('transfer_date', '<=', $date)
+            ->selectRaw('product_id, batch_reference, sum(quantity) as total, sum(case when transfer_date = ? then quantity else 0 end) as total_on', [$date])
+            ->groupBy('product_id', 'batch_reference')
+            ->get()
+            ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
+
+        // Bulk load all Adjustments (approved only)
+        $adjustments = \Illuminate\Support\Facades\DB::table('store_adjustments')
+            ->where('store_type', 'production')
+            ->whereIn('production_store_id', $storeIds)
+            ->where('status', 'approved')
+            ->where('created_at', '<=', $date . ' 23:59:59')
+            ->selectRaw('product_id, batch_reference, sum(quantity_change) as total, sum(case when date(created_at) = ? then quantity_change else 0 end) as total_on', [$date])
+            ->groupBy('product_id', 'batch_reference')
+            ->get()
+            ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
+
+        // Map over stocks matching in memory
+        $stock = $stock->map(function ($item) use ($date, $intakes, $transfersProdOut, $transfersProdIn, $transfersSales, $adjustments) {
+            $key = $item->product_id . '_' . ($item->batch_reference ?? '');
+
+            $getIntakes = $intakes->get($key)?->first();
+            $intakesUpToD = (float) ($getIntakes?->total ?? 0);
+            $intakesOn = (float) ($getIntakes?->total_on ?? 0);
+
+            $getProdOut = $transfersProdOut->get($key)?->first();
+            $transfersProdUpToD = (float) ($getProdOut?->total ?? 0);
+            $transfersProdOn = (float) ($getProdOut?->total_on ?? 0);
+
+            $getProdIn = $transfersProdIn->get($key)?->first();
+            $transfersInUpToD = (float) ($getProdIn?->total ?? 0);
+            $transfersInOn = (float) ($getProdIn?->total_on ?? 0);
+
+            $getSales = $transfersSales->get($key)?->first();
+            $transfersSalesUpToD = (float) ($getSales?->total ?? 0);
+            $transfersSalesOn = (float) ($getSales?->total_on ?? 0);
+
+            $getAdj = $adjustments->get($key)?->first();
+            $adjustmentsUpToD = - (float) ($getAdj?->total ?? 0);
+            $adjustmentsOn = - (float) ($getAdj?->total_on ?? 0);
 
             // Calculate closing stock using transaction ledger cumulative sum up to D
             $closingStockOnD = ($intakesUpToD + $transfersInUpToD) - ($transfersProdUpToD + $transfersSalesUpToD + $adjustmentsUpToD);

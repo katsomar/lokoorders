@@ -95,6 +95,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.push("/login");
   };
 
+  if (user && user.role === "order_manager") {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col overflow-y-auto">
+        {/* Mobile Header with Back Button */}
+        <header className="h-14 bg-brand-forest flex items-center justify-between px-4 z-10 text-white sticky top-0 shadow-sm shrink-0">
+          <button 
+            onClick={() => router.push("/order-manager")} 
+            className="flex items-center gap-1 text-xs font-bold text-white hover:text-brand-yellow bg-transparent border-none cursor-pointer p-0"
+          >
+            <ChevronRight size={16} className="rotate-180" />
+            Back
+          </button>
+          <span className="text-xs font-extrabold tracking-wider uppercase font-heading">Harvest Intake</span>
+          <div className="w-10"></div> {/* spacer */}
+        </header>
+        <main className="flex-1 p-4">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
