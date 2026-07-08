@@ -150,9 +150,12 @@ export default function OrderManagerDashboard() {
     ? transferAvailableBatches.find((b: any) => b.batch_reference === transferBatch) 
     : null;
 
-  const transferAvailableQty = selectedTransferBatchObj 
-    ? (parseFloat(selectedTransferBatchObj.current_quantity) || 0) 
-    : (selectedTransferProduct?.available || 0);
+  const transferAvailableQty = Number(
+    (selectedTransferBatchObj 
+      ? (parseFloat(selectedTransferBatchObj.current_quantity) || 0) 
+      : (selectedTransferProduct?.available || 0)
+    ).toFixed(1)
+  );
 
   const getFilteredTransferProducts = () => {
     if (!transferProdSearchText.trim()) return transferProducts;
@@ -830,7 +833,7 @@ export default function OrderManagerDashboard() {
         const list = Object.keys(aggregated).map((prodId) => ({
           id: prodId,
           name: aggregated[prodId].name,
-          available: aggregated[prodId].available,
+          available: Number(aggregated[prodId].available.toFixed(1)),
           unit: aggregated[prodId].unit,
           rate: aggregated[prodId].rate,
           category: aggregated[prodId].category,
@@ -2591,7 +2594,7 @@ export default function OrderManagerDashboard() {
                           {transferProductId && (
                             <div className="mt-1.5 p-2 bg-brand-forest/5 rounded-xl border border-brand-forest/15 text-[10px] text-brand-forest font-bold flex justify-between items-center">
                               <span>Selected: {selectedTransferProduct?.name}</span>
-                              <span className="text-gray-500 font-medium">Available: {selectedTransferProduct?.available} {selectedTransferProduct?.unit}</span>
+                              <span className="text-gray-500 font-medium">Available: {selectedTransferProduct?.available ? Number(selectedTransferProduct.available.toFixed(1)) : 0} {selectedTransferProduct?.unit}</span>
                             </div>
                           )}
                         </div>
@@ -2609,7 +2612,7 @@ export default function OrderManagerDashboard() {
                               <option value="">FIFO (First-In, First-Out) - Auto split across batches</option>
                               {transferAvailableBatches.map(b => (
                                 <option key={b.id} value={b.batch_reference || ""}>
-                                  Specific Batch: {b.batch_reference || "Unbatched"} ({parseFloat(b.current_quantity)} available)
+                                  Specific Batch: {b.batch_reference || "Unbatched"} ({Number((parseFloat(b.current_quantity) || 0).toFixed(1))} available)
                                 </option>
                               ))}
                             </select>

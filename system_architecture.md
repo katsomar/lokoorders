@@ -105,6 +105,7 @@ graph TD
 | 2026-07-08 | **Layout Router** | Role-based interception inside `DashboardLayout`. | Keep Order Manager isolated within a mobile view. |
 | 2026-07-08 | **Inventory view** | Added store list check `storeExists` before `loadStock` fetches. | Prevent race conditions when swapping store types. |
 | 2026-07-08 | **Inventory view** | Two-part Sales Store daily stock ledger with sub-row pack mappings. | Group Sales Store into Bulk Egg vs. Converted Pack columns side-by-side. |
+| 2026-07-08 | **Transfer Form** | Rounded transfer stock availabilities and max limits to 1 decimal place. | Prevent javascript floating-point arithmetic precision from showing excessive decimals. |
 
 ---
 
