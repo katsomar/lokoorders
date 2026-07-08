@@ -1259,6 +1259,136 @@ export default function OrderManagerDashboard() {
     );
   };
 
+  const salesRowGroups = React.useMemo(() => {
+    if (storeType !== "sales") return [];
+
+    const isBulkProduct = (code: string) => {
+      return ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
+    };
+
+    const groupsMap: { [key: string]: {
+      batchReference: string | null;
+      category: string;
+      bulkItem: any;
+      convertedItems: any[];
+    } } = {};
+
+    filteredStock.forEach(item => {
+      const code = item.product?.code || "";
+      let cat = "other";
+      if (code.includes("CRM")) cat = "cream";
+      else if (code.includes("WHT")) cat = "white";
+      else if (code.includes("BRN")) cat = "brown";
+      else if (code.includes("DMG")) cat = "damaged";
+      else if (item.product?.category === "poultry") cat = "poultry";
+      else if (item.product?.category === "by_products") cat = "manure";
+
+      const key = `${item.batch_reference || 'all'}_${cat}`;
+      if (!groupsMap[key]) {
+        groupsMap[key] = {
+          batchReference: item.batch_reference || null,
+          category: cat,
+          bulkItem: null,
+          convertedItems: []
+        };
+      }
+
+      const mappedItem = {
+        id: item.id,
+        product_id: item.product_id,
+        product: item.product?.name || "Unknown",
+        code: code,
+        quantity: parseFloat(item.current_quantity) || 0,
+        unit: item.product?.unit_of_measure === 'trays' ? 'Trays' : item.product?.unit_of_measure === 'units' ? 'Units' : item.product?.unit_of_measure === 'kg' ? 'Kg' : 'Packs',
+        opening_stock: parseFloat(item.opening_stock) || 0,
+        transferred_in: parseFloat(item.transferred_in) || 0,
+        conversions_in: parseFloat(item.conversions_in) || 0,
+        conversions_out: parseFloat(item.conversions_out) || 0,
+        sold_quantity: parseFloat(item.sold_quantity) || 0,
+        transferred_out: parseFloat(item.transferred_out) || 0,
+        replacements: parseFloat(item.replacements) || 0,
+        returns: parseFloat(item.returns) || 0,
+        damages: parseFloat(item.damages) || 0,
+        closing_stock: parseFloat(item.closing_stock) || parseFloat(item.current_quantity) || 0,
+        unitPrice: parseFloat(item.product?.sales_unit_price || item.product?.default_unit_price || 0)
+      };
+
+      if (isBulkProduct(code)) {
+        groupsMap[key].bulkItem = mappedItem;
+      } else {
+        groupsMap[key].convertedItems.push(mappedItem);
+      }
+    });
+
+    const groups = Object.values(groupsMap);
+
+    groups.forEach(group => {
+      if (!group.bulkItem) {
+        const categoryName = group.category.charAt(0).toUpperCase() + group.category.slice(1);
+        group.bulkItem = {
+          id: `placeholder-${group.category}-${group.batchReference}`,
+          product_id: "",
+          product: `${categoryName} Eggs (Trays)`,
+          code: group.category === "white" ? "EGG-WHT" : group.category === "cream" ? "EGG-CRM" : group.category === "brown" ? "EGG-BRN" : "EGG-WHT",
+          quantity: 0,
+          unit: "Trays",
+          opening_stock: 0,
+          transferred_in: 0,
+          conversions_in: 0,
+          conversions_out: 0,
+          sold_quantity: 0,
+          transferred_out: 0,
+          replacements: 0,
+          returns: 0,
+          damages: 0,
+          closing_stock: 0,
+          unitPrice: 0
+        };
+      }
+    });
+
+    return groups;
+  }, [filteredStock, storeType]);
+
+  const salesTotals = React.useMemo(() => {
+    const sums = {
+      bulkOpening: 0,
+      bulkIncoming: 0,
+      bulkCurrent: 0,
+      bulkOutgoing: 0,
+      bulkClosing: 0,
+      packConvIncoming: 0,
+      packOpening: 0,
+      packCurrent: 0,
+      packOutgoing: 0,
+      packReturns: 0,
+      packReplacements: 0,
+      packDamages: 0,
+      packClosing: 0
+    };
+
+    salesRowGroups.forEach(group => {
+      sums.bulkOpening += group.bulkItem.opening_stock;
+      sums.bulkIncoming += group.bulkItem.transferred_in;
+      sums.bulkCurrent += (group.bulkItem.opening_stock + group.bulkItem.transferred_in);
+      sums.bulkOutgoing += (group.bulkItem.conversions_out + group.bulkItem.transferred_out);
+      sums.bulkClosing += group.bulkItem.closing_stock;
+
+      group.convertedItems.forEach(pack => {
+        sums.packConvIncoming += (pack.conversions_in + pack.transferred_in);
+        sums.packOpening += pack.opening_stock;
+        sums.packCurrent += (pack.opening_stock + pack.conversions_in + pack.transferred_in);
+        sums.packOutgoing += (pack.sold_quantity + pack.transferred_out);
+        sums.packReturns += (pack.returns || 0);
+        sums.packReplacements += (pack.replacements || 0);
+        sums.packDamages += (pack.damages || 0);
+        sums.packClosing += pack.closing_stock;
+      });
+    });
+
+    return sums;
+  }, [salesRowGroups]);
+
   const uniqueBatches = Array.from(new Set(stockItems.map(item => item.batch_reference).filter(Boolean))) as string[];
   const batchOptions = [
     { label: "All Batch References", value: "all" },
@@ -1784,11 +1914,12 @@ export default function OrderManagerDashboard() {
                         <Loader2 className="animate-spin text-brand-forest" size={24} />
                         <p className="text-xs font-bold text-gray-500">Loading daily stock data...</p>
                       </div>
-                    ) : getGroupedStockData.length === 0 ? (
+                    ) : (storeType === "production" ? getGroupedStockData.length === 0 : salesRowGroups.length === 0) ? (
                       <div className="p-8 text-center text-gray-550 text-xs italic bg-white">
                         No inventory records found for this date.
                       </div>
-                    ) : (
+                    ) : storeType === "production" ? (
+                      // PRODUCTION STORE TABLE (BATCH & PRODUCT CATEGORY GROUPING)
                       <div className="overflow-x-auto scrollbar-thin">
                         <table className="w-full text-[11px] text-left border-collapse min-w-[700px]">
                           <thead>
@@ -1797,9 +1928,6 @@ export default function OrderManagerDashboard() {
                               <th className="py-2.5 px-2 text-right whitespace-nowrap">Opening</th>
                               <th className="py-2.5 px-2 text-right whitespace-nowrap">Incoming</th>
                               <th className="py-2.5 px-2 text-right whitespace-nowrap">Taken / Out</th>
-                              {storeType === "sales" && (
-                                <th className="py-2.5 px-2 text-right whitespace-nowrap">Repl.</th>
-                              )}
                               <th className="py-2.5 px-2 text-right whitespace-nowrap">Damages</th>
                               <th className="py-2.5 px-2.5 text-right whitespace-nowrap">Closing</th>
                             </tr>
@@ -1822,11 +1950,6 @@ export default function OrderManagerDashboard() {
                                 <td className="py-3 px-2 text-right">
                                   {renderBreakdownCell(item, "taken_out", "text-amber-700 font-bold")}
                                 </td>
-                                {storeType === "sales" && (
-                                  <td className="py-3 px-2 text-right">
-                                    {renderBreakdownCell(item, "replacements", "text-amber-600 font-bold")}
-                                  </td>
-                                )}
                                 <td className="py-3 px-2 text-right">
                                   {renderBreakdownCell(item, "damages", "text-red-650 font-bold")}
                                 </td>
@@ -1850,16 +1973,151 @@ export default function OrderManagerDashboard() {
                               <td className="py-3 px-2 text-right text-amber-800 font-extrabold whitespace-nowrap">
                                 {totals.taken_out > 0 ? `-${formatQuantity(totals.taken_out.toString(), "trays")}` : "0"}
                               </td>
-                              {storeType === "sales" && (
-                                <td className="py-3 px-2 text-right text-amber-600 font-extrabold whitespace-nowrap">
-                                  {totals.replacements > 0 ? `-${formatQuantity(totals.replacements.toString(), "trays")}` : "0"}
-                                </td>
-                              )}
                               <td className="py-3 px-2 text-right text-red-650 font-extrabold whitespace-nowrap">
                                 {totals.damages > 0 ? `-${formatQuantity(totals.damages.toString(), "trays")}` : "0"}
                               </td>
                               <td className="py-3 px-2.5 text-right text-brand-forest font-black whitespace-nowrap">
                                 {formatQuantity(totals.closing.toString(), "trays")}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      // SALES STORE TABLE (TWO-PART STRUCTURE AS IN ADMIN SALES VIEW)
+                      <div className="overflow-x-auto scrollbar-thin">
+                        <table className="w-full text-[10px] text-left border-collapse min-w-[1200px]">
+                          <thead>
+                            {/* Category Sub-Headers */}
+                            <tr className="bg-brand-forest/90 text-white font-extrabold text-[9px] uppercase tracking-wider border-b border-brand-forest/20">
+                              <th colSpan={4} className="py-2 px-3 text-center border-r border-white/20 bg-brand-forest">
+                                Sales Store Bulk Products
+                              </th>
+                              <th colSpan={8} className="py-2 px-3 text-center bg-brand-forest/95">
+                                Sales Store Converted Packs
+                              </th>
+                            </tr>
+                            <tr className="bg-brand-forest text-white font-extrabold uppercase tracking-wider text-[8px] border-b border-brand-forest/20">
+                              {/* Bulk Headers */}
+                              <th className="py-2 px-3 whitespace-nowrap">Product Name</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Incoming</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Opening</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap border-r border-white/20">Closing</th>
+                              {/* Converted Headers */}
+                              <th className="py-2 px-3 whitespace-nowrap pl-4">Product Packs</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Conv/Incoming</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Opening Stock</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Current</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Outgoing</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Returns</th>
+                              <th className="py-2 px-2 text-right whitespace-nowrap">Repl.</th>
+                              <th className="py-2 px-2.5 text-right whitespace-nowrap">Closing</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {salesRowGroups.map((group) => {
+                              const totalSubRows = Math.max(1, group.convertedItems.length);
+                              const bulkItem = group.bulkItem;
+
+                              return Array.from({ length: totalSubRows }).map((_, i) => {
+                                const isFirstSubRow = i === 0;
+                                const isLastSubRow = i === totalSubRows - 1;
+                                const borderClass = isLastSubRow ? "border-b border-brand-sage/20" : "border-b border-gray-100";
+                                const convertedItem = group.convertedItems.length > 0 ? group.convertedItems[i] : null;
+
+                                return (
+                                  <tr key={convertedItem ? convertedItem.id : bulkItem.id} className={`${borderClass} hover:bg-gray-50/50 transition-colors align-top`}>
+                                    {/* Bulk columns */}
+                                    {isFirstSubRow && (
+                                      <>
+                                        <td rowSpan={totalSubRows} className="py-3 px-3 font-extrabold text-gray-900 border-r border-brand-sage/10 align-middle">
+                                          <div>{bulkItem.product}</div>
+                                          <div className="text-[8px] text-brand-amber font-mono font-black mt-0.5">
+                                            {group.batchReference ? `Batch: ${group.batchReference}` : "No Batch"}
+                                          </div>
+                                        </td>
+                                        <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs ${bulkItem.transferred_in === 0 ? 'text-gray-300' : 'font-bold text-blue-600'}`}>
+                                          {formatQuantity(bulkItem.transferred_in.toString(), bulkItem.unit)}
+                                        </td>
+                                        <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs ${bulkItem.opening_stock === 0 ? 'text-gray-300' : 'font-medium text-gray-650'}`}>
+                                          {formatQuantity(bulkItem.opening_stock.toString(), bulkItem.unit)}
+                                        </td>
+                                        <td rowSpan={totalSubRows} className={`py-3 px-2 text-right align-middle text-xs border-r border-brand-sage/25 ${bulkItem.closing_stock === 0 ? 'text-gray-300' : 'font-black text-brand-forest'}`}>
+                                          {formatQuantity(bulkItem.closing_stock.toString(), bulkItem.unit)}
+                                        </td>
+                                      </>
+                                    )}
+
+                                    {/* Converted columns */}
+                                    <td className="py-3 px-3 pl-4 font-bold text-gray-700 whitespace-nowrap">
+                                      {convertedItem ? convertedItem.product : <span className="text-gray-300">—</span>}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.conversions_in + convertedItem.transferred_in) === 0 ? 'text-gray-300' : 'font-bold text-blue-600'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.conversions_in + convertedItem.transferred_in).toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : convertedItem.opening_stock === 0 ? 'text-gray-300' : 'font-medium text-gray-650'}`}>
+                                      {convertedItem ? formatQuantity(convertedItem.opening_stock.toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.opening_stock + convertedItem.conversions_in + convertedItem.transferred_in) === 0 ? 'text-gray-300' : 'font-bold text-blue-800'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.opening_stock + convertedItem.conversions_in + convertedItem.transferred_in).toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.sold_quantity + convertedItem.transferred_out) === 0 ? 'text-gray-300' : 'font-bold text-amber-700'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.sold_quantity + convertedItem.transferred_out).toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.returns || 0) === 0 ? 'text-gray-300' : 'font-bold text-teal-600'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.returns || 0).toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2 text-right ${!convertedItem ? 'text-gray-300' : (convertedItem.replacements || 0) === 0 ? 'text-gray-300' : 'font-bold text-amber-600'}`}>
+                                      {convertedItem ? formatQuantity((convertedItem.replacements || 0).toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                    <td className={`py-3 px-2.5 text-right ${!convertedItem ? 'text-gray-300' : convertedItem.closing_stock === 0 ? 'text-gray-300' : 'font-black text-brand-forest'}`}>
+                                      {convertedItem ? formatQuantity(convertedItem.closing_stock.toString(), convertedItem.unit) : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              });
+                            })}
+
+                            {/* Totals Row */}
+                            <tr className="bg-brand-sage/10 font-bold border-t border-brand-sage/40">
+                              {/* Bulk Totals */}
+                              <td className="py-2.5 px-3 font-black text-gray-900 uppercase tracking-wider text-[9px] align-middle">
+                                Bulk Totals
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-blue-700 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.bulkIncoming > 0 ? `+${formatQuantity(salesTotals.bulkIncoming.toString(), "trays")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-gray-800 font-extrabold whitespace-nowrap align-middle">
+                                {formatQuantity(salesTotals.bulkOpening.toString(), "trays")}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-brand-forest font-black whitespace-nowrap align-middle border-r border-brand-sage/25">
+                                {formatQuantity(salesTotals.bulkClosing.toString(), "trays")}
+                              </td>
+
+                              {/* Pack Totals */}
+                              <td className="py-2.5 px-3 font-black text-gray-900 uppercase tracking-wider text-[9px] pl-4 align-middle">
+                                Pack Totals
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-blue-700 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.packConvIncoming > 0 ? `+${formatQuantity(salesTotals.packConvIncoming.toString(), "units")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-gray-800 font-extrabold whitespace-nowrap align-middle">
+                                {formatQuantity(salesTotals.packOpening.toString(), "units")}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-blue-800 font-extrabold whitespace-nowrap align-middle">
+                                {formatQuantity(salesTotals.packCurrent.toString(), "units")}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-amber-800 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.packOutgoing > 0 ? `-${formatQuantity(salesTotals.packOutgoing.toString(), "units")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-teal-600 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.packReturns > 0 ? `+${formatQuantity(salesTotals.packReturns.toString(), "units")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2 text-right text-amber-600 font-extrabold whitespace-nowrap align-middle">
+                                {salesTotals.packReplacements > 0 ? `-${formatQuantity(salesTotals.packReplacements.toString(), "units")}` : "0"}
+                              </td>
+                              <td className="py-2.5 px-2.5 text-right text-brand-forest font-black whitespace-nowrap align-middle">
+                                {formatQuantity(salesTotals.packClosing.toString(), "units")}
                               </td>
                             </tr>
                           </tbody>
