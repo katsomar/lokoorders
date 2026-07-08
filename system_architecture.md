@@ -107,7 +107,7 @@ graph TD
 | 2026-07-08 | **Inventory view** | Two-part Sales Store daily stock ledger with sub-row pack mappings. | Group Sales Store into Bulk Egg vs. Converted Pack columns side-by-side. |
 | 2026-07-08 | **Transfer Form** | Rounded transfer stock availabilities and max limits to 1 decimal place. | Prevent javascript floating-point arithmetic precision from showing excessive decimals. |
 | 2026-07-08 | **Conversions Approval** | Added approval fields migration, backend endpoints, Order Manager form, and Admin pending approvals UI. | Allow Order Managers to request conversions with Admin approval instead of immediate execution. |
-| 2026-07-08 | **Damages Tracking** | Added batch_reference to Production Store adjustments, trays/eggs split inputs, and Damages columns in all ledgers. | Keep balances synced per-batch, simplify egg quantity reporting, and track loss visibility. |
+| 2026-07-08 | **Damages Tracking** | Added batch_reference to Production Store adjustments, trays/eggs split inputs, Damages columns in all ledgers, and scaled signature coordinates with programmatic non-passive touch listeners. | Keep balances synced per-batch, simplify egg quantity reporting, track loss visibility, resolve touch drawing offset bugs, and eliminate passive listener console errors. |
 
 ---
 
@@ -152,9 +152,10 @@ graph TD
   - **Admin Approval Interface**: Refactored `pending-requests/page.tsx` by adding a third "Conversions" requests tab displaying pending conversions. Admins can inspect the source trays vs yield output, batch specifications, requested dates, notes, and approve or reject them dynamically.
 
 ### 6. Damages & Breakages Tracking columns and Trays/Eggs Split Inputs
-* **The Gap/Problem**: Egg losses due to breakages or rotting inside the Production and Sales Stores were not transparently displayed inside the daily ledgers. Also, in the Production Store, adjustments did not associate with a specific batch, and Order Managers had to calculate decimal trays manually when registering egg breakages.
+* **The Gap/Problem**: Egg losses due to breakages or rotting inside the Production and Sales Stores were not transparently displayed inside the daily ledgers. Also, in the Production Store, adjustments did not associate with a specific batch, and Order Managers had to calculate decimal trays manually when registering egg breakages. Finally, the signature pad on mobile devices had touch coordinate offset bugs (drawing in the wrong place) and allowed mobile viewport scrolling during signing, making signatures jagged and hard to write.
 * **The Implementation & Rationale**:
   - **Unified Damages Column**: Integrated dedicated "Damages" columns inside all four daily stock ledgers (Admin and Manager accounts for Production and Sales Stores). Showcases the daily quantity lost directly inside the table grid, with respective summary totals at the bottom.
   - **Batch-Specific Production Adjustments**: Refactored `StoreAdjustmentController` (both auto-approve and approve routes) to locate and update the specific `ProductionStoreStock` record by batch reference, ensuring that production stock balances drop from the exact batch registered.
   - **Split Trays & Eggs Input**: Integrated split "Trays" and "Eggs" input fields inside the manager's damages reporting form for tray-based egg products. Automates the decimal tray calculations on the fly, reducing manual errors.
   - **Visual Proofs Verification**: Confirmed that when managers upload photos and canvases for damages, they are correctly rendered side-by-side inside the Admin's approvals lightbox panel.
+  - **Signature Pad Coordinate Scaling & Scroll Blocking**: Upgraded the canvas coordinate system inside `order-manager/page.tsx` to compute bounding client rect scale factors (`scaleX` and `scaleY`), resolving mouse and touch drawing offsets. Enforced `e.preventDefault()` blocks on mobile touch-start/move events to disable mobile viewport scrolling, and auto-initialized the signature background to solid white instead of transparent, yielding high-definition, smooth signatures.

@@ -114,6 +114,7 @@ export default function OrderManagerDashboard() {
   const [isCustomAdjustBatch, setIsCustomAdjustBatch] = useState(false);
   const adjustCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [adjustDrawing, setAdjustDrawing] = useState(false);
+  const adjustDrawingRef = React.useRef(false);
   const [productSearchText, setProductSearchText] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
 
@@ -684,8 +685,23 @@ export default function OrderManagerDashboard() {
     }
   }, [adjustTraysInput, adjustEggsInput, adjustProductId, adjustProducts]);
 
+
+  const getEventPos = (e: any, canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches && e.touches.length > 0 ? e.touches[0].clientY : e.clientY;
+    
+    // Scale coordinates based on visual bounds vs resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  };
+
   const startDrawing = (e: any) => {
-    if (e.cancelable) e.preventDefault();
     const canvas = adjustCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -699,10 +715,15 @@ export default function OrderManagerDashboard() {
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
     setAdjustDrawing(true);
+    adjustDrawingRef.current = true;
+
+    if (e.cancelable) {
+      e.preventDefault();
+    }
   };
 
   const draw = (e: any) => {
-    if (!adjustDrawing) return;
+    if (!adjustDrawingRef.current) return;
     const canvas = adjustCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -711,10 +732,15 @@ export default function OrderManagerDashboard() {
     const pos = getEventPos(e, canvas);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
+
+    if (e.cancelable) {
+      e.preventDefault();
+    }
   };
 
   const stopDrawing = () => {
     setAdjustDrawing(false);
+    adjustDrawingRef.current = false;
   };
 
   const clearSignature = () => {
@@ -722,18 +748,40 @@ export default function OrderManagerDashboard() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   };
 
-  const getEventPos = (e: any, canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return {
-      x: clientX - rect.left,
-      y: clientY - rect.top
-    };
-  };
+  useEffect(() => {
+    if (inventorySubView === "damages" && activeTab === "inventory") {
+      let canvasRefEl: HTMLCanvasElement | null = null;
+      
+      const timer = setTimeout(() => {
+        const canvas = adjustCanvasRef.current;
+        if (canvas) {
+          canvasRefEl = canvas;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          // Programmatic listener attachment using passive: false to allow preventDefault on touch events
+          canvas.addEventListener("touchstart", startDrawing, { passive: false });
+          canvas.addEventListener("touchmove", draw, { passive: false });
+          canvas.addEventListener("touchend", stopDrawing, { passive: false });
+        }
+      }, 150);
+
+      return () => {
+        clearTimeout(timer);
+        if (canvasRefEl) {
+          canvasRefEl.removeEventListener("touchstart", startDrawing);
+          canvasRefEl.removeEventListener("touchmove", draw);
+          canvasRefEl.removeEventListener("touchend", stopDrawing);
+        }
+      };
+    }
+  }, [inventorySubView, activeTab]);
 
   const handleAdjustmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2632,9 +2680,6 @@ export default function OrderManagerDashboard() {
                               onMouseMove={draw}
                               onMouseUp={stopDrawing}
                               onMouseLeave={stopDrawing}
-                              onTouchStart={startDrawing}
-                              onTouchMove={draw}
-                              onTouchEnd={stopDrawing}
                               className="w-full h-[100px] cursor-crosshair block"
                             />
                           </div>
