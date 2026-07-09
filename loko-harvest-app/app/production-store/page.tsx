@@ -1653,15 +1653,37 @@ export default function ProductionStorePage() {
                     Set the internal production/valuation unit prices for products. These are used when calculating production inventory worth and transfer valuations.
                   </CardDescription>
                 </div>
-                {(Object.keys(editingPrices).length > 0 || Object.keys(editingEggPrices).length > 0) && (
+                <div className="flex gap-2.5 items-center">
+                  {(Object.keys(editingPrices).length > 0 || Object.keys(editingEggPrices).length > 0) && (
+                    <Button
+                      onClick={() => {
+                        setEditingPrices({});
+                        setEditingEggPrices({});
+                      }}
+                      variant="outline"
+                      className="border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 font-bold rounded-xl h-10 px-4 text-xs cursor-pointer bg-white"
+                    >
+                      Discard
+                    </Button>
+                  )}
                   <Button
                     onClick={handleUpdateAllPrices}
                     isLoading={isUpdatingAllPrices}
-                    className="bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl h-10 px-5 text-sm border-none cursor-pointer flex items-center gap-1.5"
+                    disabled={Object.keys(editingPrices).length === 0 && Object.keys(editingEggPrices).length === 0}
+                    className={`${
+                      (Object.keys(editingPrices).length > 0 || Object.keys(editingEggPrices).length > 0)
+                        ? "bg-brand-forest hover:bg-brand-forest/90 text-white cursor-pointer"
+                        : "bg-gray-100 text-gray-400 border border-gray-200/50 cursor-not-allowed"
+                    } font-bold rounded-xl h-10 px-5 text-xs border-none flex items-center gap-1.5`}
                   >
-                    Save All Changes ({Object.keys(editingPrices).length + Object.keys(editingEggPrices).length})
+                    Save All Changes
+                    {(Object.keys(editingPrices).length > 0 || Object.keys(editingEggPrices).length > 0) && (
+                      <span className="bg-white/20 px-1.5 py-0.5 rounded-lg text-[10px] font-black">
+                        {Object.keys(editingPrices).length + Object.keys(editingEggPrices).length}
+                      </span>
+                    )}
                   </Button>
-                )}
+                </div>
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
