@@ -114,9 +114,11 @@ class ReturnVoucherController extends Controller
             $createdVouchers = [];
             $createdBy = auth()->id() ?? User::first()?->id;
             $nextSeq = $this->getNextVoucherSequence();
-            $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
 
             foreach ($validated['items'] as $item) {
+                $voucherNumber = 'LHRV-' . date('Y') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+                $nextSeq++; // Increment sequence for the next item!
+
                 $monetaryValue = $item['quantity'] * $item['unit_price'];
 
                 $voucher = ReturnVoucher::create([

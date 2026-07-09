@@ -358,13 +358,20 @@ class ReturnVoucherTest extends TestCase
                         'quantity' => 4,
                         'unit_price' => 15000,
                         'replacement_quantity' => 1,
+                    ],
+                    [
+                        'product_id' => $this->product->id,
+                        'batch_reference' => 'B-EG-26',
+                        'quantity' => 2,
+                        'unit_price' => 15000,
+                        'replacement_quantity' => 0,
                     ]
                 ]
             ]);
 
         $response->assertStatus(201)
             ->assertJsonPath('success', true)
-            ->assertJsonCount(1, 'data');
+            ->assertJsonCount(2, 'data');
 
         $this->assertDatabaseHas('return_vouchers', [
             'customer_id' => $this->customer->id,
@@ -372,6 +379,15 @@ class ReturnVoucherTest extends TestCase
             'batch_reference' => 'B-EG-25',
             'quantity' => 4,
             'replacement_quantity' => 1,
+            'acknowledged_by' => 'Store Rep Sarah',
+        ]);
+
+        $this->assertDatabaseHas('return_vouchers', [
+            'customer_id' => $this->customer->id,
+            'product_id' => $this->product->id,
+            'batch_reference' => 'B-EG-26',
+            'quantity' => 2,
+            'replacement_quantity' => 0,
             'acknowledged_by' => 'Store Rep Sarah',
         ]);
     }
