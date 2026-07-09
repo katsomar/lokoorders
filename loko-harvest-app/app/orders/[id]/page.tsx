@@ -87,10 +87,16 @@ export default function OrderDetailPage() {
 
     setIsRedispatching(true);
     try {
-      await api.post("/deliveries/assign", {
+      const [drvId, vehId] = selectedDriverId.split("_");
+      const payload: any = {
         order_id: orderId,
-        driver_id: selectedDriverId,
-      });
+        driver_id: drvId,
+      };
+      if (vehId) {
+        payload.vehicle_id = vehId;
+      }
+
+      await api.post("/deliveries/assign", payload);
       alert("Order re-dispatched successfully!");
       setShowRedispatchModal(false);
       setSelectedDriverId("");
@@ -1215,9 +1221,23 @@ export default function OrderDetailPage() {
                   className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
                 >
                   <option value="">-- Choose Driver --</option>
-                  {drivers.map((d: any) => (
-                    <option key={d.id} value={d.id} disabled={d.status === 'offline' || d.status === 'busy'}>
-                      {d.full_name || d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? ' [Offline]' : d.status === 'busy' ? ' [En Route - Locked]' : ''}
+                  {drivers.flatMap((d: any) => {
+                    const hasVehicles = d.vehicles && d.vehicles.length > 0;
+                    if (!hasVehicles) {
+                      return [{
+                        id: `${d.id}_`,
+                        label: `${d.full_name || d.name} (No vehicle)`,
+                        disabled: d.status === 'offline' || d.status === 'busy'
+                      }];
+                    }
+                    return d.vehicles.map((v: any) => ({
+                      id: `${d.id}_${v.id}`,
+                      label: `${d.full_name || d.name} (${v.registration_number} - ${v.make} ${v.model || ''})`,
+                      disabled: d.status === 'offline' || d.status === 'busy'
+                    }));
+                  }).map((opt: any) => (
+                    <option key={opt.id} value={opt.id} disabled={opt.disabled}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>

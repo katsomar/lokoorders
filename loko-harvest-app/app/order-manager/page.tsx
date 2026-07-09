@@ -1074,18 +1074,23 @@ export default function OrderManagerDashboard() {
     }
     setIsAssigningDriver(true);
     try {
+      const [drvId, vehId] = selectedDriverIdForAssign.split("_");
       if (driverModalOrder) {
-        await api.post("/deliveries/assign", {
+        const payload: any = {
           order_id: driverModalOrder.id,
-          driver_id: selectedDriverIdForAssign,
+          driver_id: drvId,
           prevent_status_update: !isDriverModalForDispatch
-        });
+        };
+        if (vehId) payload.vehicle_id = vehId;
+        await api.post("/deliveries/assign", payload);
       } else if (driverModalOrders.length > 0) {
-        await api.post("/deliveries/assign", {
+        const payload: any = {
           order_ids: driverModalOrders,
-          driver_id: selectedDriverIdForAssign,
+          driver_id: drvId,
           prevent_status_update: true
-        });
+        };
+        if (vehId) payload.vehicle_id = vehId;
+        await api.post("/deliveries/assign", payload);
       }
 
       alert("Driver assigned successfully!");
@@ -3715,9 +3720,23 @@ export default function OrderManagerDashboard() {
                   className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/50 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-brand-forest"
                 >
                   <option value="">-- Choose Driver --</option>
-                  {drivers.map(d => (
-                    <option key={d.id} value={d.id} disabled={d.status === 'offline' || d.status === 'busy'}>
-                      {d.name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No vehicle'}) {d.status === 'offline' ? ' [Offline]' : d.status === 'busy' ? ' [En Route - Locked]' : ''}
+                  {drivers.flatMap(d => {
+                    const hasVehicles = d.vehicles && d.vehicles.length > 0;
+                    if (!hasVehicles) {
+                      return [{
+                        id: `${d.id}_`,
+                        label: `${d.name} (No vehicle)`,
+                        disabled: d.status === 'offline' || d.status === 'busy'
+                      }];
+                    }
+                    return d.vehicles.map((v: any) => ({
+                      id: `${d.id}_${v.id}`,
+                      label: `${d.name} (${v.registration_number} - ${v.make} ${v.model || ''})`,
+                      disabled: d.status === 'offline' || d.status === 'busy'
+                    }));
+                  }).map(opt => (
+                    <option key={opt.id} value={opt.id} disabled={opt.disabled}>
+                      {opt.label}
                     </option>
                   ))}
                 </select>
