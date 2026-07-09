@@ -472,11 +472,17 @@ export default function OrderManagerDashboard() {
 
     setIsSubmittingAllocation(true);
     try {
-      const res = await api.post("/replacement-allocations/bulk", {
+      const [drvId, vehId] = allocDriver.split("_");
+      const payload: any = {
         order_id: allocOrder,
-        driver_id: allocDriver,
+        driver_id: drvId,
         items: itemsToSubmit
-      });
+      };
+      if (vehId) {
+        payload.vehicle_id = vehId;
+      }
+
+      const res = await api.post("/replacement-allocations/bulk", payload);
       if (res.data?.success) {
         alert("Replacement pre-allocated successfully!");
         setAllocQtys({});
@@ -3257,9 +3263,23 @@ export default function OrderManagerDashboard() {
                             className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
                           >
                             <option value="">-- Choose Driver --</option>
-                            {drivers.map(d => (
-                              <option key={d.id} value={d.id}>
-                                {d.name || d.full_name} ({d.vehicle_registration !== 'N/A' ? d.vehicle_registration : 'No Vehicle'})
+                            {drivers.flatMap(d => {
+                              const hasVehicles = d.vehicles && d.vehicles.length > 0;
+                              if (!hasVehicles) {
+                                  return [{
+                                    id: `${d.id}_`,
+                                    label: `${d.name || d.full_name} (No vehicle)`,
+                                    disabled: d.status === 'offline' || d.status === 'busy'
+                                  }];
+                              }
+                              return d.vehicles.map((v: any) => ({
+                                  id: `${d.id}_${v.id}`,
+                                  label: `${d.name || d.full_name} (${v.registration_number} - ${v.make} ${v.model || ''})`,
+                                  disabled: d.status === 'offline' || d.status === 'busy'
+                              }));
+                            }).map(opt => (
+                              <option key={opt.id} value={opt.id} disabled={opt.disabled}>
+                                {opt.label}
                               </option>
                             ))}
                           </select>

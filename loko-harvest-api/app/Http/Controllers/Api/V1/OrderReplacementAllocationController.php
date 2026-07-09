@@ -105,12 +105,17 @@ class OrderReplacementAllocationController extends Controller
             'sales_store_id' => 'required|exists:sales_stores,id',
             'batch_reference' => 'nullable|string',
             'allocated_quantity' => 'required|numeric|min:0.01',
-            'driver_id' => 'required|exists:drivers,id'
+            'driver_id' => 'required|exists:drivers,id',
+            'vehicle_id' => 'nullable|string|exists:vehicles,id',
         ]);
 
         return DB::transaction(function () use ($validated) {
             $order = Order::findOrFail($validated['order_id']);
             $product = Product::findOrFail($validated['product_id']);
+
+            if (!empty($validated['vehicle_id'])) {
+                \App\Models\Driver::where('id', $validated['driver_id'])->update(['vehicle_id' => $validated['vehicle_id']]);
+            }
 
             // Validate inventory stock level
             $batch = $validated['batch_reference'] ?? null;
@@ -230,6 +235,7 @@ class OrderReplacementAllocationController extends Controller
         $validated = $request->validate([
             'order_id' => 'required|exists:orders,id',
             'driver_id' => 'required|exists:drivers,id',
+            'vehicle_id' => 'nullable|string|exists:vehicles,id',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.sales_store_id' => 'required|exists:sales_stores,id',
@@ -241,6 +247,10 @@ class OrderReplacementAllocationController extends Controller
             return DB::transaction(function () use ($validated) {
                 $order = Order::findOrFail($validated['order_id']);
                 $createdAllocations = [];
+
+                if (!empty($validated['vehicle_id'])) {
+                    \App\Models\Driver::where('id', $validated['driver_id'])->update(['vehicle_id' => $validated['vehicle_id']]);
+                }
 
                 foreach ($validated['items'] as $item) {
                     $product = Product::findOrFail($item['product_id']);
