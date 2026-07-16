@@ -47,6 +47,12 @@ const generateQtyOptions = (maxQty: number) => {
   return options;
 };
 
+const formatQty = (val: any) => {
+  const num = Number(val);
+  if (isNaN(num)) return "0";
+  return parseFloat(num.toFixed(2)).toString();
+};
+
 export default function DeliveryConfirmationPage() {
   const params = useParams();
   const router = useRouter();
@@ -272,7 +278,7 @@ export default function DeliveryConfirmationPage() {
     if (delivery?.order_id) {
       const fetchAllocationsList = async () => {
         try {
-          const params: any = { order_id: delivery.order_id };
+          const params: any = {};
           if (delivery.driver_id && delivery.driver_id !== "N/A") {
             params.driver_id = delivery.driver_id;
           }
@@ -280,7 +286,10 @@ export default function DeliveryConfirmationPage() {
           if (res.data?.success) {
             const payload = res.data.data;
             const list = payload?.data?.data || payload?.data || [];
-            setAllocationsList(Array.isArray(list) ? list : []);
+            const filteredList = (Array.isArray(list) ? list : []).filter(
+              (a: any) => a.order?.customer_id === delivery.customer_id
+            );
+            setAllocationsList(filteredList);
           }
         } catch (err) {
           console.error("Failed to fetch allocations list:", err);
@@ -288,14 +297,14 @@ export default function DeliveryConfirmationPage() {
       };
       fetchAllocationsList();
     }
-  }, [delivery?.order_id, delivery?.driver_id]);
+  }, [delivery?.order_id, delivery?.driver_id, delivery?.customer_id]);
 
   useEffect(() => {
     if (step === 4 && delivery?.customer_id && delivery?.order_id && !hasCheckedReplacements) {
       setHasCheckedReplacements(true);
       setCheckingReplacements(true);
       
-      const allocParams: any = { order_id: delivery.order_id };
+      const allocParams: any = {};
       if (delivery.driver_id && delivery.driver_id !== "N/A") {
         allocParams.driver_id = delivery.driver_id;
       }
@@ -318,7 +327,8 @@ export default function DeliveryConfirmationPage() {
           
           const mapped = returnsRes.data.data.data.map((item: any) => {
             const matchingAlloc = allocations.find((a: any) => 
-              a.product_id === item.product_id
+              a.product_id === item.product_id &&
+              a.order?.customer_id === delivery.customer_id
             );
             const remainingAlloc = matchingAlloc 
               ? parseFloat(matchingAlloc.allocated_quantity) - parseFloat(matchingAlloc.delivered_quantity) - parseFloat(matchingAlloc.returned_quantity)
@@ -564,7 +574,7 @@ export default function DeliveryConfirmationPage() {
       setPastOrderItems(items);
 
       try {
-        const params: any = { order_id: order.id };
+        const params: any = {};
         if (delivery?.driver_id && delivery.driver_id !== "N/A") {
           params.driver_id = delivery.driver_id;
         }
@@ -572,7 +582,10 @@ export default function DeliveryConfirmationPage() {
         if (res.data?.success) {
           const payload = res.data.data;
           const list = payload?.data?.data || payload?.data || [];
-          setAllocationsList(Array.isArray(list) ? list : []);
+          const filteredList = (Array.isArray(list) ? list : []).filter(
+            (a: any) => a.order?.customer_id === delivery?.customer_id
+          );
+          setAllocationsList(filteredList);
         }
       } catch (err) {
         console.error("Failed to fetch allocations list:", err);
@@ -1666,7 +1679,7 @@ export default function DeliveryConfirmationPage() {
                                     >
                                       {options.map(qty => (
                                         <option key={qty} value={qty}>
-                                          {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.unit_of_measure || "trays"}`}
+                                          {qty === 0 ? "0 (None)" : `${formatQty(qty)} ${item.unit_of_measure || "trays"}`}
                                         </option>
                                       ))}
                                     </select>
@@ -1807,7 +1820,7 @@ export default function DeliveryConfirmationPage() {
                           <div>
                             <p className="font-bold text-white">{item.product?.name || "Product"}</p>
                             <p className="text-[10px] text-gray-400 font-semibold mt-0.5">
-                              Returned: {item.quantity} | Replaced: {item.replacement_quantity} | Remaining: <span className="text-red-400 font-bold">{remaining}</span>
+                              Returned: {formatQty(item.quantity)} | Replaced: {formatQty(item.replacement_quantity)} | Remaining: <span className="text-red-400 font-bold">{formatQty(remaining)}</span>
                             </p>
                             <p className="text-[9px] text-gray-500 font-bold mt-0.5">Voucher: {item.voucher_number} ({item.return_date})</p>
                           </div>
@@ -1822,7 +1835,7 @@ export default function DeliveryConfirmationPage() {
                           >
                             {generateQtyOptions(Math.min(remaining, item.remainingAlloc)).map(qty => (
                               <option key={qty} value={qty}>
-                                {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.product?.unit_of_measure || "trays"}`}
+                                {qty === 0 ? "0 (None)" : `${formatQty(qty)} ${item.product?.unit_of_measure || "trays"}`}
                               </option>
                             ))}
                           </select>
@@ -1840,7 +1853,7 @@ export default function DeliveryConfirmationPage() {
                             </p>
                             <p>
                               <span className="font-bold text-brand-yellow">Allocated Limit:</span>{" "}
-                              {item.remainingAlloc} {item.product?.unit_of_measure || "Trays"} (Max)
+                              {formatQty(item.remainingAlloc)} {item.product?.unit_of_measure || "Trays"} (Max)
                             </p>
                           </div>
                         )}

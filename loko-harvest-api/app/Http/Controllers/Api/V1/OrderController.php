@@ -287,12 +287,27 @@ class OrderController extends Controller
                             ->where('product_id', $item['product_id'])
                             ->where('batch_reference', $batchRef)
                             ->first();
-                        $available = $stock ? (float) $stock->current_quantity : 0.0;
+                        $ledger = \App\Models\SalesStoreStock::getLedgerStock($validated['sales_store_id'], $item['product_id'], $batchRef);
+                        $raw = $stock ? (float)$stock->current_quantity : 0.0;
+                        $available = max($ledger, $raw);
                     } else {
-                        $available = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
+                        $stocksQuery = \App\Models\SalesStoreStock::where('sales_store_id', $validated['sales_store_id'])
                             ->where('product_id', $item['product_id'])
-                            ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
-                            ->sum('current_quantity');
+                            ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'));
+                        
+                        $raw = (float)$stocksQuery->sum('current_quantity');
+                        
+                        $batches = (clone $stocksQuery)->pluck('batch_reference')->unique();
+                        
+                        $ledger = 0.0;
+                        foreach ($batches as $bRef) {
+                            $ledger += \App\Models\SalesStoreStock::getLedgerStock($validated['sales_store_id'], $item['product_id'], $bRef);
+                        }
+                        if ($batches->isEmpty()) {
+                            $ledger = \App\Models\SalesStoreStock::getLedgerStock($validated['sales_store_id'], $item['product_id'], null);
+                        }
+                        
+                        $available = max($ledger, $raw);
                     }
                     
                     if ($available < (float) $item['quantity'] && empty($validated['admin_override_reason'])) {

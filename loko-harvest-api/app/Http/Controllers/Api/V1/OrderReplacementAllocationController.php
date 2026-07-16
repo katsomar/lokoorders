@@ -124,9 +124,22 @@ class OrderReplacementAllocationController extends Controller
                 ->where('batch_reference', $batch)
                 ->first();
 
-            $available = $stock ? (float)$stock->current_quantity : 0.0;
+            $ledger = SalesStoreStock::getLedgerStock($validated['sales_store_id'], $validated['product_id'], $batch);
+            $raw = $stock ? (float)$stock->current_quantity : 0.0;
+            $available = max($ledger, $raw);
+            
             if ($available < (float)$validated['allocated_quantity']) {
                 return $this->error("Insufficient stock for {$product->name} (Batch: " . ($batch ?? 'Unbatched') . ") in the selected sales store. Available: {$available}.", 422);
+            }
+
+            if (!$stock) {
+                $stock = SalesStoreStock::create([
+                    'sales_store_id' => $validated['sales_store_id'],
+                    'product_id' => $validated['product_id'],
+                    'batch_reference' => $batch,
+                    'current_quantity' => 0.0,
+                    'updated_by' => auth()->id()
+                ]);
             }
 
             // Decrement Stock
@@ -262,9 +275,22 @@ class OrderReplacementAllocationController extends Controller
                         ->where('batch_reference', $batch)
                         ->first();
 
-                    $available = $stock ? (float)$stock->current_quantity : 0.0;
+                    $ledger = SalesStoreStock::getLedgerStock($item['sales_store_id'], $item['product_id'], $batch);
+                    $raw = $stock ? (float)$stock->current_quantity : 0.0;
+                    $available = max($ledger, $raw);
+                    
                     if ($available < (float)$item['allocated_quantity']) {
                         throw new \Exception("Insufficient stock for {$product->name} (Batch: " . ($batch ?? 'Unbatched') . ") in the selected sales store. Available: {$available}.");
+                    }
+
+                    if (!$stock) {
+                        $stock = SalesStoreStock::create([
+                            'sales_store_id' => $item['sales_store_id'],
+                            'product_id' => $item['product_id'],
+                            'batch_reference' => $batch,
+                            'current_quantity' => 0.0,
+                            'updated_by' => auth()->id()
+                        ]);
                     }
 
                     // Decrement Stock

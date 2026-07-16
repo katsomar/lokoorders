@@ -46,6 +46,12 @@ const DriverRouteMap = dynamic(() => import("@/components/DriverRouteMap"), {
   ),
 });
 
+const formatQty = (val: any) => {
+  const num = Number(val);
+  if (isNaN(num)) return "0";
+  return parseFloat(num.toFixed(2)).toString();
+};
+
 const mockAssignedDeliveries = [
   { id: "1", order: "LHO-0042", customer: "Shoprite Lugogo", zone: "Kampala Central", status: "pending", time: "10:00 AM", crates: 230, latitude: null, longitude: null },
   { id: "2", order: "LHO-0041", customer: "KFC Bukoto", zone: "Bukoto", status: "pending", time: "02:30 PM", crates: 60, latitude: null, longitude: null },
@@ -116,7 +122,11 @@ export default function DriverDashboard() {
           per_page: 5
         }
       });
-      setSearchResults(res.data?.data?.data || res.data?.data || []);
+      const list = res.data?.data?.data || res.data?.data || [];
+      const filtered = (Array.isArray(list) ? list : []).filter(
+        (order: any) => order.customer?.classification !== 'file_opener'
+      );
+      setSearchResults(filtered);
     } catch (err) {
       console.error("Failed to search orders:", err);
     } finally {
@@ -802,7 +812,7 @@ export default function DriverDashboard() {
                                             <span className="text-[10px] text-gray-400 font-semibold">{voucher.return_date}</span>
                                           </div>
                                           <p className="text-[11px] font-bold text-gray-600 leading-snug mt-1">
-                                            {voucher.product_name}: <span className="text-red-600 font-black">{voucher.remaining_quantity} {voucher.product_unit || 'trays'} remaining</span> <span className="text-gray-400 font-semibold">(Returned: {voucher.quantity} / Replaced: {voucher.replacement_quantity})</span>
+                                            {voucher.product_name}: <span className="text-red-600 font-black">{formatQty(voucher.remaining_quantity)} {voucher.product_unit || 'trays'} remaining</span> <span className="text-gray-400 font-semibold">(Returned: {formatQty(voucher.quantity)} / Replaced: {formatQty(voucher.replacement_quantity)})</span>
                                           </p>
                                         </div>
                                       ))}
@@ -1138,19 +1148,19 @@ export default function DriverDashboard() {
                               <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-semibold text-gray-500">
                                 <div>
                                   <p className="text-[8px] text-gray-400 uppercase tracking-wide">Assigned</p>
-                                  <p className="text-gray-900 mt-0.5 font-bold">{alloc.allocated_quantity}</p>
+                                  <p className="text-gray-900 mt-0.5 font-bold">{formatQty(alloc.allocated_quantity)}</p>
                                 </div>
                                 <div>
                                   <p className="text-[8px] text-gray-400 uppercase tracking-wide">Delivered</p>
-                                  <p className="text-green-600 mt-0.5 font-bold">{alloc.delivered_quantity}</p>
+                                  <p className="text-green-600 mt-0.5 font-bold">{formatQty(alloc.delivered_quantity)}</p>
                                 </div>
                                 <div>
                                   <p className="text-[8px] text-gray-400 uppercase tracking-wide">Returned</p>
-                                  <p className="text-blue-600 mt-0.5 font-bold">{alloc.returned_quantity}</p>
+                                  <p className="text-blue-600 mt-0.5 font-bold">{formatQty(alloc.returned_quantity)}</p>
                                 </div>
                                 <div>
                                   <p className="text-[8px] text-gray-400 uppercase tracking-wide">Leftover</p>
-                                  <p className="text-red-500 mt-0.5 font-black">{leftover}</p>
+                                  <p className="text-red-500 mt-0.5 font-black">{formatQty(leftover)}</p>
                                 </div>
                               </div>
                             </div>
@@ -1786,7 +1796,7 @@ export default function DriverDashboard() {
                     className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-forest/50 bg-[#0B1510] text-white focus:outline-none focus:ring-1 focus:ring-brand-yellow"
                   >
                     <option value="">-- Choose Customer --</option>
-                    {customers.map(c => (
+                    {customers.filter((c: any) => c.classification !== "file_opener").map((c: any) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
@@ -1869,7 +1879,7 @@ export default function DriverDashboard() {
                               >
                                 {replaceOptions.map(qty => (
                                   <option key={qty} value={qty}>
-                                    {qty === 0 ? "0.00 (None)" : `${qty.toFixed(2)} ${item.unit_of_measure || "trays"}`}
+                                    {qty === 0 ? "0 (None)" : `${formatQty(qty)} ${item.unit_of_measure || "trays"}`}
                                   </option>
                                 ))}
                               </select>

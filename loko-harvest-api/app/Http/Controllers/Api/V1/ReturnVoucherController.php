@@ -195,17 +195,23 @@ class ReturnVoucherController extends Controller
                     $allocation = \App\Models\OrderReplacementAllocation::where('driver_id', $driverId)
                         ->where('product_id', $voucher->product_id)
                         ->where('status', 'allocated')
+                        ->whereHas('order', function ($query) use ($voucher) {
+                            $query->where('customer_id', $voucher->customer_id);
+                        })
                         ->first();
                 }
 
                 if (!$allocation) {
-                    $allocation = \App\Models\OrderReplacementAllocation::where('order_id', $voucher->order_id)
-                        ->where('product_id', $voucher->product_id)
+                    $allocation = \App\Models\OrderReplacementAllocation::where('product_id', $voucher->product_id)
+                        ->where('status', 'allocated')
+                        ->whereHas('order', function ($query) use ($voucher) {
+                            $query->where('customer_id', $voucher->customer_id);
+                        })
                         ->first();
                 }
 
                 if (!$allocation) {
-                    throw new \Exception("No replacement allocation was pre-assigned by the manager/admin for product: " . ($voucher->product->name ?? 'Product') . " on Order: " . ($voucher->order->order_number ?? 'Order'));
+                    throw new \Exception("No active replacement allocation was pre-assigned by the manager/admin for product: " . ($voucher->product->name ?? 'Product') . " for Customer: " . ($voucher->customer->name ?? 'Customer'));
                 }
 
                 // Ensure we don't replace more than the remaining quantity on the voucher
