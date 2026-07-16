@@ -12,7 +12,9 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  LineChart,
+  Line
 } from "recharts";
 import { 
   BarChart3, 
@@ -24,16 +26,49 @@ import {
   Loader2,
   AlertCircle,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Filter,
+  Search,
+  ChevronDown,
+  Info,
+  BadgeAlert,
+  Sparkles,
+  FileSpreadsheet
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
 
+interface SalesStockItem {
+  id: string;
+  product: string;
+  code: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+}
+
 export default function ReportsPage() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("all");
+  
+  // Date presets and range
+  const [datePreset, setDatePreset] = useState<string>("mtd");
+  const [startDate, setStartDate] = useState<string>(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState<string>(
+    new Date().toISOString().split('T')[0]
+  );
+
+  // Active Tab
+  const [activeTab, setActiveTab] = useState<"overview" | "customers" | "products" | "predictions">("overview");
+
+  // Report Data
   const [salesSummary, setSalesSummary] = useState({
     total_sales: 0,
     total_collections: 0,
@@ -42,15 +77,45 @@ export default function ReportsPage() {
     sales_trend: []
   });
   const [driverPerformance, setDriverPerformance] = useState<any[]>([]);
-  const [agingReport, setAgingReport] = useState<any[]>([]);
+  const [analytics, setAnalytics] = useState({
+    best_performers: [] as any[],
+    most_returns: [] as any[],
+    product_mix: [] as any[],
+    predictions: [] as any[],
+    outstanding_aging: [] as any[]
+  });
 
-  const fetchReportData = async () => {
-    setIsLoading(true);
+  // Fetch initial configuration & customer list
+  useEffect(() => {
+    const fetchInit = async () => {
+      try {
+        const res = await api.get("/customers", { params: { per_page: 1000 } });
+        if (res.data?.data?.data) {
+          setCustomers(res.data.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to load customers:", err);
+      }
+    };
+    fetchInit();
+  }, []);
+
+  // Fetch report data based on current parameters
+  const fetchReportData = async (isRefresher = false) => {
+    if (isRefresher) setIsUpdating(true);
+    else setIsLoading(true);
+
     try {
-      const [salesRes, driverRes, agingRes] = await Promise.all([
-        api.get("/reports/sales-summary"),
+      const [salesRes, driverRes, analyticsRes] = await Promise.all([
+        api.get(`/reports/sales-summary`, { params: { start_date: startDate, end_date: endDate } }),
         api.get("/reports/driver-performance"),
-        api.get("/reports/aging"),
+        api.get("/reports/customer-analytics", { 
+          params: { 
+            start_date: startDate, 
+            end_date: endDate, 
+            customer_id: selectedCustomerId 
+          } 
+        }),
       ]);
 
       if (salesRes.data.data) {
@@ -59,19 +124,47 @@ export default function ReportsPage() {
       if (driverRes.data.data) {
         setDriverPerformance(driverRes.data.data);
       }
-      if (agingRes.data.data) {
-        setAgingReport(agingRes.data.data);
+      if (analyticsRes.data.data) {
+        setAnalytics(analyticsRes.data.data);
       }
     } catch (err) {
       console.error("Failed to fetch reports:", err);
     } finally {
       setIsLoading(false);
+      setIsUpdating(false);
     }
   };
 
+  // Trigger fetch when parameters change
   useEffect(() => {
     fetchReportData();
-  }, []);
+  }, [startDate, endDate, selectedCustomerId]);
+
+  const handlePresetChange = (preset: string) => {
+    setDatePreset(preset);
+    const today = new Date();
+    let startStr = "";
+    const endStr = today.toISOString().split('T')[0];
+
+    if (preset === "mtd") {
+      startStr = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    } else if (preset === "last30") {
+      const past = new Date();
+      past.setDate(today.getDate() - 30);
+      startStr = past.toISOString().split('T')[0];
+    } else if (preset === "last90") {
+      const past = new Date();
+      past.setDate(today.getDate() - 90);
+      startStr = past.toISOString().split('T')[0];
+    } else if (preset === "ytd") {
+      startStr = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+    } else {
+      return; // custom allows manual change
+    }
+
+    setStartDate(startStr);
+    setEndDate(endStr);
+  };
 
   const formatCurrency = (amount: any) => {
     const val = parseFloat(amount || 0);
@@ -81,7 +174,7 @@ export default function ReportsPage() {
   const formatCompactCurrency = (amount: any) => {
     const val = parseFloat(amount || 0);
     if (val >= 1_000_000) {
-      return `UGX ${(val / 1_000_000).toFixed(1)}M`;
+      return `UGX ${(val / 1_000_000).toFixed(2)}M`;
     }
     if (val >= 1_000) {
       return `UGX ${(val / 1_000).toFixed(0)}K`;
@@ -89,35 +182,61 @@ export default function ReportsPage() {
     return `UGX ${val.toLocaleString()}`;
   };
 
-  // Compute logistics metrics
+  // Logistics calculations
   const totalDeliveries = driverPerformance.reduce((sum, d) => sum + parseInt(d.total_deliveries || 0), 0);
   const totalSuccessful = driverPerformance.reduce((sum, d) => sum + parseInt(d.successful || 0), 0);
   const successRate = totalDeliveries > 0 ? (totalSuccessful / totalDeliveries) * 100 : 0;
 
-  // Format category distribution pie chart data
-  const pieColors = {
-    eggs: "#1A5C2A",
-    poultry: "#3A8C3F",
-    manure: "#F5A800",
-    other: "#E08C00"
-  };
-  const pieData = (salesSummary.sales_by_category || []).map((c: any) => {
-    const categoryName = c.category === 'eggs' ? 'White Eggs' :
-                         c.category === 'poultry' ? 'Poultry' :
-                         c.category === 'manure' ? 'By-products' : c.category;
+  // Recharts Category Pie Chart data
+  const pieColors = ["#1A5C2A", "#3A8C3F", "#F5A800", "#E08C00", "#6366F1"];
+  const pieData = (salesSummary.sales_by_category || []).map((c: any, index: number) => {
+    const categoryLabel = c.category === 'eggs' ? 'White Eggs' :
+                          c.category === 'poultry' ? 'Poultry' :
+                          c.category === 'manure' ? 'By-products' : c.category;
     return {
-      name: categoryName,
+      name: categoryLabel,
       value: parseFloat(c.total || 0),
-      color: pieColors[c.category as keyof typeof pieColors] || "#9CA3AF"
+      color: pieColors[index % pieColors.length]
     };
   });
+
+  // Dynamic CSV Export
+  const exportToCSV = () => {
+    let headers: string[] = [];
+    let rows: any[] = [];
+    let filename = `loko_report_${activeTab}_${startDate}_to_${endDate}.csv`;
+
+    if (activeTab === "overview") {
+      headers = ["Category", "Gross sales (UGX)"];
+      rows = pieData.map(d => [d.name, d.value]);
+    } else if (activeTab === "customers") {
+      headers = ["Customer Name", "Customer Type", "Total Spent (UGX)", "Order Count", "Avg Order Value (UGX)"];
+      rows = analytics.best_performers.map(c => [c.name, c.customer_type, c.total_spent, c.order_count, c.avg_order_value]);
+    } else if (activeTab === "products") {
+      headers = ["Product Name", "Product Code", "Category", "Quantity Sold", "Revenue Generated (UGX)", "Top Customer", "Top Customer Qty"];
+      rows = analytics.product_mix.map(p => [p.product_name, p.product_code, p.product_category, p.total_quantity, p.total_revenue, p.top_customer_name, p.top_customer_qty]);
+    } else if (activeTab === "predictions") {
+      headers = ["Customer Name", "Avg Order Cycle (Days)", "Last Order Date", "Predicted Next Order Date", "Predicted Order Value (UGX)", "Predicted Qty", "Demand status", "Churn status"];
+      rows = analytics.predictions.map(p => [p.customer_name, p.avg_interval_days, p.last_order_date, p.predicted_next_order_date, p.predicted_order_value, p.predicted_order_qty, p.demand_status, p.churn_risk]);
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(","), ...rows.map(e => e.map((val: any) => `"${val}"`).join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   if (isLoading) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-xs text-gray-500 font-bold">
           <Loader2 className="animate-spin text-brand-forest" size={36} />
-          Compiling analytics & reports data...
+          Compiling business intelligence & analytics reports...
         </div>
       </DashboardLayout>
     );
@@ -125,257 +244,579 @@ export default function ReportsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 pb-12 max-w-6xl mx-auto">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="space-y-8 pb-12 max-w-7xl mx-auto px-4">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-brand-forest to-emerald-900 text-white p-6 rounded-2xl shadow-md">
           <div>
-            <h1 className="text-2xl font-black text-brand-forest font-heading leading-none flex items-center gap-2">
-              <BarChart3 className="text-brand-forest" size={26} />
-              Advanced Analytics
+            <h1 className="text-2xl md:text-3xl font-black font-heading leading-none flex items-center gap-2">
+              <Sparkles className="text-brand-yellow animate-pulse" size={26} />
+              BI Analytics Dashboard
             </h1>
-            <p className="text-gray-500 font-body text-xs mt-1.5">Performance insights and financial reconciliation</p>
+            <p className="text-emerald-100 font-body text-xs mt-2">
+              Deep-dive metrics, ordering trends, predictive demand forecasting, and collection insights.
+            </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <Button 
+              variant="outline" 
+              onClick={exportToCSV}
+              className="h-9.5 px-4 text-xs font-bold border-white/20 text-white bg-white/10 hover:bg-white/20 rounded-xl gap-1.5 shadow-sm"
+            >
+              <FileSpreadsheet size={14} />
+              Export CSV
+            </Button>
             <Button 
               variant="outline" 
               onClick={() => window.print()}
-              className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white"
+              className="h-9.5 px-4 text-xs font-bold border-white/20 text-white bg-white/10 hover:bg-white/20 rounded-xl gap-1.5 shadow-sm"
             >
               <Download size={14} />
-              Export Report
+              PDF / Print
             </Button>
             <Button 
-              onClick={fetchReportData}
-              className="h-9.5 px-4 bg-brand-forest hover:bg-brand-forest/90 text-white font-extrabold shadow-sm rounded-xl text-xs gap-1.5"
+              onClick={() => fetchReportData(true)}
+              disabled={isUpdating}
+              className="h-9.5 px-4 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest font-black shadow-sm rounded-xl text-xs gap-1.5 border-none"
             >
-              <Calendar size={14} />
+              {isUpdating ? <Loader2 className="animate-spin" size={14} /> : <Calendar size={14} />}
               Refresh Data
             </Button>
           </div>
         </div>
 
-        {/* Top KPIs */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="border border-brand-sage/40 shadow-sm bg-brand-forest text-white rounded-xl overflow-hidden">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-[10px] font-extrabold uppercase tracking-wider text-white/70 flex items-center gap-1.5">
-                <TrendingUp size={14} className="text-brand-yellow" />
-                MTD Gross Net Sales
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4 px-5">
-              <h3 className="text-2xl font-black font-heading leading-tight">{formatCompactCurrency(salesSummary.total_sales)}</h3>
-              <p className="text-[10px] text-brand-yellow/85 font-medium mt-1">Sum of orders placed this month</p>
+        {/* Unified Filter Dashboard */}
+        <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+          <CardContent className="p-5 flex flex-col lg:flex-row gap-5 items-end justify-between">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full">
+              {/* Customer Dropdown */}
+              <div className="space-y-1.5 col-span-1 md:col-span-1">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  <Users size={12} className="text-brand-forest" />
+                  Client / Customer Filter
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full h-10 pl-3 pr-8 text-xs font-bold border border-brand-sage/60 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest/30 focus:border-brand-forest appearance-none text-gray-700"
+                  >
+                    <option value="all">All Clients (Aggregated)</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-3.5 text-gray-400 pointer-events-none" size={12} />
+                </div>
+              </div>
+
+              {/* Date Presets */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  <Calendar size={12} className="text-brand-forest" />
+                  Select Period Preset
+                </label>
+                <div className="flex gap-1 bg-gray-50 border border-brand-sage/40 p-1 rounded-xl h-10">
+                  {["mtd", "last30", "last90", "ytd"].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handlePresetChange(preset)}
+                      className={`flex-1 text-[10px] font-extrabold rounded-lg capitalize transition-all ${
+                        datePreset === preset 
+                          ? "bg-brand-forest text-white shadow-sm" 
+                          : "text-gray-500 hover:text-brand-forest hover:bg-brand-sage/20"
+                      }`}
+                    >
+                      {preset === "mtd" ? "MTD" : preset === "last30" ? "30D" : preset === "last90" ? "90D" : "YTD"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Date Range */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setDatePreset("custom");
+                  }}
+                  className="w-full h-10 px-3 text-xs font-bold border border-brand-sage/60 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest/30 text-gray-700 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setDatePreset("custom");
+                  }}
+                  className="w-full h-10 px-3 text-xs font-bold border border-brand-sage/60 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-brand-forest/30 text-gray-700 font-mono"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Overview Key stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="border border-brand-sage/40 shadow-sm bg-gradient-to-br from-brand-forest to-emerald-800 text-white rounded-xl overflow-hidden">
+            <CardContent className="p-5 relative">
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-200 flex items-center gap-1">
+                <TrendingUp size={12} className="text-brand-yellow" />
+                Gross Sales Revenue
+              </span>
+              <h3 className="text-2xl font-black font-heading mt-2">{formatCurrency(salesSummary.total_sales)}</h3>
+              <p className="text-[10px] text-emerald-100/80 mt-1">For selected date range & filters</p>
             </CardContent>
           </Card>
           
           <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl overflow-hidden">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                <Users size={14} className="text-brand-forest" />
-                Revenue Collections (MTD)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4 px-5">
-              <h3 className="text-2xl font-black text-brand-forest font-heading leading-tight">{formatCompactCurrency(salesSummary.total_collections)}</h3>
-              <p className="text-[10px] text-green-600 font-bold mt-1">Total payments logged in month</p>
+            <CardContent className="p-5">
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                <Users size={12} className="text-brand-forest" />
+                Payments Collected
+              </span>
+              <h3 className="text-2xl font-black text-brand-forest font-heading mt-2">{formatCurrency(salesSummary.total_collections)}</h3>
+              <p className="text-[10px] text-green-600 font-bold mt-1">
+                Collection Ratio: {salesSummary.total_sales > 0 ? ((salesSummary.total_collections / salesSummary.total_sales) * 100).toFixed(1) : "0"}%
+              </p>
             </CardContent>
           </Card>
 
           <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl overflow-hidden">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                <Truck size={14} className="text-brand-forest" />
+            <CardContent className="p-5">
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                <Truck size={12} className="text-brand-forest" />
                 Logistics Success Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-4 px-5">
-              <h3 className="text-2xl font-black text-brand-forest font-heading leading-tight">{successRate > 0 ? `${successRate.toFixed(1)}%` : "0%"}</h3>
+              </span>
+              <h3 className="text-2xl font-black text-brand-forest font-heading mt-2">
+                {successRate > 0 ? `${successRate.toFixed(1)}%` : "0%"}
+              </h3>
               <p className="text-[10px] text-brand-amber font-bold mt-1">
                 {totalSuccessful} of {totalDeliveries} runs delivered
               </p>
             </CardContent>
           </Card>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Sales Growth */}
-          <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-            <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
-              <CardTitle className="text-sm font-bold text-brand-forest font-heading">
-                Sales Category Revenue (5-Month Trend)
-              </CardTitle>
-            </CardHeader>
+          <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl overflow-hidden">
             <CardContent className="p-5">
-              <div className="h-[320px] w-full">
-                {salesSummary.sales_trend.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
-                    No historical sales data available
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesSummary.sales_trend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
-                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} />
-                      <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `UGX ${(val / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fill: '#6B7280' }} />
-                      <Tooltip 
-                        cursor={{ fill: '#F8FBF8' }} 
-                        formatter={(val) => [formatCurrency(val), ""]}
-                        contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '11px' }} 
-                      />
-                      <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                      <Bar dataKey="eggs" name="Eggs" fill="#1A5C2A" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="poultry" name="Poultry" fill="#3A8C3F" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="manure" name="By-products" fill="#F5A800" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="other" name="Other" fill="#E08C00" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Category Distribution */}
-          <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-            <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
-              <CardTitle className="text-sm font-bold text-brand-forest font-heading">
-                Sales Category Distribution (MTD)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
-              <div className="h-[320px] w-full">
-                {pieData.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
-                    No active category sales data
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={95}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(val) => [formatCurrency(val), "Volume"]} />
-                      <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+                <AlertCircle size={12} className="text-red-500" />
+                Receivables / Outstanding
+              </span>
+              <h3 className="text-2xl font-black text-red-600 font-heading mt-2">
+                {formatCurrency(analytics.outstanding_aging.reduce((sum, c) => sum + c.current_balance, 0))}
+              </h3>
+              <p className="text-[10px] text-gray-500 font-medium mt-1">Outstanding account balances</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Driver Performance Table */}
-        <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-          <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold text-brand-forest font-heading flex items-center gap-1.5">
-              <Clock size={16} />
-              Logistics Performance Ledger
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {driverPerformance.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 text-xs italic">
-                No active driver logistics logs recorded.
-              </div>
-            ) : (
-              <div className="w-full overflow-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
-                    <tr>
-                      <th className="px-6 py-4">Driver Name</th>
-                      <th className="px-6 py-4 text-center">Total Jobs</th>
-                      <th className="px-6 py-4 text-center">Successful Runs</th>
-                      <th className="px-6 py-4 text-center">Efficiency Score</th>
-                      <th className="px-6 py-4 text-right">Avg Transit Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {driverPerformance.map((driver: any, idx: number) => {
-                      const deliveries = parseInt(driver.total_deliveries || 0);
-                      const successful = parseInt(driver.successful || 0);
-                      const efficiency = deliveries > 0 ? Math.round((successful / deliveries) * 100) : 0;
-                      const avgMinutes = Math.round(parseFloat(driver.avg_time_minutes || 0));
-                      return (
-                        <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
-                          <td className="px-6 py-4 font-bold text-gray-900 text-xs">{driver.name}</td>
-                          <td className="px-6 py-4 text-center text-xs text-gray-600 font-semibold">{deliveries}</td>
-                          <td className="px-6 py-4 text-center text-xs text-green-600 font-bold">{successful}</td>
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="w-24 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                <div 
-                                  className="bg-brand-forest h-full" 
-                                  style={{ width: `${efficiency}%` }}
-                                />
-                              </div>
-                              <span className="text-[10px] font-extrabold text-gray-700">{efficiency}%</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-right text-xs font-semibold text-gray-600 font-mono">
-                            {avgMinutes > 0 ? `${avgMinutes} mins` : "N/A"}
-                          </td>
+        {/* Tab Selection */}
+        <div className="flex border-b border-brand-sage/40 gap-4">
+          {[
+            { id: "overview", label: "Executive Overview", icon: BarChart3 },
+            { id: "customers", label: "Client performance & Returns", icon: Users },
+            { id: "products", label: "Product mix & Outflow", icon: Sparkles },
+            { id: "predictions", label: "Predictive Demand Cycles", icon: Clock }
+          ].map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`pb-3 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+                  activeTab === tab.id 
+                    ? "border-brand-forest text-brand-forest" 
+                    : "border-transparent text-gray-400 hover:text-gray-600"
+                }`}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "overview" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-fadeIn">
+            {/* Sales Growth */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Sales Revenue Category Mix (MTD Trend)
+                </CardTitle>
+                <CardDescription className="text-[10px] text-gray-500">Gross sales across poultry, eggs, and by-products</CardDescription>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="h-[320px] w-full">
+                  {salesSummary.sales_trend.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
+                      No historical sales data available
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={salesSummary.sales_trend}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
+                        <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} />
+                        <YAxis axisLine={false} tickLine={false} tickFormatter={(val) => `UGX ${(val / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                        <Tooltip 
+                          cursor={{ fill: '#F8FBF8' }} 
+                          formatter={(val) => [formatCurrency(val), ""]}
+                          contentStyle={{ borderRadius: '12px', border: '1px solid #E8F0E9', fontSize: '11px' }} 
+                        />
+                        <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar dataKey="eggs" name="Eggs" fill="#1A5C2A" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="poultry" name="Poultry" fill="#3A8C3F" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="manure" name="By-products" fill="#F5A800" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="other" name="Other" fill="#E08C00" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Category Distribution */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Sales Category Distribution
+                </CardTitle>
+                <CardDescription className="text-[10px] text-gray-500">Revenue split by product types</CardDescription>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="h-[320px] w-full">
+                  {pieData.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
+                      No active category sales data
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={95}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(val) => [formatCurrency(val), "Volume"]} />
+                        <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tab 2: Best performing clients & Returns */}
+        {activeTab === "customers" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Top spender chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl lg:col-span-2">
+                <CardHeader className="py-3.5 px-5">
+                  <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                    Top Clients by Total Order Value
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-5">
+                  <div className="h-[280px] w-full">
+                    {analytics.best_performers.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
+                        No client purchase records in this period
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analytics.best_performers.slice(0, 7)} layout="vertical">
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8F0E9" />
+                          <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(val) => `${(val / 1000).toFixed(0)}K`} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                          <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} width={120} />
+                          <Tooltip formatter={(val) => [formatCurrency(val), "Total Spent"]} />
+                          <Bar dataKey="total_spent" name="Spent" fill="#1A5C2A" radius={[0, 4, 4, 0]} barSize={16} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Outstanding Receivables Balance */}
+              <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+                <CardHeader className="py-3.5 px-5">
+                  <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                    Account Receivables Ledger
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {analytics.outstanding_aging.length === 0 ? (
+                    <p className="p-5 text-xs text-gray-400 italic text-center">No outstanding client receivables</p>
+                  ) : (
+                    <div className="divide-y divide-gray-100 max-h-[280px] overflow-y-auto">
+                      {analytics.outstanding_aging.map((c, i) => (
+                        <div key={i} className="p-3 px-5 flex items-center justify-between hover:bg-brand-sage/5 transition-all">
+                          <div>
+                            <p className="text-xs font-black text-gray-800 leading-none">{c.name}</p>
+                            <span className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{c.credit_terms}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-black text-red-600 font-mono">{formatCurrency(c.current_balance)}</span>
+                            <p className="text-[8px] text-gray-400 mt-0.5">Headroom: {formatCompactCurrency(c.headroom)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Performance ledger table */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Detailed Client Revenue & returns Ledger
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {analytics.best_performers.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 text-xs italic">
+                    No matching sales history logs.
+                  </div>
+                ) : (
+                  <div className="w-full overflow-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Client Name</th>
+                          <th className="px-6 py-4 text-center">Type</th>
+                          <th className="px-6 py-4 text-center">Total Orders</th>
+                          <th className="px-6 py-4 text-right">Avg Order Value</th>
+                          <th className="px-6 py-4 text-right">Total Returned Value</th>
+                          <th className="px-6 py-4 text-right">Net Revenue Spent</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analytics.best_performers.map((c: any, idx: number) => {
+                          const returnsData = analytics.most_returns.find(r => r.id === c.id);
+                          const totalReturned = returnsData ? returnsData.total_returned_value : 0.0;
+                          const netRevenue = c.total_spent - totalReturned;
+                          return (
+                            <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
+                              <td className="px-6 py-4 font-bold text-gray-900 text-xs">{c.name}</td>
+                              <td className="px-6 py-4 text-center">
+                                <Badge className="bg-brand-sage/50 text-brand-forest border-none text-[9px] font-extrabold uppercase rounded-lg">
+                                  {c.customer_type}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 text-center text-xs text-gray-600 font-semibold">{c.order_count}</td>
+                              <td className="px-6 py-4 text-right text-xs font-semibold text-gray-600">{formatCurrency(c.avg_order_value)}</td>
+                              <td className="px-6 py-4 text-right text-xs font-semibold text-amber-600">
+                                {totalReturned > 0 ? formatCurrency(totalReturned) : "UGX 0"}
+                              </td>
+                              <td className="px-6 py-4 text-right font-black text-brand-forest text-xs font-heading">
+                                {formatCurrency(netRevenue)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* Customer Receivables Aging Ledger */}
-        <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
-          <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
-            <CardTitle className="text-sm font-bold text-brand-forest font-heading flex items-center gap-1.5">
-              <Users size={16} />
-              Customer Accounts Receivables Aging Ledger
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {agingReport.length === 0 ? (
-              <div className="p-8 text-center text-gray-500 text-xs italic">
-                No active outstanding customer credit balances.
+        {/* Tab 3: Product mix & demand mapping */}
+        {activeTab === "products" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Products take out chart */}
+            <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+              <CardHeader className="py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Product Sales Volume & Outflow Mix
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-5">
+                <div className="h-[280px] w-full">
+                  {analytics.product_mix.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-gray-400 text-xs italic">
+                      No active product sales records in this duration
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analytics.product_mix}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8F0E9" />
+                        <XAxis dataKey="product_code" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#6B7280' }} />
+                        <Tooltip formatter={(val) => [val, "Quantity Outflow"]} />
+                        <Bar dataKey="total_quantity" name="Qty Dispatched" fill="#3A8C3F" radius={[4, 4, 0, 0]} barSize={25} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Product consumption ledger table */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Product Outflow & Consumption Ledger
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {analytics.product_mix.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 text-xs italic">
+                    No active product distribution data.
+                  </div>
+                ) : (
+                  <div className="w-full overflow-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Product Name</th>
+                          <th className="px-6 py-4 text-center">Product Code</th>
+                          <th className="px-6 py-4 text-center">Category</th>
+                          <th className="px-6 py-4 text-center">Total Qty Distributed</th>
+                          <th className="px-6 py-4 text-right">Revenue Generated</th>
+                          <th className="px-6 py-4 text-right">Top Consuming Client</th>
+                          <th className="px-6 py-4 text-right">Top Consumption Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analytics.product_mix.map((p: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
+                            <td className="px-6 py-4 font-bold text-gray-900 text-xs">{p.product_name}</td>
+                            <td className="px-6 py-4 text-center font-mono text-xs font-semibold text-gray-600">{p.product_code}</td>
+                            <td className="px-6 py-4 text-center">
+                              <Badge className="bg-gray-50 text-gray-600 border border-gray-200 text-[9px] font-extrabold uppercase rounded-lg">
+                                {p.product_category}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-center text-xs font-black text-gray-800">{p.total_quantity}</td>
+                            <td className="px-6 py-4 text-right text-xs font-semibold text-brand-forest">{formatCurrency(p.total_revenue)}</td>
+                            <td className="px-6 py-4 text-right text-xs text-gray-700 font-medium">{p.top_customer_name}</td>
+                            <td className="px-6 py-4 text-right font-black text-gray-800 text-xs font-mono">
+                              {p.top_customer_qty}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tab 4: Predictions */}
+        {activeTab === "predictions" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Predictive overview description card */}
+            <Card className="border border-brand-sage/40 shadow-sm bg-gradient-to-r from-emerald-50 to-brand-sage/30 rounded-xl p-5 border-l-4 border-l-brand-forest flex gap-4 items-start">
+              <Info className="text-brand-forest flex-shrink-0 mt-0.5" size={18} />
+              <div>
+                <h4 className="text-xs font-black text-brand-forest uppercase tracking-wider">How Predictive Demand Cycle Modeling Works</h4>
+                <p className="text-[11px] text-gray-600 mt-1 leading-relaxed">
+                  Loko Harvest algorithms analyze individual client historical order timestamps to calculate their **Average Order Interval** cycle. 
+                  Based on their last dispatch and this ordering pattern, the system projects the **Predicted Next Order Date** and volume. 
+                  Clients whose elapsed time exceeds their predicted order date by 150% are automatically flagged as **High Churn Risk**.
+                </p>
               </div>
-            ) : (
-              <div className="w-full overflow-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
-                    <tr>
-                      <th className="px-6 py-4">Customer Name</th>
-                      <th className="px-6 py-4 text-center">Credit Terms</th>
-                      <th className="px-6 py-4 text-right">Outstanding Balance (Receivables)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {agingReport.map((cust: any, idx: number) => (
-                      <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
-                        <td className="px-6 py-4 font-bold text-gray-900 text-xs">{cust.name}</td>
-                        <td className="px-6 py-4 text-center">
-                          <Badge className="bg-amber-100 text-amber-700 border-none text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg">
-                            {cust.credit_terms?.replace('_', ' ') || "N/A"}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right font-black text-red-600 text-xs font-heading">
-                          {formatCurrency(cust.current_balance)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </Card>
+
+            {/* Predictions Table */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5">
+                <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                  Deterministic Client Order Forecasting
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {analytics.predictions.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 text-xs italic">
+                    Insufficient historical purchase data to generate demand projections.
+                  </div>
+                ) : (
+                  <div className="w-full overflow-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4">Client Name</th>
+                          <th className="px-6 py-4 text-center">Avg Interval</th>
+                          <th className="px-6 py-4 text-center">Last Order Date</th>
+                          <th className="px-6 py-4 text-center">Projected Next Order</th>
+                          <th className="px-6 py-4 text-right">Projected Order Value</th>
+                          <th className="px-6 py-4 text-right">Projected Qty</th>
+                          <th className="px-6 py-4 text-center">Demand Trend</th>
+                          <th className="px-6 py-4 text-right">Engagement Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analytics.predictions.map((p: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
+                            <td className="px-6 py-4 font-bold text-gray-900 text-xs">{p.customer_name}</td>
+                            <td className="px-6 py-4 text-center font-mono text-xs font-semibold text-gray-600">{p.avg_interval_days} Days</td>
+                            <td className="px-6 py-4 text-center text-xs text-gray-500 font-mono">{p.last_order_date}</td>
+                            <td className="px-6 py-4 text-center text-xs font-black text-brand-forest font-mono">{p.predicted_next_order_date}</td>
+                            <td className="px-6 py-4 text-right text-xs font-bold text-gray-700">{formatCurrency(p.predicted_order_value)}</td>
+                            <td className="px-6 py-4 text-right text-xs font-bold text-gray-700 font-mono">{p.predicted_order_qty} Units</td>
+                            <td className="px-6 py-4 text-center">
+                              <Badge className={`border text-[9px] font-extrabold uppercase rounded-lg shadow-none px-2.5 ${
+                                p.demand_status === 'Increasing Demand' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
+                                  : p.demand_status === 'Decreasing Demand'
+                                  ? 'bg-rose-50 text-rose-700 border-rose-300'
+                                  : 'bg-gray-50 text-gray-600 border-gray-300'
+                              }`}>
+                                {p.demand_status}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <Badge className={`border text-[9px] font-extrabold uppercase rounded-lg shadow-none px-2.5 ${
+                                p.churn_risk === 'High Risk'
+                                  ? 'bg-red-100 text-red-700 border-red-300 animate-pulse'
+                                  : p.churn_risk === 'Medium Risk'
+                                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                                  : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                              }`}>
+                                {p.churn_risk === 'Active' ? 'Highly Engaged' : p.churn_risk}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

@@ -115,6 +115,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/reports/sales-summary', [App\Http\Controllers\Api\V1\ReportController::class, 'salesSummary']);
         Route::get('/reports/aging', [App\Http\Controllers\Api\V1\ReportController::class, 'agingReport']);
         Route::get('/reports/driver-performance', [App\Http\Controllers\Api\V1\ReportController::class, 'driverPerformance']);
+        Route::get('/reports/customer-analytics', [App\Http\Controllers\Api\V1\ReportController::class, 'customerAnalytics']);
         Route::get('/dashboard/admin', [App\Http\Controllers\Api\V1\DashboardController::class, 'adminDashboard']);
         
         // Return Vouchers
