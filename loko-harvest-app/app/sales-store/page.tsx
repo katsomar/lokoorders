@@ -315,6 +315,8 @@ export default function SalesStorePage() {
           sold_quantity: parseFloat(item.sold_quantity || 0),
           transferred_out: parseFloat(item.transferred_out || 0),
           replacements: parseFloat(item.replacements || 0),
+          returns: parseFloat(item.returns || 0),
+          damages: parseFloat(item.damages || 0),
           closing_stock: parseFloat(item.closing_stock || 0),
           unit_price: parseFloat(item.unit_price || item.product.sales_unit_price || item.product.default_unit_price),
           egg_unit_price: parseFloat(item.egg_unit_price || item.product.sales_egg_unit_price || 0),
