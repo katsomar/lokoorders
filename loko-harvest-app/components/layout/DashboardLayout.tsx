@@ -18,7 +18,8 @@ import {
   LogOut,
   Warehouse,
   ChevronRight,
-  Clock
+  Clock,
+  ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/store/useAuth";
 import api from "@/lib/api";
@@ -51,6 +52,7 @@ const navItems = [
   { group: "System", items: [
     { name: "Users", href: "/users", icon: Users },
     { name: "Settings", href: "/settings", icon: Settings },
+    { name: "External POS", href: "https://skyrix-pos-sys.great-site.net/index.php", icon: ExternalLink, external: true },
   ]}
 ];
 
@@ -161,7 +163,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             .map((group) => ({
               ...group,
               items: group.items.filter(
-                (item) => item.href !== "/users" || user?.role === "admin"
+                (item) => (item.href !== "/users" && item.name !== "External POS") || user?.role === "admin"
               ),
             }))
             .filter((group) => group.items.length > 0)
@@ -179,6 +181,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link
                       key={item.name}
                       href={item.href}
+                      target={item.external ? "_blank" : undefined}
+                      rel={item.external ? "noopener noreferrer" : undefined}
                       className={`relative flex items-center gap-3 rounded-lg px-3 py-2 transition-all group ${
                         isActive 
                           ? "bg-white/10 text-brand-yellow border-l-4 border-brand-yellow" 
