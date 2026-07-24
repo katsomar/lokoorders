@@ -193,6 +193,11 @@ export default function DeliveryConfirmationPage() {
     secondsElapsedRef.current = secondsElapsed;
   }, [secondsElapsed]);
 
+  const stepRef = useRef(1);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
   useEffect(() => {
     let trackingInterval: any;
     if (step === 2 && deliveryStatus === "Dispatched") {
@@ -263,12 +268,19 @@ export default function DeliveryConfirmationPage() {
               elapsed = Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 1000);
             }
           }
-          setStep(2);
-          setDeliveryStatus("Dispatched");
+          if (stepRef.current !== 3 && stepRef.current !== 4) {
+            setStep(2);
+            setDeliveryStatus("Dispatched");
+          }
         } else if (d.status === "delivered") {
           setStep(4);
           setDeliveryStatus("Delivered");
         } else {
+          if (stepRef.current === 2 || stepRef.current === 3) {
+            if (typeof window !== "undefined") {
+              localStorage.removeItem(`transit_start_time_${d.id}`);
+            }
+          }
           setStep(1);
           setDeliveryStatus("Assigned");
         }
