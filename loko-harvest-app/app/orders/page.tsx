@@ -190,6 +190,9 @@ export default function OrdersPage() {
         return <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Ready</Badge>;
       case "dispatched":
         return <Badge className="bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Dispatched</Badge>;
+      case "on_route":
+      case "on route":
+        return <Badge className="bg-sky-100 text-sky-700 border border-sky-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">On Route</Badge>;
       case "delivered":
         return <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-extrabold uppercase py-0.5 px-2 rounded-lg">Delivered</Badge>;
       case "undone":
@@ -548,7 +551,7 @@ export default function OrdersPage() {
                               </Button>
                             </Link>
                             
-                            {!(order.status === "dispatched" || order.status === "delivered") ? (
+                            {!(order.status === "dispatched" || order.status === "on_route" || order.status === "on route" || order.status === "delivered") ? (
                               <>
                                 <Link href={`/orders/${order.id}/edit`}>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-lg">

@@ -26,7 +26,7 @@ class DashboardController extends Controller
     public function adminDashboard(Request $request)
     {
         // 1. Fulfillment Operations KPI
-        $activeOrdersStatuses = ['pending', 'processing', 'ready_for_dispatch', 'dispatched'];
+        $activeOrdersStatuses = ['pending', 'processing', 'ready_for_dispatch', 'dispatched', 'on_route'];
         $activeOrdersCount = Order::whereIn('status', $activeOrdersStatuses)->count();
         
         $todayNewOrdersCount = Order::whereDate('order_date', Carbon::today())->count();
@@ -117,7 +117,7 @@ class DashboardController extends Controller
         $statusCounts = [
             'Delivered' => (int)($dbStatusCounts['delivered'] ?? 0),
             'Pending' => (int)($dbStatusCounts['pending'] ?? 0),
-            'Dispatched' => (int)($dbStatusCounts['dispatched'] ?? 0),
+            'Dispatched' => (int)($dbStatusCounts['dispatched'] ?? 0) + (int)($dbStatusCounts['on_route'] ?? 0) + (int)($dbStatusCounts['on route'] ?? 0),
             'Processing' => (int)($dbStatusCounts['processing'] ?? 0) + (int)($dbStatusCounts['ready_for_dispatch'] ?? 0),
             'Returned' => 0
         ];

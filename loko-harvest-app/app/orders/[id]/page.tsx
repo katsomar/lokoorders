@@ -173,6 +173,9 @@ export default function OrderDetailPage() {
         return <Badge className="bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Ready</Badge>;
       case "dispatched":
         return <Badge className="bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Dispatched</Badge>;
+      case "on_route":
+      case "on route":
+        return <Badge className="bg-sky-100 text-sky-700 border border-sky-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">On Route</Badge>;
       case "delivered":
         return <Badge className="bg-green-100 text-green-700 border border-green-200 text-[10px] font-extrabold uppercase py-0.5 px-2.5 rounded-lg shrink-0">Delivered</Badge>;
       case "undone":
@@ -430,7 +433,7 @@ export default function OrderDetailPage() {
               <Printer size={14} />
               Print Order
             </Button>
-            {!(order.status === "dispatched" || order.status === "delivered") && (
+            {!(order.status === "dispatched" || order.status === "on_route" || order.status === "on route" || order.status === "delivered") && (
               <>
                 <Link href={`/orders/${order.id}/edit`}>
                   <Button 

@@ -244,6 +244,15 @@ class DeliveryController extends Controller
             'is_penalized' => $isPenalized,
         ]);
 
+        if ($delivery->order) {
+            $delivery->order->update(['status' => 'on_route']);
+            $delivery->order->statusHistory()->create([
+                'status' => 'on_route',
+                'changed_by' => auth()->id() ?? \App\Models\User::first()->id,
+                'notes' => 'Driver started delivery route.',
+            ]);
+        }
+
         return $this->success($delivery, 'Delivery is now in transit');
     }
 
@@ -263,11 +272,22 @@ class DeliveryController extends Controller
             return $this->error('Only in transit deliveries can be cancelled.', 422);
         }
 
-        $delivery->update([
-            'status' => 'assigned'
-        ]);
+        return DB::transaction(function () use ($delivery) {
+            $delivery->update([
+                'status' => 'assigned'
+            ]);
 
-        return $this->success($delivery, 'Delivery status reverted to assigned');
+            if ($delivery->order) {
+                $delivery->order->update(['status' => 'dispatched']);
+                $delivery->order->statusHistory()->create([
+                    'status' => 'dispatched',
+                    'changed_by' => auth()->id() ?? \App\Models\User::first()->id,
+                    'notes' => 'Driver cancelled transit. Reverted status to dispatched.',
+                ]);
+            }
+
+            return $this->success($delivery, 'Delivery status reverted to assigned');
+        });
     }
 
     public function track(Request $request, $id)

@@ -63,7 +63,7 @@ export default function OrderManagerDashboard() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "alerts" | "replacements">("orders");
   const [inventorySubView, setInventorySubView] = useState<"list" | "damages" | "transfers" | "conversions">("list");
-  const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "undone" | "all">("pending");
+  const [orderFilter, setOrderFilter] = useState<"pending" | "processing" | "ready_for_dispatch" | "dispatched" | "on_route" | "undone" | "all">("pending");
   const [searchQuery, setSearchQuery] = useState("");
  
   const formatQuantity = (qtyStr: string, unit: string) => {
@@ -1756,6 +1756,8 @@ export default function OrderManagerDashboard() {
       case "processing": return <Badge className="bg-blue-100 text-blue-700 border-none font-bold text-[9px] uppercase">Processing</Badge>;
       case "ready_for_dispatch": return <Badge className="bg-purple-100 text-purple-700 border-none font-bold text-[9px] uppercase">Ready for Dispatch</Badge>;
       case "dispatched": return <Badge className="bg-emerald-100 text-emerald-700 border-none font-bold text-[9px] uppercase">Dispatched</Badge>;
+      case "on_route":
+      case "on route": return <Badge className="bg-sky-100 text-sky-700 border-none font-bold text-[9px] uppercase">On Route</Badge>;
       case "delivered": return <Badge className="bg-green-600 text-white border-none font-bold text-[9px] uppercase">Delivered</Badge>;
       case "undone": return <Badge className="bg-red-100 text-red-700 border border-red-200 font-bold text-[9px] uppercase">Undone Claim</Badge>;
       default: return <Badge className="bg-gray-100 text-gray-500 border-none font-bold text-[9px] uppercase">{status}</Badge>;
@@ -1887,7 +1889,7 @@ export default function OrderManagerDashboard() {
 
                 {/* Sub-tabs Filters */}
                 <div className="flex flex-wrap bg-brand-sage/10 p-1 rounded-xl border border-brand-sage/20 gap-0.5">
-                  {(["pending", "processing", "ready_for_dispatch", "dispatched", "undone", "all"] as const).map(tab => (
+                  {(["pending", "processing", "ready_for_dispatch", "dispatched", "on_route", "undone", "all"] as const).map(tab => (
                     <button
                       key={tab}
                       onClick={() => setOrderFilter(tab)}
@@ -1897,7 +1899,7 @@ export default function OrderManagerDashboard() {
                           : "text-brand-forest hover:bg-brand-sage/20"
                       }`}
                     >
-                      {tab.replace(/_for_dispatch/g, "").replace("ready", "ready")}
+                      {tab.replace(/_for_dispatch/g, "").replace("ready", "ready").replace("on_route", "on route")}
                     </button>
                   ))}
                 </div>

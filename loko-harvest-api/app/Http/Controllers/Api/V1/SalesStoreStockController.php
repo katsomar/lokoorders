@@ -79,7 +79,7 @@ class SalesStoreStockController extends Controller
         $sold = \Illuminate\Support\Facades\DB::table('order_items')
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->whereIn('orders.sales_store_id', $storeIds)
-            ->whereIn('orders.status', ['dispatched', 'delivered'])
+            ->whereIn('orders.status', ['dispatched', 'on_route', 'delivered'])
             ->where('orders.order_date', '<=', $date)
             ->selectRaw('order_items.product_id, order_items.batch_reference, sum(order_items.quantity) as total, sum(case when orders.order_date = ? then order_items.quantity else 0 end) as total_on', [$date])
             ->groupBy('order_items.product_id', 'order_items.batch_reference')

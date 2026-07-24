@@ -148,7 +148,7 @@ class SalesStoreStock extends Model
             ->where('orders.sales_store_id', $salesStoreId)
             ->where('order_items.product_id', $productId)
             ->where('order_items.batch_reference', $batchReference)
-            ->whereIn('orders.status', ['dispatched', 'delivered'])
+            ->whereIn('orders.status', ['dispatched', 'on_route', 'delivered'])
             ->where('orders.order_date', '<=', $date)
             ->sum('order_items.quantity');
 

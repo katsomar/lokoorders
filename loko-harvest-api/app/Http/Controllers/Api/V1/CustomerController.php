@@ -22,7 +22,7 @@ class CustomerController extends Controller
             ->when($request->only_branches, fn($q) => $q->whereNotNull('parent_id'))
             ->when($request->has_active_orders, function($q) {
                 $q->whereHas('orders', function($orderQ) {
-                    $orderQ->whereIn('status', ['pending', 'processing', 'ready_for_dispatch', 'dispatched']);
+                    $orderQ->whereIn('status', ['pending', 'processing', 'ready_for_dispatch', 'dispatched', 'on_route']);
                 });
             })
             ->paginate($request->per_page ?? 15);
