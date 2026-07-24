@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import api from "@/lib/api";
+import { compressImage } from "@/lib/imageCompressor";
 
 const DriverTransitMap = dynamic(() => import("@/components/DriverTransitMap"), {
   ssr: false,
@@ -485,12 +486,20 @@ export default function DeliveryConfirmationPage() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setProofImageFile(file);
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
+      try {
+        const compressed = await compressImage(file);
+        setProofImageFile(compressed);
+        const url = URL.createObjectURL(compressed);
+        setPreviewUrl(url);
+      } catch (err) {
+        console.error("Failed to compress image:", err);
+        setProofImageFile(file);
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
+      }
     }
   };
 
