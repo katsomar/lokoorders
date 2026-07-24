@@ -22,7 +22,8 @@ import {
   Info,
   AlertTriangle,
   X,
-  Loader2
+  Loader2,
+  Camera
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { compressImage } from "@/lib/imageCompressor";
+import { CameraCapture } from "@/components/ui/camera-capture";
 
 interface ProductionStockItem {
   id: string;
@@ -240,6 +243,7 @@ export default function ProductionStorePage() {
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustImageFile, setAdjustImageFile] = useState<File | null>(null);
   const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const adjustCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const [adjustDrawing, setAdjustDrawing] = useState(false);
 
@@ -627,6 +631,32 @@ export default function ProductionStorePage() {
     } finally {
       setIsUpdatingAllPrices(false);
     }
+  };
+
+  const handleAdjustFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file);
+        setAdjustImageFile(compressed);
+      } catch (err) {
+        console.error("Failed to compress adjust file:", err);
+        setAdjustImageFile(file);
+      }
+    } else {
+      setAdjustImageFile(null);
+    }
+  };
+
+  const handleAdjustCameraCapture = async (file: File) => {
+    try {
+      const compressed = await compressImage(file);
+      setAdjustImageFile(compressed);
+    } catch (err) {
+      console.error("Failed to compress adjust camera file:", err);
+      setAdjustImageFile(file);
+    }
+    setShowCamera(false);
   };
 
   // Compute valuations
@@ -2150,16 +2180,27 @@ export default function ProductionStorePage() {
 
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-brand-forest block">Upload Photo Proof</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files.length > 0) {
-                        setAdjustImageFile(e.target.files[0]);
-                      }
-                    }}
-                    className="w-full text-[10px] text-gray-500 font-semibold file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-brand-sage/10 file:text-brand-forest file:cursor-pointer hover:file:bg-brand-sage/20"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAdjustFileChange}
+                      className="w-full text-[10px] text-gray-500 font-semibold file:mr-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:bg-brand-sage/10 file:text-brand-forest file:cursor-pointer hover:file:bg-brand-sage/20 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => setShowCamera(true)}
+                      className="bg-brand-yellow hover:bg-brand-yellow/80 text-[#0F2115] text-[10px] font-black rounded-xl h-8 px-2.5 flex items-center justify-center gap-1 cursor-pointer shadow"
+                    >
+                      <Camera size={12} />
+                      Camera
+                    </Button>
+                  </div>
+                  {adjustImageFile && (
+                    <p className="text-[9px] text-green-600 font-bold uppercase tracking-wider">
+                      ✓ Photo Selected: {adjustImageFile.name}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2369,6 +2410,14 @@ export default function ProductionStorePage() {
           </button>
           <img src={lightboxUrl} alt="Zoomed proof" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" />
         </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          title="Capture Stock Adjustment Proof"
+          onCapture={handleAdjustCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
       )}
 
     </DashboardLayout>

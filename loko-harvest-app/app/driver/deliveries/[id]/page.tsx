@@ -30,6 +30,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import api from "@/lib/api";
 import { compressImage } from "@/lib/imageCompressor";
+import { CameraCapture } from "@/components/ui/camera-capture";
 
 const DriverTransitMap = dynamic(() => import("@/components/DriverTransitMap"), {
   ssr: false,
@@ -67,6 +68,7 @@ export default function DeliveryConfirmationPage() {
   const [deliveryStatus, setDeliveryStatus] = useState<"Assigned" | "Dispatched" | "Delivered">("Assigned");
   const [isLoading, setIsLoading] = useState(false);
   const [proofType, setProofType] = useState<"signature" | "photo" | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
   
   // Real-time transit timer simulation
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -513,6 +515,21 @@ export default function DeliveryConfirmationPage() {
         setPreviewUrl(url);
       }
     }
+  };
+
+  const handleCameraCapture = async (file: File) => {
+    try {
+      const compressed = await compressImage(file);
+      setProofImageFile(compressed);
+      const url = URL.createObjectURL(compressed);
+      setPreviewUrl(url);
+    } catch (err) {
+      console.error("Failed to compress captured image:", err);
+      setProofImageFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+    setShowCamera(false);
   };
 
   useEffect(() => {
@@ -1354,6 +1371,17 @@ export default function DeliveryConfirmationPage() {
                     </div>
                   )}
                 </div>
+
+                {hasGeofenceCleared && (
+                  <Button
+                    type="button"
+                    onClick={() => setShowCamera(true)}
+                    className="w-full bg-brand-yellow text-[#0B1E14] hover:bg-brand-yellow/80 border-none font-bold h-9 text-xs rounded-xl shadow-md mt-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Camera size={14} />
+                    Take Photo with Camera
+                  </Button>
+                )}
               </div>
 
               {/* 2. Client Signature Pad Card */}
@@ -2074,6 +2102,14 @@ export default function DeliveryConfirmationPage() {
             </Button>
           </motion.div>
         </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          title="Capture Signed Document"
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
       )}
     </div>
   );

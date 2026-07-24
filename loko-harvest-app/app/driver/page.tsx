@@ -27,7 +27,8 @@ import {
   Coffee,
   Lock,
   RefreshCcw,
-  CornerDownLeft
+  CornerDownLeft,
+  Camera
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -35,6 +36,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
+import { compressImage } from "@/lib/imageCompressor";
+import { CameraCapture } from "@/components/ui/camera-capture";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 
 const DriverRouteMap = dynamic(() => import("@/components/DriverRouteMap"), {
@@ -488,6 +491,32 @@ export default function DriverDashboard() {
     router.push("/login");
   };
 
+  const handleRefuelFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        const compressed = await compressImage(file);
+        setRefuelEvidenceFile(compressed);
+      } catch (err) {
+        console.error("Failed to compress refuel file:", err);
+        setRefuelEvidenceFile(file);
+      }
+    } else {
+      setRefuelEvidenceFile(null);
+    }
+  };
+
+  const handleRefuelCameraCapture = async (file: File) => {
+    try {
+      const compressed = await compressImage(file);
+      setRefuelEvidenceFile(compressed);
+    } catch (err) {
+      console.error("Failed to compress refuel camera file:", err);
+      setRefuelEvidenceFile(file);
+    }
+    setShowCamera(false);
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmNewPassword) {
@@ -531,6 +560,7 @@ export default function DriverDashboard() {
   const [refuelNotes, setRefuelNotes] = useState("");
   const [refuelEvidenceFile, setRefuelEvidenceFile] = useState<File | null>(null);
   const [isSubmittingRefuel, setIsSubmittingRefuel] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
 
   useEffect(() => {
@@ -1495,15 +1525,30 @@ export default function DriverDashboard() {
               </div>
 
               {/* Upload Receipt */}
-              <div>
+              <div className="space-y-1.5">
                 <label className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Upload Receipt Evidence (Required) *</label>
-                <Input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  required
-                  onChange={(e) => setRefuelEvidenceFile(e.target.files?.[0] || null)}
-                  className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer bg-white"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    required={!refuelEvidenceFile}
+                    onChange={handleRefuelFileChange}
+                    className="h-9 text-xs rounded-xl border-brand-sage/50 cursor-pointer bg-white flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => setShowCamera(true)}
+                    className="bg-brand-yellow hover:bg-brand-yellow/80 text-[#0F2115] text-xs font-black rounded-xl h-9 px-3 flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                  >
+                    <Camera size={14} />
+                    Camera
+                  </Button>
+                </div>
+                {refuelEvidenceFile && (
+                  <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider">
+                    ✓ Evidence Selected: {refuelEvidenceFile.name}
+                  </p>
+                )}
               </div>
 
               {/* Buttons */}
@@ -1992,6 +2037,14 @@ export default function DriverDashboard() {
 
           </div>
         </div>
+      )}
+
+      {showCamera && (
+        <CameraCapture
+          title="Capture Fuel Receipt"
+          onCapture={handleRefuelCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
       )}
     </div>
   );
