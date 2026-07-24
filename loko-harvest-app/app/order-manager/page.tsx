@@ -40,6 +40,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 
+const isCarriedOverUncompleted = (order: any) => {
+  if (!order || !order.order_date) return false;
+  
+  // Get today's local date string (YYYY-MM-DD)
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  
+  const orderDateStr = order.order_date.split(' ')[0];
+  
+  const isPastDay = orderDateStr < todayStr;
+  const isUncompleted = !["delivered", "dispatched"].includes((order.status || "").toLowerCase());
+  
+  return isPastDay && isUncompleted;
+};
+
 export default function OrderManagerDashboard() {
   const { user, clearAuth } = useAuth();
   const router = useRouter();
@@ -1237,6 +1255,20 @@ export default function OrderManagerDashboard() {
     return true;
   });
 
+  const sortedFilteredOrders = React.useMemo(() => {
+    return [...filteredOrders].sort((a, b) => {
+      const aCarried = isCarriedOverUncompleted(a);
+      const bCarried = isCarriedOverUncompleted(b);
+      if (aCarried && !bCarried) return -1;
+      if (!aCarried && bCarried) return 1;
+      return 0;
+    });
+  }, [filteredOrders]);
+
+  const carriedOverOrdersCount = React.useMemo(() => {
+    return orders.filter(isCarriedOverUncompleted).length;
+  }, [orders]);
+
   const filteredStock = stockItems.filter(item => {
     // 1. Filter by Batch selection dropdown
     if (selectedBatch !== "all" && item.batch_reference !== selectedBatch) {
@@ -1836,6 +1868,16 @@ export default function OrderManagerDashboard() {
                   />
                 </div>
 
+                {/* Overdue Warning Alert Banner */}
+                {carriedOverOrdersCount > 0 && (
+                  <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-3.5 text-xs flex items-center gap-2.5 animate-pulse-gentle">
+                    <AlertTriangle size={16} className="text-red-600 shrink-0" />
+                    <div>
+                      <span className="font-extrabold text-red-850">Attention Required:</span> You have <strong className="font-extrabold">{carriedOverOrdersCount}</strong> uncompleted order{carriedOverOrdersCount !== 1 ? 's' : ''} carried over from previous days. They have been pinned to the top of your list. Please prioritize them!
+                    </div>
+                  </div>
+                )}
+
                 {/* Sub-tabs Filters */}
                 <div className="flex flex-wrap bg-brand-sage/10 p-1 rounded-xl border border-brand-sage/20 gap-0.5">
                   {(["pending", "processing", "ready_for_dispatch", "dispatched", "undone", "all"] as const).map(tab => (
@@ -1912,8 +1954,17 @@ export default function OrderManagerDashboard() {
                     No matching orders in pipeline
                   </div>
                 ) : (
-                  filteredOrders.map((order) => (
-                    <div key={order.id} className="bg-white border border-brand-sage/40 rounded-2xl shadow-sm overflow-hidden p-4 space-y-3.5">
+                  sortedFilteredOrders.map((order) => {
+                    const isCarriedOver = isCarriedOverUncompleted(order);
+                    return (
+                      <div 
+                        key={order.id} 
+                        className={`bg-white border rounded-2xl shadow-sm overflow-hidden p-4 space-y-3.5 transition-all ${
+                          isCarriedOver 
+                            ? "animate-throb-red-card border-red-500" 
+                            : "border-brand-sage/40"
+                        }`}
+                      >
                       <div className="flex justify-between items-start">
                         <div className="flex items-start gap-3">
                           {["pending", "processing", "ready_for_dispatch"].includes(order.status) && (
@@ -2082,7 +2133,8 @@ export default function OrderManagerDashboard() {
                         )}
                       </div>
                     </div>
-                  ))
+                  );
+                })
                 )}
               </div>
             </motion.div>

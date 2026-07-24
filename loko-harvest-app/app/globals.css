@@ -97,3 +97,37 @@
 .animate-pulse-gentle {
   animation: pulse-gentle 2s ease-in-out infinite;
 }
+
+/* Throbbing border animations for carried-over uncompleted orders */
+@keyframes throb-red-row {
+  0%, 100% {
+    background-color: rgba(239, 68, 68, 0.02);
+    box-shadow: inset 4px 0 0 0 #EF4444;
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.08);
+    box-shadow: inset 6px 0 0 0 #EF4444, inset 0 0 10px rgba(239, 68, 68, 0.1);
+  }
+}
+
+@keyframes throb-red-card {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.35);
+    box-shadow: 0 1px 2px 0 rgba(239, 68, 68, 0.05);
+    background-color: rgba(254, 242, 242, 0.04);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.85);
+    box-shadow: 0 4px 12px 0 rgba(239, 68, 68, 0.15);
+    background-color: rgba(254, 242, 242, 0.25);
+  }
+}
+
+.animate-throb-red-row {
+  animation: throb-red-row 2.5s infinite ease-in-out;
+}
+
+.animate-throb-red-card {
+  animation: throb-red-card 2.5s infinite ease-in-out;
+}
+

@@ -28,6 +28,24 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import api from "@/lib/api";
 
+const isCarriedOverUncompleted = (order: any) => {
+  if (!order || !order.order_date) return false;
+  
+  // Get today's local date string (YYYY-MM-DD)
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  
+  const orderDateStr = order.order_date.split(' ')[0];
+  
+  const isPastDay = orderDateStr < todayStr;
+  const isUncompleted = !["delivered", "dispatched"].includes((order.status || "").toLowerCase());
+  
+  return isPastDay && isUncompleted;
+};
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,6 +57,16 @@ export default function OrdersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [perPage, setPerPage] = useState(15);
+
+  const sortedOrders = React.useMemo(() => {
+    return [...orders].sort((a, b) => {
+      const aCarried = isCarriedOverUncompleted(a);
+      const bCarried = isCarriedOverUncompleted(b);
+      if (aCarried && !bCarried) return -1;
+      if (!aCarried && bCarried) return 1;
+      return 0;
+    });
+  }, [orders]);
 
   const [metrics, setMetrics] = useState({
     totalUrgent: 0,
@@ -357,6 +385,10 @@ export default function OrdersPage() {
         <div className="flex flex-wrap items-center gap-6 bg-white px-5 py-3 rounded-xl border border-brand-sage/40 shadow-sm text-xs font-bold text-gray-600">
           <span className="text-[10px] text-gray-400 uppercase tracking-wider">Indicator Legend:</span>
           <div className="flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-600 animate-pulse inline-block border border-red-400" />
+            <span className="text-red-600 font-extrabold animate-pulse">Carried Over (Action Required)</span>
+          </div>
+          <div className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse inline-block" />
             <span>Missed Deadline / Undone Attempt</span>
           </div>
@@ -406,7 +438,7 @@ export default function OrdersPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  orders.map((order) => {
+                  sortedOrders.map((order) => {
                     const name = order.customer?.name || "Unknown Customer";
                     const storeName = order.sales_store?.name || "Main Sales Store";
                     const logoLetter = name.toLowerCase().includes("shoprite") ? "S" :
@@ -421,10 +453,16 @@ export default function OrdersPage() {
                     const hasIssues = hasUndone || isMissed;
                     const hasReturns = Array.isArray(order.return_vouchers) && order.return_vouchers.length > 0;
                     const hasReplacements = Array.isArray(order.return_vouchers) && order.return_vouchers.some((v: any) => parseFloat(v.replacement_quantity) > 0);
+                    const isCarriedOver = isCarriedOverUncompleted(order);
 
                     return (
-                      <TableRow key={order.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
-                        <TableCell className="pl-6 py-3.5">
+                      <TableRow 
+                        key={order.id} 
+                        className={`hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0 ${
+                          isCarriedOver ? "animate-throb-red-row" : ""
+                        }`}
+                      >
+                        <TableCell className={`pl-6 py-3.5 ${isCarriedOver ? "border-l-4 border-l-red-600" : ""}`}>
                           <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-brand-forest">
                             {order.order_number}
                             <div className="flex items-center gap-1 shrink-0">
