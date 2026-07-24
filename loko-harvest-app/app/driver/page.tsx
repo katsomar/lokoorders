@@ -474,6 +474,15 @@ export default function DriverDashboard() {
     }
   }, [activeTab, stats?.driver_id]);
 
+  useEffect(() => {
+    if (stats?.assigned_route) {
+      const activeRoute = stats.assigned_route.find((r: any) => r.status === "in_transit");
+      if (activeRoute) {
+        router.push(`/driver/deliveries/${activeRoute.id}`);
+      }
+    }
+  }, [stats, router]);
+
   const handleLogout = () => {
     clearAuth();
     router.push("/login");

@@ -252,7 +252,16 @@ export default function DeliveryConfirmationPage() {
           driver_id: d.driver_id || "N/A",
         });
         
+        let elapsed = 0;
         if (d.status === "in_transit") {
+          if (typeof window !== "undefined") {
+            const localStart = localStorage.getItem(`transit_start_time_${d.id}`);
+            if (localStart) {
+              elapsed = Math.floor((Date.now() - parseInt(localStart)) / 1000);
+            } else if (d.updated_at) {
+              elapsed = Math.floor((Date.now() - new Date(d.updated_at).getTime()) / 1000);
+            }
+          }
           setStep(2);
           setDeliveryStatus("Dispatched");
         } else if (d.status === "delivered") {
@@ -262,6 +271,7 @@ export default function DeliveryConfirmationPage() {
           setStep(1);
           setDeliveryStatus("Assigned");
         }
+        setSecondsElapsed(Math.max(0, elapsed));
       }
     } catch (err) {
       console.error("Failed to fetch delivery details:", err);
@@ -377,6 +387,9 @@ export default function DeliveryConfirmationPage() {
     try {
       const res = await api.post(`/deliveries/${params.id}/transit`, payload);
       if (res.data?.success) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(`transit_start_time_${params.id}`, Date.now().toString());
+        }
         setDeliveryStatus("Dispatched");
         setStep(2); // Go to Active Dispatch Screen
         setShowDelayModal(false);
@@ -426,6 +439,9 @@ export default function DeliveryConfirmationPage() {
     try {
       const res = await api.post(`/deliveries/${params.id}/cancel`);
       if (res.data?.success) {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(`transit_start_time_${params.id}`);
+        }
         setDeliveryStatus("Assigned");
         setSecondsElapsed(0);
         setStep(1); // Go back to details
@@ -455,6 +471,9 @@ export default function DeliveryConfirmationPage() {
         undone_reason: undoneReason,
         return_sales_store_id: returnSalesStoreId,
       });
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(`transit_start_time_${params.id}`);
+      }
       alert("Delivery marked as undone successfully. Physical inventory returned.");
       router.push("/driver");
     } catch (err: any) {
@@ -881,6 +900,9 @@ export default function DeliveryConfirmationPage() {
         });
 
         if (res.data?.success) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`transit_start_time_${params.id}`);
+          }
           setDeliveryStatus("Delivered");
           handleReturnsFlowStart();
         }
