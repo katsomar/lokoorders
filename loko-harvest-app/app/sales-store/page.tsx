@@ -266,8 +266,8 @@ export default function SalesStorePage() {
   const [calcPacksType, setCalcPacksType] = useState<"single" | "15pack" | "6pack">("15pack");
   const [calcPacksInput, setCalcPacksInput] = useState("40");
 
-  const fetchMovements = async () => {
-    setLoadingMovements(true);
+  const fetchMovements = async (silent = false) => {
+    if (!silent) setLoadingMovements(true);
     try {
       const movementsRes = await api.get('/sales-movements');
       const movementsData = movementsRes.data.data.data || [];
@@ -287,7 +287,7 @@ export default function SalesStorePage() {
     } catch (err) {
       console.error("Failed to fetch movements", err);
     } finally {
-      setLoadingMovements(false);
+      if (!silent) setLoadingMovements(false);
     }
   };
 
@@ -303,9 +303,9 @@ export default function SalesStorePage() {
     }
   };
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    fetchMovements(); // Load in background
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    fetchMovements(silent); // Load in background
     try {
       const [stockRes, storesRes, productsRes] = await Promise.all([
         api.get('/sales-stock', { params: { date: selectedDate } }),
@@ -372,12 +372,19 @@ export default function SalesStorePage() {
     } catch (err) {
       console.error("Failed to fetch sales store data", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchData(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, [selectedDate]);
 
   useEffect(() => {

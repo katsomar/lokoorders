@@ -407,8 +407,8 @@ export default function ProductionStorePage() {
     }
   };
 
-  const fetchIntakes = async () => {
-    setLoadingIntakes(true);
+  const fetchIntakes = async (silent = false) => {
+    if (!silent) setLoadingIntakes(true);
     try {
       const intakeRes = await api.get('/production-intakes');
       const groupedMap: { [key: string]: any } = {};
@@ -447,7 +447,7 @@ export default function ProductionStorePage() {
     } catch (err) {
       console.error("Failed to fetch intakes", err);
     } finally {
-      setLoadingIntakes(false);
+      if (!silent) setLoadingIntakes(false);
     }
   };
 
@@ -463,9 +463,9 @@ export default function ProductionStorePage() {
     }
   };
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    fetchIntakes(); // Load in background
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
+    fetchIntakes(silent); // Load in background
     try {
       const todayStr = (() => {
         const d = new Date();
@@ -542,12 +542,19 @@ export default function ProductionStorePage() {
     } catch (err) {
       console.error("Failed to fetch production store data", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchData(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, [selectedDate]);
 
   useEffect(() => {

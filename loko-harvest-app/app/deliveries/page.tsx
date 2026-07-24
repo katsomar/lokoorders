@@ -117,8 +117,8 @@ export default function DeliveriesPage() {
     return () => clearInterval(trackingInterval);
   }, [selectedDelivery?.id, selectedDelivery?.status]);
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const [deliveriesRes, driversRes, ordersRes, vehiclesRes] = await Promise.all([
         api.get("/deliveries"),
@@ -136,12 +136,19 @@ export default function DeliveriesPage() {
     } catch (err) {
       console.error("Failed to fetch logistics delivery records:", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchData(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   // Set up canvas mouse & touch events when signature verification mode is active

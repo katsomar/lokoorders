@@ -53,8 +53,8 @@ export default function PendingRequestsPage() {
   // Lightbox modal state
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
-  const fetchTransfers = async () => {
-    setLoadingTransfers(true);
+  const fetchTransfers = async (silent = false) => {
+    if (!silent) setLoadingTransfers(true);
     try {
       const res = await api.get("/store-transfers", {
         params: { status: "pending", per_page: 100 }
@@ -63,12 +63,12 @@ export default function PendingRequestsPage() {
     } catch (err) {
       console.error("Failed to fetch pending transfers:", err);
     } finally {
-      setLoadingTransfers(false);
+      if (!silent) setLoadingTransfers(false);
     }
   };
 
-  const fetchAdjustments = async () => {
-    setLoadingAdjustments(true);
+  const fetchAdjustments = async (silent = false) => {
+    if (!silent) setLoadingAdjustments(true);
     try {
       const res = await api.get("/store-adjustments", {
         params: { status: "pending", per_page: 100 }
@@ -77,12 +77,12 @@ export default function PendingRequestsPage() {
     } catch (err) {
       console.error("Failed to fetch pending adjustments:", err);
     } finally {
-      setLoadingAdjustments(false);
+      if (!silent) setLoadingAdjustments(false);
     }
   };
 
-  const fetchConversions = async () => {
-    setLoadingConversions(true);
+  const fetchConversions = async (silent = false) => {
+    if (!silent) setLoadingConversions(true);
     try {
       const res = await api.get("/sales-store-conversions", {
         params: { status: "pending", per_page: 100 }
@@ -91,7 +91,7 @@ export default function PendingRequestsPage() {
     } catch (err) {
       console.error("Failed to fetch pending conversions:", err);
     } finally {
-      setLoadingConversions(false);
+      if (!silent) setLoadingConversions(false);
     }
   };
 
@@ -99,6 +99,15 @@ export default function PendingRequestsPage() {
     fetchTransfers();
     fetchAdjustments();
     fetchConversions();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchTransfers(true);
+      fetchAdjustments(true);
+      fetchConversions(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   const handleApproveTransfer = async (id: string) => {

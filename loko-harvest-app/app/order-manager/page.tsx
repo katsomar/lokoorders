@@ -275,8 +275,8 @@ export default function OrderManagerDashboard() {
   };
 
   // Fetch Orders
-  const fetchOrders = async () => {
-    setLoadingOrders(true);
+  const fetchOrders = async (silent = false) => {
+    if (!silent) setLoadingOrders(true);
     try {
       const res = await api.get("/orders", { params: { per_page: 300 } });
       const list = res.data?.data?.data || res.data?.data || [];
@@ -294,7 +294,7 @@ export default function OrderManagerDashboard() {
     } catch (err) {
       console.error("Failed to load orders:", err);
     } finally {
-      setLoadingOrders(false);
+      if (!silent) setLoadingOrders(false);
     }
   };
 
@@ -675,6 +675,13 @@ export default function OrderManagerDashboard() {
       fetchAllocations();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchOrders(true);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Stock adjustments effects & handlers
   const fetchAdjustments = async () => {
@@ -1848,7 +1855,7 @@ export default function OrderManagerDashboard() {
                     Orders Pipeline
                   </h3>
                   <button 
-                    onClick={fetchOrders}
+                    onClick={() => fetchOrders()}
                     className="p-1.5 rounded-lg bg-brand-sage/10 text-brand-forest hover:bg-brand-sage/20 border border-brand-sage/20"
                     title="Refresh List"
                   >

@@ -214,63 +214,74 @@ export default function DeliveryConfirmationPage() {
     return () => clearInterval(trackingInterval);
   }, [step, deliveryStatus, params.id]);
 
-  useEffect(() => {
-    async function fetchDelivery() {
-      try {
-        const response = await api.get(`/deliveries/${params.id}`);
-        if (response.data?.success) {
-          const d = response.data.data;
-          setDelivery({
-            id: d.id,
-            order: d.order?.order_number || "N/A",
-            order_status: d.order?.status || "N/A",
-            customer: d.order?.customer?.name || "N/A",
-            contact: d.order?.customer?.contact_person || "N/A",
-            phone: d.order?.customer?.phone_primary || "",
-            address: d.order?.customer?.address || "N/A",
-            status: d.status,
-            items: (d.order?.items || []).map((item: any) => ({
-              name: item.product?.name || "Unknown Product",
-              quantity: item.quantity,
-              unit_of_measure: item.product?.unit_of_measure || "trays",
-            })),
-            required_delivery_date: d.order?.required_delivery_date || "",
-            assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
-            assigned_time: d.dispatched_at ? new Date(d.dispatched_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "N/A",
-            customer_latitude: d.order?.customer?.latitude !== null ? Number(d.order?.customer?.latitude) : null,
-            customer_longitude: d.order?.customer?.longitude !== null ? Number(d.order?.customer?.longitude) : null,
-            vehicle: d.driver?.vehicle ? {
-              id: d.driver.vehicle.id,
-              plate: d.driver.vehicle.registration_number || "N/A",
-              make_model: `${d.driver.vehicle.make || ""} ${d.driver.vehicle.model || ""}`.trim() || "N/A",
-              fuel_level: Number(d.driver.vehicle.fuel_level ?? 0),
-              fuel_tank_capacity: Number(d.driver.vehicle.fuel_tank_capacity ?? 80.0),
-              consumption_per_km: Number(d.driver.vehicle.consumption_per_km ?? 0.12),
-            } : null,
-            customer_id: d.order?.customer_id || "N/A",
-            order_id: d.order_id || "N/A",
-            driver_id: d.driver_id || "N/A",
-          });
-          
-          if (d.status === "in_transit") {
-            setStep(2);
-            setDeliveryStatus("Dispatched");
-          } else if (d.status === "delivered") {
-            setStep(4);
-            setDeliveryStatus("Delivered");
-          } else {
-            setStep(1);
-            setDeliveryStatus("Assigned");
-          }
+  const fetchDelivery = async (silent = false) => {
+    if (!silent) setIsPageLoading(true);
+    try {
+      const response = await api.get(`/deliveries/${params.id}`);
+      if (response.data?.success) {
+        const d = response.data.data;
+        setDelivery({
+          id: d.id,
+          order: d.order?.order_number || "N/A",
+          order_status: d.order?.status || "N/A",
+          customer: d.order?.customer?.name || "N/A",
+          contact: d.order?.customer?.contact_person || "N/A",
+          phone: d.order?.customer?.phone_primary || "",
+          address: d.order?.customer?.address || "N/A",
+          status: d.status,
+          items: (d.order?.items || []).map((item: any) => ({
+            name: item.product?.name || "Unknown Product",
+            quantity: item.quantity,
+            unit_of_measure: item.product?.unit_of_measure || "trays",
+          })),
+          required_delivery_date: d.order?.required_delivery_date || "",
+          assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
+          assigned_time: d.dispatched_at ? new Date(d.dispatched_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "N/A",
+          customer_latitude: d.order?.customer?.latitude !== null ? Number(d.order?.customer?.latitude) : null,
+          customer_longitude: d.order?.customer?.longitude !== null ? Number(d.order?.customer?.longitude) : null,
+          vehicle: d.driver?.vehicle ? {
+            id: d.driver.vehicle.id,
+            plate: d.driver.vehicle.registration_number || "N/A",
+            make_model: `${d.driver.vehicle.make || ""} ${d.driver.vehicle.model || ""}`.trim() || "N/A",
+            fuel_level: Number(d.driver.vehicle.fuel_level ?? 0),
+            fuel_tank_capacity: Number(d.driver.vehicle.fuel_tank_capacity ?? 80.0),
+            consumption_per_km: Number(d.driver.vehicle.consumption_per_km ?? 0.12),
+          } : null,
+          customer_id: d.order?.customer_id || "N/A",
+          order_id: d.order_id || "N/A",
+          driver_id: d.driver_id || "N/A",
+        });
+        
+        if (d.status === "in_transit") {
+          setStep(2);
+          setDeliveryStatus("Dispatched");
+        } else if (d.status === "delivered") {
+          setStep(4);
+          setDeliveryStatus("Delivered");
+        } else {
+          setStep(1);
+          setDeliveryStatus("Assigned");
         }
-      } catch (err) {
-        console.error("Failed to fetch delivery details:", err);
-      } finally {
-        setIsPageLoading(false);
       }
+    } catch (err) {
+      console.error("Failed to fetch delivery details:", err);
+    } finally {
+      if (!silent) setIsPageLoading(false);
     }
+  };
+
+  useEffect(() => {
     if (params.id) {
       fetchDelivery();
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    if (params.id) {
+      const timer = setInterval(() => {
+        fetchDelivery(true);
+      }, 8000);
+      return () => clearInterval(timer);
     }
   }, [params.id]);
 

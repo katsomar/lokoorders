@@ -87,8 +87,8 @@ export default function OrdersPage() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  const fetchOrders = async () => {
-    setIsLoading(true);
+  const fetchOrders = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await api.get("/orders", {
         params: {
@@ -110,7 +110,7 @@ export default function OrdersPage() {
     } catch (err) {
       console.error("Failed to fetch orders:", err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -151,6 +151,13 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+  }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchOrders(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
 
   useEffect(() => {

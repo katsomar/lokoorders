@@ -428,20 +428,29 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [showNotReadyModal, setShowNotReadyModal] = useState(false);
 
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const response = await api.get("/driver/dashboard");
-        if (response.data?.success) {
-          setStats(response.data.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch driver stats:", error);
-      } finally {
-        setLoading(false);
+  const fetchStats = async (silent = false) => {
+    if (!silent) setLoading(true);
+    try {
+      const response = await api.get("/driver/dashboard");
+      if (response.data?.success) {
+        setStats(response.data.data);
       }
+    } catch (error) {
+      console.error("Failed to fetch driver stats:", error);
+    } finally {
+      if (!silent) setLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchStats();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchStats(true);
+    }, 8000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
