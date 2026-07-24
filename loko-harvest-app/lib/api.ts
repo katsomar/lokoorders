@@ -2,10 +2,10 @@ import axios from 'axios';
 
 const getBaseURL = () => {
   if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
+    const hostname = window.location.hostname === 'localhost' ? '127.0.0.1' : window.location.hostname;
     return `http://${hostname}:8000/api/v1`;
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+  return process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 };
 
 const api = axios.create({

@@ -79,6 +79,8 @@ export default function SalesStorePage() {
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingMovements, setLoadingMovements] = useState(true);
+  const [loadingInterTransfers, setLoadingInterTransfers] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "cream" | "white" | "brown" | "other">("all");
   
@@ -264,14 +266,50 @@ export default function SalesStorePage() {
   const [calcPacksType, setCalcPacksType] = useState<"single" | "15pack" | "6pack">("15pack");
   const [calcPacksInput, setCalcPacksInput] = useState("40");
 
+  const fetchMovements = async () => {
+    setLoadingMovements(true);
+    try {
+      const movementsRes = await api.get('/sales-movements');
+      const movementsData = movementsRes.data.data.data || [];
+      const mappedMovements = movementsData.map((move: any) => ({
+        id: move.id,
+        date: new Date(move.created_at || move.movement_date).toLocaleString('en-US', { 
+            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+        }),
+        product: move.product?.name,
+        type: move.movement_type,
+        quantity: parseFloat(move.quantity),
+        unit: move.product?.unit_of_measure === 'trays' ? 'Trays' : move.product?.unit_of_measure === 'units' ? 'Units' : 'Packs',
+        ref: move.reference_id ? `REF-${move.reference_id.substring(0, 6)}` : 'N/A',
+        store_name: move.sales_store?.name || 'N/A'
+      }));
+      setMovements(mappedMovements);
+    } catch (err) {
+      console.error("Failed to fetch movements", err);
+    } finally {
+      setLoadingMovements(false);
+    }
+  };
+
+  const fetchInterTransfers = async () => {
+    setLoadingInterTransfers(true);
+    try {
+      const interRes = await api.get('/sales-store-transfers');
+      setInterTransfers(interRes.data?.data?.data || interRes.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch sales store transfers", err);
+    } finally {
+      setLoadingInterTransfers(false);
+    }
+  };
+
   const fetchData = async () => {
     setIsLoading(true);
+    fetchMovements(); // Load in background
     try {
-      const [stockRes, movementsRes, storesRes, interRes, productsRes] = await Promise.all([
+      const [stockRes, storesRes, productsRes] = await Promise.all([
         api.get('/sales-stock', { params: { date: selectedDate } }),
-        api.get('/sales-movements'),
         api.get('/sales-stores'),
-        api.get('/sales-store-transfers'),
         api.get('/products?t=' + Date.now())
       ]);
 
@@ -324,24 +362,8 @@ export default function SalesStorePage() {
       });
       setStockItems(mappedStock);
 
-      const movementsData = movementsRes.data.data.data || [];
-      const mappedMovements = movementsData.map((move: any) => ({
-        id: move.id,
-        date: new Date(move.created_at || move.movement_date).toLocaleString('en-US', { 
-            year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-        }),
-        product: move.product?.name,
-        type: move.movement_type,
-        quantity: parseFloat(move.quantity),
-        unit: move.product?.unit_of_measure === 'trays' ? 'Trays' : move.product?.unit_of_measure === 'units' ? 'Units' : 'Packs',
-        ref: move.reference_id ? `REF-${move.reference_id.substring(0, 6)}` : 'N/A',
-        store_name: move.sales_store?.name || 'N/A'
-      }));
-      setMovements(mappedMovements);
-
       const storesList = storesRes.data.data || [];
       setSalesStores(storesList);
-      setInterTransfers(interRes.data.data.data || []);
       setProducts(productsRes.data.data || []);
 
       if (storesList.length > 0 && !convStoreId) {
@@ -357,6 +379,12 @@ export default function SalesStorePage() {
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (activeTab === "transfers") {
+      fetchInterTransfers();
+    }
+  }, [activeTab]);
 
   const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
  
@@ -1678,22 +1706,33 @@ export default function SalesStorePage() {
                     Recent Movements
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0 divide-y divide-brand-sage/30 max-h-[300px] overflow-y-auto">
-                  {movements.slice(0, 8).map((move) => (
-                    <div key={move.id} className="p-3.5 hover:bg-brand-sage/5 transition-colors flex flex-col gap-1 text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-brand-forest text-xs">{move.product}</span>
-                        <span className={`font-black text-xs ${move.type === 'transfer_in' || move.type === 'return_in' ? 'text-green-600' : 'text-amber-600'}`}>
-                          {move.type === 'transfer_in' || move.type === 'return_in' ? '+' : '-'}{move.quantity} {move.unit.toLowerCase()}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
-                        <span>Store: <strong className="text-brand-forest">{move.store_name}</strong></span>
-                        <span>{move.date}</span>
-                      </div>
+                <CardContent className="p-0 max-h-[300px] overflow-y-auto">
+                  {loadingMovements ? (
+                    <div className="flex items-center justify-center p-12 text-xs text-gray-500 font-bold gap-2">
+                      <Loader2 className="animate-spin text-brand-forest" size={18} />
+                      Loading recent movements...
                     </div>
-                  ))}
+                  ) : movements.length === 0 ? (
+                    <div className="p-6 text-center text-gray-400 text-xs">No recent movements available.</div>
+                  ) : (
+                    <div className="divide-y divide-brand-sage/30">
+                      {movements.slice(0, 8).map((move) => (
+                        <div key={move.id} className="p-3.5 hover:bg-brand-sage/5 transition-colors flex flex-col gap-1 text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="font-bold text-brand-forest text-xs">{move.product}</span>
+                            <span className={`font-black text-xs ${move.type === 'transfer_in' || move.type === 'return_in' ? 'text-green-600' : 'text-amber-600'}`}>
+                              {move.type === 'transfer_in' || move.type === 'return_in' ? '+' : '-'}{move.quantity} {move.unit.toLowerCase()}
+                            </span>
+                          </div>
+                          
+                          <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
+                            <span>Store: <strong className="text-brand-forest">{move.store_name}</strong></span>
+                            <span>{move.date}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1816,7 +1855,16 @@ export default function SalesStorePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {interTransfers.length === 0 ? (
+                    {loadingInterTransfers ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center py-12">
+                          <div className="flex items-center justify-center text-xs text-gray-500 font-bold gap-2">
+                            <Loader2 className="animate-spin text-brand-forest" size={18} />
+                            Loading transfers...
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : interTransfers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center py-10 text-gray-400 font-medium">
                           No inter-sales-store transfers recorded.

@@ -203,6 +203,8 @@ export default function ProductionStorePage() {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingIntakes, setLoadingIntakes] = useState(true);
+  const [loadingInterTransfers, setLoadingInterTransfers] = useState(true);
   
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
@@ -405,83 +407,13 @@ export default function ProductionStorePage() {
     }
   };
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchIntakes = async () => {
+    setLoadingIntakes(true);
     try {
-      const todayStr = (() => {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      })();
-      const isHistorical = selectedDate !== todayStr;
-
-      const [stockRes, intakeRes, storesRes, interRes, productsRes, salesStoresRes] = await Promise.all([
-        api.get('/production-stock', { params: { date: selectedDate } }),
-        api.get('/production-intakes'),
-        api.get('/production-stores'),
-        api.get('/production-store-transfers'),
-        api.get('/products'),
-        api.get('/sales-stores')
-      ]);
-      
-      const stockData = stockRes.data.data || [];
-      const intakesList = intakeRes.data?.data?.data || intakeRes.data?.data || [];
-      const mappedStock: ProductionStockItem[] = stockData.map((item: any) => {
-        let cat = "damaged";
-        if (item.product.code.includes("WHT")) cat = "white";
-        else if (item.product.code.includes("CRM")) cat = "cream";
-        else if (item.product.code.includes("BRN")) cat = "brown";
-        else if (item.product.category === "poultry") cat = "poultry";
-        
-        let cap = 5000;
-        if (cat === "white") cap = 4000;
-        else if (cat === "cream") cap = 3000;
-        else if (cat === "brown") cap = 2000;
-        else if (cat === "damaged") cap = 10000;
-
-        const incoming = intakesList
-          .filter((log: any) => 
-            log.product_id === item.product_id && 
-            log.production_store_id === item.production_store_id &&
-            (log.batch_number === item.batch_reference || log.batch_reference === item.batch_reference)
-          )
-          .reduce((sum: number, log: any) => {
-            const val = parseFloat(log.quantity);
-            return sum + (isNaN(val) ? 0 : val);
-          }, 0);
-
-        const safeIncoming = isNaN(incoming) ? 0 : incoming;
-
-        return {
-          id: item.id,
-          product_id: item.product_id,
-          product: item.product.name,
-          code: item.product.code,
-          quantity: parseFloat(item.current_quantity),
-          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
-          capacity: cap,
-          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.production_unit_price || item.product.default_unit_price),
-          category: cat as any,
-          batch_reference: item.batch_reference || 'N/A',
-          production_store_id: item.production_store_id,
-          production_store_name: item.production_store?.name || 'N/A',
-          incoming: parseFloat(item.incoming || 0),
-          opening_stock: parseFloat(item.opening_stock || 0),
-          stock_taken: parseFloat(item.stock_taken || 0),
-          replacements: parseFloat(item.replacements || 0),
-          damages: parseFloat(item.damages || 0),
-          closing_stock: parseFloat(item.closing_stock || 0),
-          unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
-          egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
-        };
-      });
-      setStockItems(mappedStock);
-
+      const intakeRes = await api.get('/production-intakes');
       const groupedMap: { [key: string]: any } = {};
 
-      (intakeRes.data.data.data || []).forEach((intake: any) => {
+      (intakeRes.data?.data?.data || intakeRes.data?.data || []).forEach((intake: any) => {
         const createdAtTime = new Date(intake.created_at).getTime();
         const roundedTime = Math.round(createdAtTime / 60000) * 60000;
         const key = `${intake.intake_date}_${intake.production_store_id}_${intake.batch_reference || ''}_${roundedTime}`;
@@ -512,9 +444,85 @@ export default function ProductionStorePage() {
       });
 
       setIntakeLogs(mappedIntakes);
+    } catch (err) {
+      console.error("Failed to fetch intakes", err);
+    } finally {
+      setLoadingIntakes(false);
+    }
+  };
+
+  const fetchInterTransfers = async () => {
+    setLoadingInterTransfers(true);
+    try {
+      const interRes = await api.get('/production-store-transfers');
+      setInterTransfers(interRes.data?.data?.data || interRes.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch inter-store transfers", err);
+    } finally {
+      setLoadingInterTransfers(false);
+    }
+  };
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    fetchIntakes(); // Load in background
+    try {
+      const todayStr = (() => {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      })();
+      const isHistorical = selectedDate !== todayStr;
+
+      const [stockRes, storesRes, productsRes, salesStoresRes] = await Promise.all([
+        api.get('/production-stock', { params: { date: selectedDate } }),
+        api.get('/production-stores'),
+        api.get('/products'),
+        api.get('/sales-stores')
+      ]);
+      
+      const stockData = stockRes.data.data || [];
+      const mappedStock: ProductionStockItem[] = stockData.map((item: any) => {
+        let cat = "damaged";
+        if (item.product.code.includes("WHT")) cat = "white";
+        else if (item.product.code.includes("CRM")) cat = "cream";
+        else if (item.product.code.includes("BRN")) cat = "brown";
+        else if (item.product.category === "poultry") cat = "poultry";
+        
+        let cap = 5000;
+        if (cat === "white") cap = 4000;
+        else if (cat === "cream") cap = 3000;
+        else if (cat === "brown") cap = 2000;
+        else if (cat === "damaged") cap = 10000;
+
+        return {
+          id: item.id,
+          product_id: item.product_id,
+          product: item.product.name,
+          code: item.product.code,
+          quantity: parseFloat(item.current_quantity),
+          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
+          capacity: cap,
+          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.production_unit_price || item.product.default_unit_price),
+          category: cat as any,
+          batch_reference: item.batch_reference || 'N/A',
+          production_store_id: item.production_store_id,
+          production_store_name: item.production_store?.name || 'N/A',
+          incoming: parseFloat(item.incoming || 0),
+          opening_stock: parseFloat(item.opening_stock || 0),
+          stock_taken: parseFloat(item.stock_taken || 0),
+          replacements: parseFloat(item.replacements || 0),
+          damages: parseFloat(item.damages || 0),
+          closing_stock: parseFloat(item.closing_stock || 0),
+          unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
+          egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
+        };
+      });
+      setStockItems(mappedStock);
 
       setProductionStores(storesRes.data.data || []);
-      setInterTransfers(interRes.data.data.data || []);
       const productsData = productsRes.data.data || [];
       setProducts(productsData);
       
@@ -541,6 +549,12 @@ export default function ProductionStorePage() {
   useEffect(() => {
     fetchData();
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (activeTab === "transfers") {
+      fetchInterTransfers();
+    }
+  }, [activeTab]);
 
   const [isUpdatingAllPrices, setIsUpdatingAllPrices] = useState(false);
  
@@ -1340,42 +1354,49 @@ export default function ProductionStorePage() {
                 <CardDescription className="text-xs">Audit log of latest egg harvest entries</CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="divide-y divide-brand-sage/30 max-h-[500px] overflow-y-auto">
-                  {intakeLogs.length === 0 ? (
-                    <div className="p-6 text-center text-gray-400 text-xs">No recent intake logs available.</div>
-                  ) : intakeLogs.map((log: any) => (
-                    <div key={log.id} className="p-4 hover:bg-brand-sage/5 transition-colors flex flex-col gap-2">
-                      <div className="flex justify-between items-start">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{log.date}</span>
-                        <Badge className="border-none text-[9px] font-bold bg-green-50 text-green-600">
-                          INTAKE
-                        </Badge>
-                      </div>
-                      
-                      {/* Grouped Products */}
-                      <div className="space-y-1 bg-gray-50/50 p-2 rounded-lg border border-brand-sage/10">
-                        {log.items.map((item: any, idx: number) => (
-                          <div key={idx} className="flex justify-between items-center gap-2 text-[11px] py-0.5">
-                            <span className="font-medium text-gray-700 truncate" title={item.product}>
-                              {item.product}
-                            </span>
-                            <span className="font-semibold text-green-600 shrink-0 whitespace-nowrap">
-                              +{item.quantity.toLocaleString()} {item.unit.toLowerCase()}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
+                {loadingIntakes ? (
+                  <div className="flex items-center justify-center p-12 text-xs text-gray-500 font-bold gap-2">
+                    <Loader2 className="animate-spin text-brand-forest" size={18} />
+                    Loading recent intakes...
+                  </div>
+                ) : intakeLogs.length === 0 ? (
+                  <div className="p-6 text-center text-gray-400 text-xs">No recent intake logs available.</div>
+                ) : (
+                  <div className="divide-y divide-brand-sage/30 max-h-[500px] overflow-y-auto">
+                    {intakeLogs.map((log: any) => (
+                      <div key={log.id} className="p-4 hover:bg-brand-sage/5 transition-colors flex flex-col gap-2">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{log.date}</span>
+                          <Badge className="border-none text-[9px] font-bold bg-green-50 text-green-600">
+                            INTAKE
+                          </Badge>
+                        </div>
+                        
+                        {/* Grouped Products */}
+                        <div className="space-y-1 bg-gray-50/50 p-2 rounded-lg border border-brand-sage/10">
+                          {log.items.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center gap-2 text-[11px] py-0.5">
+                              <span className="font-medium text-gray-700 truncate" title={item.product}>
+                                {item.product}
+                              </span>
+                              <span className="font-semibold text-green-600 shrink-0 whitespace-nowrap">
+                                +{item.quantity.toLocaleString()} {item.unit.toLowerCase()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
 
-                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
-                        <span>Store: <strong className="text-brand-forest">{log.store_name}</strong></span>
-                        <span className="font-mono">Batch: {log.batch}</span>
+                        <div className="flex justify-between items-center text-[10px] text-gray-400 font-semibold">
+                          <span>Store: <strong className="text-brand-forest">{log.store_name}</strong></span>
+                          <span className="font-mono">Batch: {log.batch}</span>
+                        </div>
+                        <div className="text-[9px] text-gray-400 font-medium">
+                          Logged by: <span className="font-semibold text-gray-650">{log.recorded_by}</span>
+                        </div>
                       </div>
-                      <div className="text-[9px] text-gray-400 font-medium">
-                        Logged by: <span className="font-semibold text-gray-650">{log.recorded_by}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1498,7 +1519,16 @@ export default function ProductionStorePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {interTransfers.length === 0 ? (
+                    {loadingInterTransfers ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-12">
+                          <div className="flex items-center justify-center text-xs text-gray-500 font-bold gap-2">
+                            <Loader2 className="animate-spin text-brand-forest" size={18} />
+                            Loading transfers...
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : interTransfers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-10 text-gray-400 font-medium">
                           No inter-store transfers recorded.
