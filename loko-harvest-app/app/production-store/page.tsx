@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { useLookups } from "@/store/useLookups";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 
@@ -198,9 +199,8 @@ export default function ProductionStorePage() {
   const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
   const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
   const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
-  const [productionStores, setProductionStores] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const { products, productionStores, salesStores } = useLookups();
   const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
@@ -226,7 +226,6 @@ export default function ProductionStorePage() {
   const [transferQty, setTransferQty] = useState("");
   const [salesTransferStoreId, setSalesTransferStoreId] = useState("");
   const [salesTransferStoreDestId, setSalesTransferStoreDestId] = useState("");
-  const [salesStores, setSalesStores] = useState<any[]>([]);
   const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
 
   // Edit stock state
@@ -430,36 +429,15 @@ export default function ProductionStorePage() {
     }
     try {
       const res = await api.get('/production-store/dashboard', { 
-        params: { date: selectedDate } 
+        params: { 
+          date: selectedDate,
+          exclude_lookups: 1
+        } 
       });
 
-      const { lookups, inventory } = res.data.data || {};
+      const { inventory } = res.data.data || {};
 
-      // 1. Process Lookups
-      if (lookups) {
-        if (lookups.production_stores) {
-          setProductionStores(lookups.production_stores);
-        }
-        if (lookups.products) {
-          const productsData = lookups.products;
-          setProducts(productsData);
-          const allowedProds = productsData.filter((p: any) => 
-            ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)
-          );
-          if (allowedProds.length > 0) {
-            setTransferProductId(allowedProds[0].id);
-          }
-        }
-        if (lookups.sales_stores) {
-          const salesData = lookups.sales_stores;
-          setSalesStores(salesData);
-          if (salesData.length > 0) {
-            setSalesTransferStoreDestId(salesData[0].id);
-          }
-        }
-      }
-
-      // 2. Process Intakes
+      // 1. Process Intakes
       if (inventory && inventory.intakes) {
         const groupedMap: { [key: string]: any } = {};
         inventory.intakes.forEach((intake: any) => {
@@ -495,7 +473,7 @@ export default function ProductionStorePage() {
         setIntakeLogs(mappedIntakes);
       }
 
-      // 3. Process Stock
+      // 2. Process Stock
       if (inventory && inventory.stock) {
         const mappedStock: ProductionStockItem[] = inventory.stock.map((item: any) => {
           let cat = "damaged";
@@ -537,7 +515,7 @@ export default function ProductionStorePage() {
       }
 
     } catch (err) {
-      console.error("Failed to fetch production store dashboard data", err);
+      console.error("Failed to fetch production store data", err);
     } finally {
       if (!silent) {
         setIsLoading(false);
@@ -549,6 +527,23 @@ export default function ProductionStorePage() {
   const fetchData = async (silent = false) => {
     await fetchDashboardData(false, silent);
   };
+
+  useEffect(() => {
+    if (products.length > 0 && !transferProductId) {
+      const allowedProds = products.filter((p: any) => 
+        ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)
+      );
+      if (allowedProds.length > 0) {
+        setTransferProductId(allowedProds[0].id);
+      }
+    }
+  }, [products, transferProductId]);
+
+  useEffect(() => {
+    if (salesStores && salesStores.length > 0 && !salesTransferStoreDestId) {
+      setSalesTransferStoreDestId(salesStores[0].id);
+    }
+  }, [salesStores, salesTransferStoreDestId]);
 
   useEffect(() => {
     fetchDashboardData(true, false);

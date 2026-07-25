@@ -22,6 +22,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { useAuth } from "@/store/useAuth";
+import { useLookups } from "@/store/useLookups";
 import api from "@/lib/api";
 
 const navItems = [
@@ -61,6 +62,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const { user, clearAuth } = useAuth();
+  const { fetchLookups, clearLookups } = useLookups();
+
+  React.useEffect(() => {
+    if (user) {
+      fetchLookups();
+    }
+  }, [user, fetchLookups]);
 
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -94,6 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleLogout = () => {
     clearAuth();
+    clearLookups();
     router.push("/login");
   };
 

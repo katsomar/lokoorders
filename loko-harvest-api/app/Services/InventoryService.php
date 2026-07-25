@@ -13,13 +13,24 @@ class InventoryService
 {
     public function getProductionStoreDashboardData($date, $productionStoreId = null)
     {
-        // 1. Fetch Lookups (only active products, stores) selecting only necessary columns
-        $products = Product::where('is_active', true)
-            ->select('id', 'name', 'code', 'category', 'unit_of_measure', 'default_unit_price', 'production_unit_price', 'sales_unit_price', 'production_egg_unit_price', 'sales_egg_unit_price')
-            ->get();
+        $excludeLookups = request()->query('exclude_lookups') == 1;
+        $lookups = null;
 
-        $productionStores = ProductionStore::select('id', 'name', 'code', 'location')->get();
-        $salesStores = SalesStore::select('id', 'name', 'code', 'location')->get();
+        if (!$excludeLookups) {
+            // 1. Fetch Lookups (only active products, stores) selecting only necessary columns
+            $products = Product::where('is_active', true)
+                ->select('id', 'name', 'code', 'category', 'unit_of_measure', 'default_unit_price', 'production_unit_price', 'sales_unit_price', 'production_egg_unit_price', 'sales_egg_unit_price')
+                ->get();
+
+            $productionStores = ProductionStore::select('id', 'name', 'code', 'location')->get();
+            $salesStores = SalesStore::select('id', 'name', 'code', 'location')->get();
+
+            $lookups = [
+                'products' => $products,
+                'production_stores' => $productionStores,
+                'sales_stores' => $salesStores,
+            ];
+        }
 
         // 2. Fetch Intake Logs (limited to 50 logs for UI layout to control JSON size)
         $intakes = ProductionStoreIntake::with([
@@ -136,11 +147,7 @@ class InventoryService
         }
 
         return [
-            'lookups' => [
-                'products' => $products,
-                'production_stores' => $productionStores,
-                'sales_stores' => $salesStores,
-            ],
+            'lookups' => $lookups,
             'inventory' => [
                 'stock' => $stock,
                 'intakes' => $intakes,
