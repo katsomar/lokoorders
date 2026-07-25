@@ -195,6 +195,29 @@ const RenderActions = ({ group, onAdjust, onEdit, onDelete }: { group: any; onAd
   );
 };
 
+const SearchBar = React.memo(({ onSearch }: { onSearch: (val: string) => void }) => {
+  const [value, setValue] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      onSearch(value);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [value, onSearch]);
+
+  return (
+    <div className="relative flex-1 min-w-[200px] max-w-[320px] sm:ml-auto">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+      <Input 
+        placeholder="Search bulk products..." 
+        className="pl-9 h-9 text-xs border-brand-sage rounded-xl w-full" 
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+    </div>
+  );
+});
+
 export default function ProductionStorePage() {
   const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
   const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
@@ -1236,15 +1259,7 @@ export default function ProductionStorePage() {
                     ))}
                   </select>
 
-                  <div className="relative flex-1 min-w-[200px] max-w-[320px] sm:ml-auto">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                    <Input 
-                      placeholder="Search bulk products..." 
-                      className="pl-9 h-9 text-xs border-brand-sage rounded-xl w-full" 
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
+                  <SearchBar onSearch={setSearchTerm} />
                 </div>
               </CardHeader>
               
