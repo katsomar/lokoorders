@@ -33,6 +33,8 @@ const optionalNumeric = z.any()
     return isNaN(parsed) ? 0 : parsed;
   });
 
+const todayStr = new Date().toISOString().split('T')[0];
+
 const intakeSchema = z.object({
   production_store_id: z.string().min(1, "Production store is required"),
   product_id: z.string().min(1, "Product is required"),
@@ -42,12 +44,18 @@ const intakeSchema = z.object({
         return undefined;
       }
       const parsed = Number(val);
-      return isNaN(parsed) ? undefined : parsed;
+      return isNaN(parsed) ? undefined : Math.max(0, parsed);
     }),
-  intake_date: z.string(),
+  intake_date: z.string().refine((date) => date <= todayStr, {
+    message: "Intake date cannot be in the future",
+  }),
   valuation_price: optionalNumeric,
-  batch_number: z.string().optional(),
-  notes: z.string().optional(),
+  batch_number: z.string().max(50, "Batch number cannot exceed 50 characters")
+    .refine((val) => !val || /^[A-Za-z0-9\-_]+$/.test(val), {
+      message: "Batch number can only contain letters, numbers, hyphens, and underscores",
+    })
+    .optional(),
+  notes: z.string().max(500, "Notes cannot exceed 500 characters").optional(),
   good_stacks: optionalNumeric,
   good_extra_trays: optionalNumeric,
   good_extra_eggs: optionalNumeric,

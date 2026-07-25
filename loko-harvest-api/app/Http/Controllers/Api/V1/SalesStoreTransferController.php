@@ -70,8 +70,8 @@ class SalesStoreTransferController extends Controller
             'to_sales_store_id' => 'required|exists:sales_stores,id|different:from_sales_store_id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|numeric|min:0.01',
-            'transfer_date' => 'required|date',
-            'notes' => 'nullable|string',
+            'transfer_date' => 'required|date|before_or_equal:today',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         return DB::transaction(function () use ($validated) {

@@ -34,8 +34,8 @@ class SalesStoreConversionController extends Controller
             'from_product_id' => 'required|exists:products,id',
             'to_product_id' => 'required|exists:products,id|different:from_product_id',
             'from_quantity' => 'required|numeric|min:0.01',
-            'batch_reference' => 'nullable|string',
-            'notes' => 'nullable|string',
+            'batch_reference' => 'nullable|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         $storeId = $validated['sales_store_id'];

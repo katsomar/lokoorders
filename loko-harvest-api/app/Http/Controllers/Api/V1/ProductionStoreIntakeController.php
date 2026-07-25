@@ -29,10 +29,10 @@ class ProductionStoreIntakeController extends Controller
             'production_store_id' => 'required|exists:production_stores,id',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'nullable|numeric|min:0.01',
-            'intake_date' => 'required|date',
+            'intake_date' => 'required|date|before_or_equal:today',
             'valuation_price' => 'required|numeric|min:0',
-            'batch_number' => 'nullable|string',
-            'notes' => 'nullable|string',
+            'batch_number' => 'nullable|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         return DB::transaction(function () use ($validated, $request) {

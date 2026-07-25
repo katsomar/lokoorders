@@ -24,16 +24,16 @@ class SalesStoreController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'code' => 'required|string|unique:sales_stores,code|max:50',
+            'name' => 'required|string|min:3|max:100',
+            'code' => 'required|string|min:3|max:10|regex:/^[A-Za-z0-9\-]+$/|unique:sales_stores,code',
             'location' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
         ]);
 
         $store = SalesStore::create([
-            'name' => $validated['name'],
-            'code' => strtoupper($validated['code']),
-            'location' => $validated['location'] ?? null,
+            'name' => trim($validated['name']),
+            'code' => strtoupper(trim($validated['code'])),
+            'location' => isset($validated['location']) ? trim($validated['location']) : null,
             'is_active' => $validated['is_active'] ?? true,
         ]);
 
@@ -51,16 +51,16 @@ class SalesStoreController extends Controller
         $store = SalesStore::findOrFail($id);
 
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'code' => 'required|string|max:50|unique:sales_stores,code,' . $store->id,
+            'name' => 'required|string|min:3|max:100',
+            'code' => 'required|string|min:3|max:10|regex:/^[A-Za-z0-9\-]+$/|unique:sales_stores,code,' . $store->id,
             'location' => 'nullable|string|max:255',
             'is_active' => 'required|boolean',
         ]);
 
         $store->update([
-            'name' => $validated['name'],
-            'code' => strtoupper($validated['code']),
-            'location' => $validated['location'] ?? null,
+            'name' => trim($validated['name']),
+            'code' => strtoupper(trim($validated['code'])),
+            'location' => isset($validated['location']) ? trim($validated['location']) : null,
             'is_active' => $validated['is_active'],
         ]);
 

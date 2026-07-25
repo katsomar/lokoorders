@@ -584,13 +584,24 @@ export default function SalesStorePage() {
   // Create Sales Store
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStoreName || !newStoreCode) return;
+    const cleanName = newStoreName.trim();
+    const cleanCode = newStoreCode.trim().toUpperCase();
+
+    if (cleanName.length < 3 || cleanName.length > 100) {
+      alert("Store name must be between 3 and 100 characters.");
+      return;
+    }
+    if (!/^[A-Za-z0-9\-]{3,10}$/.test(cleanCode)) {
+      alert("Store code must be 3 to 10 alphanumeric characters or hyphens.");
+      return;
+    }
+
     setIsSubmittingStore(true);
     try {
       await api.post("/sales-stores", {
-        name: newStoreName,
-        code: newStoreCode,
-        location: newStoreLocation
+        name: cleanName,
+        code: cleanCode,
+        location: newStoreLocation.trim() || null
       });
       alert("Sales store created successfully!");
       setNewStoreName("");
@@ -625,7 +636,11 @@ export default function SalesStorePage() {
     e.preventDefault();
     const qty = parseFloat(interQty) || 0;
     if (qty <= 0 || !interFromStoreId || !interToStoreId || !interProductId) {
-      alert("Please fill all required transfer details.");
+      alert("Please fill all required transfer details with a quantity greater than 0.");
+      return;
+    }
+    if (interFromStoreId === interToStoreId) {
+      alert("Source store and destination store cannot be the same store.");
       return;
     }
 
@@ -734,7 +749,20 @@ export default function SalesStorePage() {
   const handlePostConversion = async (e: React.FormEvent) => {
     e.preventDefault();
     const qty = parseFloat(convQty) || 0;
-    if (qty <= 0 || !convStoreId || !convFromProductId || !convToProductId) return;
+    if (qty <= 0 || !convStoreId || !convFromProductId || !convToProductId) {
+      alert("Please fill all required conversion fields with a quantity greater than 0.");
+      return;
+    }
+    if (convFromProductId === convToProductId) {
+      alert("Source product and destination packaged product cannot be the same product.");
+      return;
+    }
+
+    const availableStock = getSelectedSourceStockItem()?.quantity || 0;
+    if (availableStock < qty) {
+      alert(`Insufficient stock available for conversion! Only ${availableStock} trays available.`);
+      return;
+    }
 
     setIsSubmittingConv(true);
     try {

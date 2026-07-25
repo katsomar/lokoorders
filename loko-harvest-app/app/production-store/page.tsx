@@ -859,13 +859,24 @@ export default function ProductionStorePage() {
   // Create Production Store
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStoreName || !newStoreCode) return;
+    const cleanName = newStoreName.trim();
+    const cleanCode = newStoreCode.trim().toUpperCase();
+
+    if (cleanName.length < 3 || cleanName.length > 100) {
+      alert("Store name must be between 3 and 100 characters.");
+      return;
+    }
+    if (!/^[A-Za-z0-9\-]{3,10}$/.test(cleanCode)) {
+      alert("Store code must be 3 to 10 alphanumeric characters or hyphens.");
+      return;
+    }
+
     setIsSubmittingStore(true);
     try {
       await api.post("/production-stores", {
-        name: newStoreName,
-        code: newStoreCode,
-        location: newStoreLocation
+        name: cleanName,
+        code: cleanCode,
+        location: newStoreLocation.trim() || null
       });
       alert("Production store created successfully!");
       setNewStoreName("");
@@ -900,7 +911,11 @@ export default function ProductionStorePage() {
     e.preventDefault();
     const qty = parseFloat(interQty) || 0;
     if (qty <= 0 || !interFromStoreId || !interToStoreId || !interProductId) {
-      alert("Please fill all required transfer details.");
+      alert("Please fill all required transfer details with a quantity greater than 0.");
+      return;
+    }
+    if (interFromStoreId === interToStoreId) {
+      alert("Source store and destination store cannot be the same store.");
       return;
     }
 
