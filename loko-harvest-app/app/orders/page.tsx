@@ -87,19 +87,23 @@ export default function OrdersPage() {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  const fetchOrders = async (silent = false) => {
+  const fetchOrdersData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      const res = await api.get("/orders", {
-        params: {
-          search: debouncedSearch,
-          status: statusFilter || undefined,
-          urgency: urgencyFilter || undefined,
-          page: currentPage,
-          per_page: 15,
-        }
-      });
-      const responseData = res.data.data;
+      const [ordersRes, metricsRes] = await Promise.all([
+        api.get("/orders", {
+          params: {
+            search: debouncedSearch,
+            status: statusFilter || undefined,
+            urgency: urgencyFilter || undefined,
+            page: currentPage,
+            per_page: 15,
+          }
+        }),
+        api.get("/orders/metrics")
+      ]);
+
+      const responseData = ordersRes.data.data;
       if (responseData) {
         setOrders(responseData.data || []);
         setCurrentPage(responseData.current_page || 1);
@@ -107,30 +111,23 @@ export default function OrdersPage() {
         setTotalItems(responseData.total || 0);
         setPerPage(responseData.per_page || 15);
       }
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
-    } finally {
-      if (!silent) setIsLoading(false);
-    }
-  };
 
-  const fetchMetrics = async () => {
-    try {
-      const res = await api.get("/orders/metrics");
-      const data = res.data.data;
-      if (data) {
+      const metricsData = metricsRes.data.data;
+      if (metricsData) {
         setMetrics({
-          totalUrgent: data.totalUrgent || 0,
-          totalPending: data.totalPending || 0,
-          totalDispatched: data.totalDispatched || 0,
-          totalDelivered: data.totalDelivered || 0,
-          totalUndelivered: data.totalUndelivered || 0,
-          totalReplacementValue: data.totalReplacementValue || 0,
-          netExpectedValue: data.netExpectedValue || 0
+          totalUrgent: metricsData.totalUrgent || 0,
+          totalPending: metricsData.totalPending || 0,
+          totalDispatched: metricsData.totalDispatched || 0,
+          totalDelivered: metricsData.totalDelivered || 0,
+          totalUndelivered: metricsData.totalUndelivered || 0,
+          totalReplacementValue: metricsData.totalReplacementValue || 0,
+          netExpectedValue: metricsData.netExpectedValue || 0
         });
       }
     } catch (err) {
-      console.error("Failed to load metrics:", err);
+      console.error("Failed to fetch orders data:", err);
+    } finally {
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -141,28 +138,22 @@ export default function OrdersPage() {
     try {
       await api.delete(`/orders/${orderId}`);
       alert("Order deleted successfully!");
-      fetchOrders();
-      fetchMetrics();
+      fetchOrdersData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to delete order.");
     }
   };
 
-
   useEffect(() => {
-    fetchOrders();
+    fetchOrdersData();
   }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      fetchOrders(true);
-    }, 8000);
+      fetchOrdersData(true);
+    }, 30000);
     return () => clearInterval(timer);
   }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
-
-  useEffect(() => {
-    fetchMetrics();
-  }, [orders]);
 
   const getUrgencyBadge = (urgency: string) => {
     switch ((urgency || "").toLowerCase()) {
