@@ -355,16 +355,16 @@ class DriverController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'full_name' => 'required|string',
+            'full_name' => 'required|string|min:3|max:100',
             'email' => 'nullable|email|unique:users,email',
-            'phone' => 'required|string',
+            'phone' => 'required|string|regex:/^[0-9+\-\s()]{9,20}$/',
             'vehicle_id' => 'nullable|exists:vehicles,id',
             'vehicle_ids' => 'nullable|array',
             'vehicle_ids.*' => 'exists:vehicles,id',
-            'license_number' => 'required|string',
+            'license_number' => 'required|string|min:3|max:30|regex:/^[A-Za-z0-9\-]+$/',
             'employment_status' => 'nullable|in:active,inactive',
-            'date_joined' => 'nullable|date',
-            'notes' => 'nullable|string',
+            'date_joined' => 'nullable|date|before_or_equal:today',
+            'notes' => 'nullable|string|max:500',
             'avatar' => 'required|image|max:2048',
             'license_photo' => 'required|image|max:2048',
         ]);
@@ -422,16 +422,16 @@ class DriverController extends Controller
         $user = $driver->user;
 
         $validated = $request->validate([
-            'full_name' => 'required|string',
+            'full_name' => 'required|string|min:3|max:100',
             'email' => 'nullable|email|unique:users,email,' . ($user ? $user->id : 'NULL'),
-            'phone' => 'required|string',
+            'phone' => 'required|string|regex:/^[0-9+\-\s()]{9,20}$/',
             'vehicle_id' => 'nullable|string',
             'vehicle_ids' => 'nullable|array',
             'vehicle_ids.*' => 'exists:vehicles,id',
-            'license_number' => 'required|string',
+            'license_number' => 'required|string|min:3|max:30|regex:/^[A-Za-z0-9\-]+$/',
             'employment_status' => 'nullable|in:active,inactive',
-            'date_joined' => 'nullable|date',
-            'notes' => 'nullable|string',
+            'date_joined' => 'nullable|date|before_or_equal:today',
+            'notes' => 'nullable|string|max:500',
             'avatar' => 'nullable|image|max:2048',
             'license_photo' => 'nullable|image|max:2048',
         ]);

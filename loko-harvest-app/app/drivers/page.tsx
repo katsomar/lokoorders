@@ -402,25 +402,41 @@ export default function DriversPage() {
   // Submit Register Driver
   const handleRegisterDriverSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDriverName || !newDriverPhone || !newDriverLicense || !newDriverAvatarFile || !newDriverLicenseFile) {
-      alert("All fields, including driver avatar and license photo, are required.");
+    const name = newDriverName.trim();
+    const phone = newDriverPhone.trim();
+    const license = newDriverLicense.trim();
+
+    if (name.length < 3 || name.length > 100) {
+      alert("Driver full name must be between 3 and 100 characters.");
+      return;
+    }
+    if (!/^[0-9+\-\s()]{9,20}$/.test(phone)) {
+      alert("Phone number must contain 9 to 20 digits, spaces, or valid symbols (+, -, ()).");
+      return;
+    }
+    if (!/^[A-Za-z0-9\-]{3,30}$/.test(license)) {
+      alert("License number must be 3 to 30 alphanumeric characters or hyphens.");
+      return;
+    }
+    if (!newDriverAvatarFile || !newDriverLicenseFile) {
+      alert("Driver avatar and license photo are required.");
       return;
     }
 
     setIsSubmittingDriver(true);
     try {
       const formData = new FormData();
-      formData.append("full_name", newDriverName);
-      if (newDriverEmail) formData.append("email", newDriverEmail);
-      formData.append("phone", newDriverPhone);
+      formData.append("full_name", name);
+      if (newDriverEmail.trim()) formData.append("email", newDriverEmail.trim());
+      formData.append("phone", phone);
       if (newDriverVehicleIds.length > 0) {
         newDriverVehicleIds.forEach(id => formData.append("vehicle_ids[]", id));
         formData.append("vehicle_id", newDriverVehicleIds[0]);
       }
-      formData.append("license_number", newDriverLicense);
+      formData.append("license_number", license);
       formData.append("employment_status", newDriverStatus);
       formData.append("date_joined", newDriverDateJoined);
-      if (newDriverNotes) formData.append("notes", newDriverNotes);
+      if (newDriverNotes.trim()) formData.append("notes", newDriverNotes.trim());
       formData.append("avatar", newDriverAvatarFile);
       formData.append("license_photo", newDriverLicenseFile);
 
@@ -498,6 +514,7 @@ export default function DriversPage() {
       setIsSubmittingVehicle(false);
     }
   };
+
   const handleStartEditDriver = (driver: any) => {
     setSelectedDriverForEdit(driver);
     setEditDriverName(driver.name || "");
@@ -517,8 +534,20 @@ export default function DriversPage() {
     e.preventDefault();
     if (!selectedDriverForEdit) return;
 
-    if (!editDriverName || !editDriverPhone || !editDriverLicense) {
-      alert("Name, phone, and license number are required.");
+    const name = editDriverName.trim();
+    const phone = editDriverPhone.trim();
+    const license = editDriverLicense.trim();
+
+    if (name.length < 3 || name.length > 100) {
+      alert("Driver full name must be between 3 and 100 characters.");
+      return;
+    }
+    if (!/^[0-9+\-\s()]{9,20}$/.test(phone)) {
+      alert("Phone number must contain 9 to 20 digits, spaces, or valid symbols (+, -, ()).");
+      return;
+    }
+    if (!/^[A-Za-z0-9\-]{3,30}$/.test(license)) {
+      alert("License number must be 3 to 30 alphanumeric characters or hyphens.");
       return;
     }
 
@@ -526,13 +555,13 @@ export default function DriversPage() {
     try {
       const formData = new FormData();
       formData.append("_method", "PUT");
-      formData.append("full_name", editDriverName);
-      if (editDriverEmail) formData.append("email", editDriverEmail);
-      formData.append("phone", editDriverPhone);
-      formData.append("license_number", editDriverLicense);
+      formData.append("full_name", name);
+      if (editDriverEmail.trim()) formData.append("email", editDriverEmail.trim());
+      formData.append("phone", phone);
+      formData.append("license_number", license);
       formData.append("employment_status", editDriverStatus);
       formData.append("date_joined", editDriverDateJoined);
-      formData.append("notes", editDriverNotes || "");
+      formData.append("notes", editDriverNotes.trim() || "");
       if (editDriverVehicleIds.length > 0) {
         editDriverVehicleIds.forEach(id => formData.append("vehicle_ids[]", id));
         formData.append("vehicle_id", editDriverVehicleIds[0]);

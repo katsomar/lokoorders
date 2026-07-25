@@ -111,12 +111,12 @@ class DeliveryController extends Controller
     public function confirm(Request $request, $id)
     {
         $validated = $request->validate([
-            'recipient_name' => 'required|string',
-            'recipient_phone' => 'nullable|string',
-            'delivered_at' => 'required|date',
+            'recipient_name' => 'required|string|min:2|max:100',
+            'recipient_phone' => 'nullable|string|regex:/^[0-9+\-\s()]{9,20}$/',
+            'delivered_at' => 'required|date|before_or_equal:now',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
-            'notes' => 'nullable|string',
+            'notes' => 'nullable|string|max:500',
             'proof_image_file' => 'required|file|image|max:4096',
             'signature_data' => 'required|string',
         ]);

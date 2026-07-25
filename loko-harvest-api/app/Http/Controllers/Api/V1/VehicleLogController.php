@@ -48,13 +48,13 @@ class VehicleLogController extends Controller
             'vehicle_id' => 'required|exists:vehicles,id',
             'driver_id' => 'nullable|exists:drivers,id',
             'log_type' => 'required|in:movement,refuel',
-            'destination' => 'nullable|string',
+            'destination' => 'nullable|string|max:255',
             'duration_minutes' => 'nullable|integer|min:0',
             'initial_fuel' => 'nullable|numeric|between:0,100',
             'added_fuel' => 'nullable|numeric|min:0',
             'fuel_price_per_liter' => 'nullable|numeric|min:0',
-            'notes' => 'nullable|string',
-            'logged_at' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
+            'logged_at' => 'nullable|date|before_or_equal:today',
             'evidence_file' => 'required_if:log_type,refuel|file|mimes:jpeg,png,jpg,pdf|max:2048',
         ]);
 
