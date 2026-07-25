@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 
@@ -301,14 +302,9 @@ export default function DeliveryConfirmationPage() {
     }
   }, [params.id]);
 
-  useEffect(() => {
-    if (params.id) {
-      const timer = setInterval(() => {
-        fetchDelivery(true);
-      }, 8000);
-      return () => clearInterval(timer);
-    }
-  }, [params.id]);
+  useRealtime(["delivery.updated", "order.updated"], () => {
+    fetchDelivery(true);
+  });
 
   useEffect(() => {
     if (delivery?.order_id) {

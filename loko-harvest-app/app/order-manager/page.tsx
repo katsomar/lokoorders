@@ -39,6 +39,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 
 const isCarriedOverUncompleted = (order: any) => {
   if (!order || !order.order_date) return false;
@@ -676,12 +677,9 @@ export default function OrderManagerDashboard() {
     }
   }, [activeTab]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchOrders(true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
+  useRealtime(["order.updated", "delivery.updated", "stock.updated"], () => {
+    fetchOrders(true);
+  });
 
   // Stock adjustments effects & handlers
   const fetchAdjustments = async () => {

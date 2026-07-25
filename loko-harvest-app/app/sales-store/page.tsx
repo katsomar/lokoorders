@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { useAuth } from "@/store/useAuth";
@@ -414,12 +415,9 @@ export default function SalesStorePage() {
     fetchSalesDashboardData(false);
   }, [selectedDate]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchSalesDashboardData(true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [selectedDate]);
+  useRealtime(["stock.updated", "order.updated"], () => {
+    fetchSalesDashboardData(true);
+  });
 
   useEffect(() => {
     if (activeTab === "transfers") {

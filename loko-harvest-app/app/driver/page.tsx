@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
@@ -449,12 +450,9 @@ export default function DriverDashboard() {
     fetchStats();
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchStats(true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
+  useRealtime(["delivery.updated", "order.updated", "driver.updated"], () => {
+    fetchStats(true);
+  });
 
   useEffect(() => {
     if (activeTab === "replacements" && stats?.driver_id) {

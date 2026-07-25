@@ -145,6 +145,8 @@ class OrderController extends Controller
 
             $order->update(['total_amount' => $totalAmount]);
 
+            \App\Services\RealtimePublisher::publish('order.updated');
+
             return $this->success($order->load('items.product', 'customer'), 'Order created successfully', 201);
         });
     }
@@ -213,6 +215,8 @@ class OrderController extends Controller
             'changed_by' => auth()->id(),
             'notes' => $request->notes,
         ]);
+
+        \App\Services\RealtimePublisher::publish('order.updated');
 
         return $this->success($order, "Order status updated to {$newStatus}");
     }

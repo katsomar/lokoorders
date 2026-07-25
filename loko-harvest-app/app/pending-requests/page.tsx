@@ -26,6 +26,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 
 export default function PendingRequestsPage() {
   const router = useRouter();
@@ -101,14 +102,11 @@ export default function PendingRequestsPage() {
     fetchConversions();
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchTransfers(true);
-      fetchAdjustments(true);
-      fetchConversions(true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, []);
+  useRealtime(["stock.updated", "order.updated"], () => {
+    fetchTransfers(true);
+    fetchAdjustments(true);
+    fetchConversions(true);
+  });
 
   const handleApproveTransfer = async (id: string) => {
     if (!confirm("Are you sure you want to approve this transfer? This will debit production stock and credit sales stock.")) return;

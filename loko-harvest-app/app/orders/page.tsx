@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 
 const isCarriedOverUncompleted = (order: any) => {
   if (!order || !order.order_date) return false;
@@ -148,12 +149,9 @@ export default function OrdersPage() {
     fetchOrdersData();
   }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchOrdersData(true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [debouncedSearch, statusFilter, urgencyFilter, currentPage]);
+  useRealtime(["order.updated", "delivery.updated"], () => {
+    fetchOrdersData(true);
+  });
 
   const getUrgencyBadge = (urgency: string) => {
     switch ((urgency || "").toLowerCase()) {

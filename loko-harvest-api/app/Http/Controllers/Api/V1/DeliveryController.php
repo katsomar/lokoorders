@@ -98,6 +98,8 @@ class DeliveryController extends Controller
                     $deliveries[] = $delivery;
                 }
 
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+
                 return $this->success(
                     count($deliveries) === 1 ? $deliveries[0] : $deliveries,
                     'Deliveries assigned successfully'
@@ -188,6 +190,8 @@ class DeliveryController extends Controller
                 'confirmed_at' => $validated['delivered_at'],
                 'confirmed_by' => auth()->id() ?? \App\Models\User::first()->id,
             ]);
+
+            \App\Services\RealtimePublisher::publish('delivery.updated');
 
             return $this->success($delivery, 'Delivery confirmed successfully');
         });

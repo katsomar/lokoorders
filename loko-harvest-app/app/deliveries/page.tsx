@@ -30,6 +30,7 @@ import {
   Check
 } from "lucide-react";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -144,12 +145,9 @@ export default function DeliveriesPage() {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchData(true);
-    }, 8000);
-    return () => clearInterval(timer);
-  }, []);
+  useRealtime(["delivery.updated", "order.updated", "driver.updated"], () => {
+    fetchData(true);
+  });
 
   // Set up canvas mouse & touch events when signature verification mode is active
   useEffect(() => {

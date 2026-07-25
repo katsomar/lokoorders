@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { useRealtime } from "@/hooks/useRealtime";
 import { useLookups } from "@/store/useLookups";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
@@ -572,12 +573,9 @@ export default function ProductionStorePage() {
     fetchDashboardData(true, false);
   }, [selectedDate]);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      fetchDashboardData(false, true);
-    }, 30000);
-    return () => clearInterval(timer);
-  }, [selectedDate]);
+  useRealtime(["stock.updated", "order.updated"], () => {
+    fetchDashboardData(false, true);
+  });
 
 
   useEffect(() => {
