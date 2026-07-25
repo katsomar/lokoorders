@@ -703,29 +703,7 @@ export default function ProductionStorePage() {
     return item.stock_taken * item.unit_price;
   };
 
-  const calculateTotalValuation = () => {
-    return getFilteredStock().reduce((acc, item) => acc + getStockItemValuation(item), 0);
-  };
-
-  const formatQuantity = (qty: number, unit: string, isBaseEgg: boolean = false) => {
-    return formatQuantityGlobal(qty, unit, isBaseEgg);
-  };
-
-  const formatTotalQuantity = (qty: number) => {
-    const allTrays = getFilteredStock().every(item => item.unit.toLowerCase() === "trays");
-    if (allTrays) {
-      return formatQuantity(qty, "trays", true);
-    }
-    return qty.toLocaleString();
-  };
-
-  const getUniqueBatches = () => {
-    const filteredStock = stockItems.filter(item => selectedStoreFilter === "all" || item.production_store_id === selectedStoreFilter);
-    const batches = filteredStock.map(item => item.batch_reference || 'N/A');
-    return ["all", ...Array.from(new Set(batches))];
-  };
-
-  const getFilteredStock = () => {
+  const filteredStock = React.useMemo(() => {
     return stockItems.filter(item => {
       const matchesSearch = item.product.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             item.code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -733,13 +711,12 @@ export default function ProductionStorePage() {
       const matchesStore = selectedStoreFilter === "all" || item.production_store_id === selectedStoreFilter;
       return matchesSearch && matchesBatch && matchesStore;
     });
-  };
+  }, [stockItems, searchTerm, selectedBatchFilter, selectedStoreFilter]);
 
-  const getGroupedStock = () => {
-    const filtered = getFilteredStock();
+  const groupedStock = React.useMemo(() => {
     const groups: { [key: string]: any } = {};
 
-    filtered.forEach(item => {
+    filteredStock.forEach(item => {
       let baseCode = item.code;
       let baseName = item.product;
       let type: "good" | "d1" | "d2" | "d3" | "shell" | "other" = "other";
@@ -768,6 +745,10 @@ export default function ProductionStorePage() {
         else if (item.code.endsWith("-D3")) type = "d3";
         else if (item.code.endsWith("-SHL")) type = "shell";
         else type = "good";
+      } else if (item.product.toLowerCase().includes("damaged") || item.product.toLowerCase().includes("crack")) {
+        baseCode = "EGG-DMG";
+        baseName = "Damaged Eggs";
+        type = "good";
       }
 
       const key = `${item.production_store_id}_${item.batch_reference}_${baseCode}`;
@@ -813,6 +794,28 @@ export default function ProductionStorePage() {
     });
 
     return Object.values(groups);
+  }, [filteredStock]);
+
+  const calculateTotalValuation = () => {
+    return filteredStock.reduce((acc, item) => acc + getStockItemValuation(item), 0);
+  };
+
+  const formatQuantity = (qty: number, unit: string, isBaseEgg: boolean = false) => {
+    return formatQuantityGlobal(qty, unit, isBaseEgg);
+  };
+
+  const formatTotalQuantity = (qty: number) => {
+    const allTrays = filteredStock.every(item => item.unit.toLowerCase() === "trays");
+    if (allTrays) {
+      return formatQuantity(qty, "trays", true);
+    }
+    return qty.toLocaleString();
+  };
+
+  const getUniqueBatches = () => {
+    const filteredStockList = stockItems.filter(item => selectedStoreFilter === "all" || item.production_store_id === selectedStoreFilter);
+    const batches = filteredStockList.map(item => item.batch_reference || 'N/A');
+    return ["all", ...Array.from(new Set(batches))];
   };
 
   const getGroupWorthTaken = (group: any) => {
@@ -1126,7 +1129,7 @@ export default function ProductionStorePage() {
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Bulk Egg Trays</p>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
                 {formatQuantityGlobal(
-                  getFilteredStock()
+                  filteredStock
                     .filter(item => item.unit === "Trays")
                     .reduce((acc, item) => acc + item.closing_stock, 0),
                   "trays",
@@ -1145,14 +1148,14 @@ export default function ProductionStorePage() {
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Loose Damaged Eggs</p>
               <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
                 {formatQuantityGlobal(
-                  getFilteredStock()
+                  filteredStock
                     .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
                     .reduce((acc, item) => acc + item.closing_stock, 0),
                   "trays"
                 )}
               </h3>
               <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1">
-                Worth UGX {(getFilteredStock()
+                Worth UGX {(filteredStock
                   .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
                   .reduce((acc, item) => acc + getStockItemValuation(item), 0)).toLocaleString()}
               </p>
@@ -1284,7 +1287,7 @@ export default function ProductionStorePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {getGroupedStock().length === 0 ? (
+                    {groupedStock.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={14} className="text-center py-10 text-gray-400 font-medium">
                           No stock records found matching filters.
@@ -1292,7 +1295,7 @@ export default function ProductionStorePage() {
                       </TableRow>
                     ) : (
                       <>
-                        {getGroupedStock().map((group: any) => {
+                        {groupedStock.map((group: any) => {
                           const worthTaken = getGroupWorthTaken(group);
                           const worthClosing = getGroupWorthClosing(group);
                           return (
@@ -1344,6 +1347,7 @@ export default function ProductionStorePage() {
                                   onAdjust={handleStartAdjustment} 
                                   onEdit={handleStartEdit} 
                                   onDelete={handleDeleteStock} 
+                                  // Add React.memo wrapper props
                                 />
                               </TableCell>
                             </TableRow>
@@ -1356,32 +1360,32 @@ export default function ProductionStorePage() {
                             Total
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.opening_stock, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.incoming, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.incoming, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold bg-gray-50/50">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.opening_stock + item.incoming, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.opening_stock + item.incoming, 0))}
                           </TableCell>
                           <TableCell className="text-right text-amber-600 text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.stock_taken, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.stock_taken, 0))}
                           </TableCell>
                           <TableCell className="text-right text-blue-600 text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.replacements, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.replacements, 0))}
                           </TableCell>
                           <TableCell className="text-right text-red-600 text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.damages, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.damages, 0))}
                           </TableCell>
                           <TableCell className="text-right text-brand-forest text-xs font-bold">
-                            {formatTotalQuantity(getFilteredStock().reduce((sum, item) => sum + item.closing_stock, 0))}
+                            {formatTotalQuantity(filteredStock.reduce((sum, item) => sum + item.closing_stock, 0))}
                           </TableCell>
                           <TableCell className="text-right text-gray-500 text-xs font-medium">—</TableCell>
                           <TableCell className="text-right text-amber-700 text-xs font-bold">
-                            UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuationTaken(item), 0).toLocaleString()}
+                            UGX {filteredStock.reduce((sum, item) => sum + getStockItemValuationTaken(item), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right font-bold text-brand-forest text-xs">
-                            UGX {getFilteredStock().reduce((sum, item) => sum + getStockItemValuation(item), 0).toLocaleString()}
+                            UGX {filteredStock.reduce((sum, item) => sum + getStockItemValuation(item), 0).toLocaleString()}
                           </TableCell>
                           <TableCell className="text-center pr-6">—</TableCell>
                         </TableRow>
