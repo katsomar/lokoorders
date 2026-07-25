@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { format } from "date-fns";
 import api from "@/lib/api";
+import { useLookups } from "@/store/useLookups";
 
 interface ReturnVoucher {
   id: string;
@@ -78,6 +79,7 @@ const reasonColors: Record<string, string> = {
 };
 
 export default function ReturnsPage() {
+  const { customers, fetchLookups } = useLookups();
   const [activeTab, setActiveTab] = useState<"vouchers" | "replacements">("vouchers");
   const [returns, setReturns] = useState<ReturnVoucher[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,16 +122,18 @@ export default function ReturnsPage() {
   const [orderSearchText, setOrderSearchText] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  const filteredOrderOptions = orders
-    .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
-    .filter(o => {
-      if (!orderSearchText.trim()) return false;
-      const q = orderSearchText.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const orderNumClean = o.order_number.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const numMatch = orderNumClean.includes(q);
-      const custMatch = o.customer?.name.toLowerCase().includes(orderSearchText.toLowerCase()) || false;
-      return numMatch || custMatch;
-    });
+  const filteredOrderOptions = React.useMemo(() => {
+    if (!orderSearchText.trim()) return [];
+    const q = orderSearchText.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return orders
+      .filter(o => o.status !== 'pending' && o.status !== 'cancelled')
+      .filter(o => {
+        const orderNumClean = (o.order_number || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const numMatch = orderNumClean.includes(q);
+        const custMatch = o.customer?.name ? o.customer.name.toLowerCase().includes(orderSearchText.toLowerCase()) : false;
+        return numMatch || custMatch;
+      });
+  }, [orders, orderSearchText]);
 
   // Modals state
   const [selectedReturn, setSelectedReturn] = useState<ReturnVoucher | null>(null);
@@ -143,8 +147,10 @@ export default function ReturnsPage() {
     return `${backendBaseUrl}/storage/${path}`;
   };
 
-  // Form dependencies state
-  const [customers, setCustomers] = useState<any[]>([]);
+  // Ensure lookups are loaded
+  useEffect(() => {
+    fetchLookups();
+  }, [fetchLookups]);
   const [customerOrders, setCustomerOrders] = useState<any[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
@@ -211,14 +217,7 @@ export default function ReturnsPage() {
   };
 
   const fetchDependencies = async () => {
-    try {
-      const custRes = await api.get("/customers", { params: { minimal: 1 } });
-      if (custRes.data && custRes.data.success) {
-        setCustomers(custRes.data.data.data || custRes.data.data || []);
-      }
-    } catch (err) {
-      console.error("Error fetching dependencies:", err);
-    }
+    fetchLookups();
   };
 
   const fetchOrders = async () => {
