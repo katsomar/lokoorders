@@ -45,9 +45,9 @@ class StoreAdjustmentController extends Controller
             'production_store_id' => 'required_if:store_type,production|nullable|exists:production_stores,id',
             'sales_store_id' => 'required_if:store_type,sales|nullable|exists:sales_stores,id',
             'product_id' => 'required|exists:products,id',
-            'batch_reference' => 'required|string',
+            'batch_reference' => 'required|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
             'quantity' => 'required|numeric|min:0.01',
-            'reason' => 'required|string|max:500',
+            'reason' => 'required|string|min:5|max:500',
             'image_file' => 'nullable|image|max:5120', // Max 5MB
             'signature_data' => 'required|string', // Base64 signature
         ]);

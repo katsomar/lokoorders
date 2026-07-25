@@ -103,7 +103,7 @@ class OrderReplacementAllocationController extends Controller
             'order_id' => 'required|exists:orders,id',
             'product_id' => 'required|exists:products,id',
             'sales_store_id' => 'required|exists:sales_stores,id',
-            'batch_reference' => 'nullable|string',
+            'batch_reference' => 'nullable|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
             'allocated_quantity' => 'required|numeric|min:0.01',
             'driver_id' => 'required|exists:drivers,id',
             'vehicle_id' => 'nullable|string|exists:vehicles,id',
@@ -252,7 +252,7 @@ class OrderReplacementAllocationController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.sales_store_id' => 'required|exists:sales_stores,id',
-            'items.*.batch_reference' => 'nullable|string',
+            'items.*.batch_reference' => 'nullable|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
             'items.*.allocated_quantity' => 'required|numeric|min:0.01'
         ]);
 

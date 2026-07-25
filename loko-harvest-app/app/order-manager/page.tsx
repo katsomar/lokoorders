@@ -899,8 +899,18 @@ export default function OrderManagerDashboard() {
       return;
     }
 
-    if (!adjustBatch) {
-      alert("Please select or enter a batch reference.");
+    if (parseFloat(adjustQty) <= 0) {
+      alert("Adjustment quantity must be greater than 0.");
+      return;
+    }
+
+    if (adjustReason.trim().length < 5 || adjustReason.trim().length > 500) {
+      alert("Adjustment reason must be between 5 and 500 characters.");
+      return;
+    }
+
+    if (!adjustBatch || !/^[A-Za-z0-9\-_]{1,50}$/.test(adjustBatch.trim())) {
+      alert("Batch reference must contain 1 to 50 letters, numbers, hyphens, or underscores.");
       return;
     }
 
