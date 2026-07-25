@@ -880,6 +880,17 @@ export default function DeliveryConfirmationPage() {
     if (!delivery) return;
     const activeDelivery = delivery;
 
+    const recipientName = (activeDelivery.contact || "").trim();
+    if (recipientName.length < 2 || recipientName.length > 100) {
+      alert("Recipient contact name must be between 2 and 100 characters.");
+      return;
+    }
+
+    if (activeDelivery.phone && !/^[0-9+\-\s()]{9,20}$/.test(activeDelivery.phone.trim())) {
+      alert("Recipient phone number must contain 9 to 20 valid characters.");
+      return;
+    }
+
     if (!proofImageFile) {
       alert("Please upload a photo of the signed document.");
       return;

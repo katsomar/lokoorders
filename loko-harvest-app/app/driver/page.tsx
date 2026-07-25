@@ -598,6 +598,18 @@ export default function DriverDashboard() {
       alert("Fuel quantity and price per liter are required.");
       return;
     }
+    if (parseFloat(refuelAddedFuel) <= 0) {
+      alert("Added fuel quantity must be greater than 0.");
+      return;
+    }
+    if (parseFloat(refuelPrice) < 0) {
+      alert("Fuel price per liter cannot be negative.");
+      return;
+    }
+    if (refuelNotes.trim().length > 500) {
+      alert("Refueling notes cannot exceed 500 characters.");
+      return;
+    }
     if (!refuelEvidenceFile) {
       alert("Refueling receipt evidence file is required.");
       return;
