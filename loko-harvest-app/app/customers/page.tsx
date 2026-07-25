@@ -255,18 +255,46 @@ export default function CustomersPage() {
 
   const handleAddCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomerName || !newArea) return;
+    const name = newCustomerName.trim();
+    const contact = newContactPerson.trim();
+    const phone = newPhone.trim();
+    const address = newAddress.trim();
+
+    if (name.length < 3 || name.length > 100) {
+      alert("Customer name must be between 3 and 100 characters.");
+      return;
+    }
+    if (contact.length < 2 || contact.length > 100) {
+      alert("Contact person must be between 2 and 100 characters.");
+      return;
+    }
+    if (!/^[0-9+\-\s()]{9,20}$/.test(phone)) {
+      alert("Primary phone number must contain 9 to 20 digits, spaces, or valid symbols (+, -, ()).");
+      return;
+    }
+    if (address.length < 3 || address.length > 255) {
+      alert("Delivery address must be between 3 and 255 characters.");
+      return;
+    }
+    if (!newArea) {
+      alert("Please select or enter a delivery zone.");
+      return;
+    }
+    if (newClassification === "branch" && !newParentId) {
+      alert("Please select a parent Corporate HQ customer for this branch location.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       await api.post("/customers", {
-        name: newCustomerName,
+        name,
         classification: newClassification,
         parent_id: newClassification === "branch" ? (newParentId || null) : null,
-        contact_person: newContactPerson || "N/A",
-        phone_primary: newPhone || "N/A",
-        email: newEmail || null,
-        address: newAddress || "N/A",
+        contact_person: contact,
+        phone_primary: phone,
+        email: newEmail.trim() || null,
+        address,
         delivery_zone: newArea,
         customer_type: newType,
         credit_terms: newCreditTerms,
@@ -327,18 +355,48 @@ export default function CustomersPage() {
 
   const handleEditCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCustomer || !editCustomerName || !editArea) return;
+    if (!editingCustomer) return;
+
+    const name = editCustomerName.trim();
+    const contact = editContactPerson.trim();
+    const phone = editPhone.trim();
+    const address = editAddress.trim();
+
+    if (name.length < 3 || name.length > 100) {
+      alert("Customer name must be between 3 and 100 characters.");
+      return;
+    }
+    if (contact.length < 2 || contact.length > 100) {
+      alert("Contact person must be between 2 and 100 characters.");
+      return;
+    }
+    if (!/^[0-9+\-\s()]{9,20}$/.test(phone)) {
+      alert("Primary phone number must contain 9 to 20 valid characters.");
+      return;
+    }
+    if (address.length < 3 || address.length > 255) {
+      alert("Delivery address must be between 3 and 255 characters.");
+      return;
+    }
+    if (!editArea) {
+      alert("Please select or enter a delivery zone.");
+      return;
+    }
+    if (editClassification === "branch" && !editParentId) {
+      alert("Please select a parent Corporate HQ customer for this branch location.");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       await api.put(`/customers/${editingCustomer.id}`, {
-        name: editCustomerName,
+        name,
         classification: editClassification,
         parent_id: editClassification === "branch" ? (editParentId || null) : null,
-        contact_person: editContactPerson || "N/A",
-        phone_primary: editPhone || "N/A",
-        email: editEmail || null,
-        address: editAddress || "N/A",
+        contact_person: contact,
+        phone_primary: phone,
+        email: editEmail.trim() || null,
+        address,
         delivery_zone: editArea,
         customer_type: editType,
         credit_terms: editCreditTerms,

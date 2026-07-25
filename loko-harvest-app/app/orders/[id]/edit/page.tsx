@@ -33,23 +33,39 @@ import api from "@/lib/api";
 
 let globalCustomers: any[] = [];
 
+const todayStr = new Date().toISOString().split('T')[0];
+
 const orderSchema = z.object({
   customer_id: z.string().min(1, "Customer HQ is required"),
   sales_store_id: z.string().min(1, "Sales store is required"),
   branch_id: z.string().optional(),
-  order_date: z.string(),
+  order_date: z.string().refine((d) => d <= todayStr, {
+    message: "Order date cannot be in the future",
+  }),
   required_delivery_date: z.string(),
   urgency: z.enum(["normal", "urgent", "critical"]),
-  fiscal_document_number: z.string().optional(),
-  order_notes: z.string().optional(),
-  admin_override_reason: z.string().optional(),
+  fiscal_document_number: z.string().max(100, "Fiscal document number max 100 characters").optional(),
+  order_notes: z.string().max(500, "Order notes cannot exceed 500 characters").optional(),
+  admin_override_reason: z.string().max(500, "Override reason cannot exceed 500 characters").optional(),
   items: z.array(z.object({
     product_id: z.string().min(1, "Product is required"),
-    batch_reference: z.string().optional(),
+    batch_reference: z.string().max(50, "Batch reference max 50 characters")
+      .refine((val) => !val || /^[A-Za-z0-9\-_]+$/.test(val), {
+        message: "Batch reference can only contain letters, numbers, hyphens, and underscores",
+      })
+      .optional(),
     quantity: z.number().min(0.01, "Quantity must be > 0"),
     unit_price: z.number().min(0, "Price must be >= 0"),
   })).min(1, "At least one item is required"),
 }).superRefine((data, ctx) => {
+  if (data.required_delivery_date < data.order_date) {
+    ctx.addIssue({
+      path: ["required_delivery_date"],
+      code: z.ZodIssueCode.custom,
+      message: "Required delivery date cannot be earlier than order date",
+    });
+  }
+
   const hasBranches = globalCustomers.some(c => c.parent_id === data.customer_id);
   if (hasBranches && !data.branch_id) {
     ctx.addIssue({

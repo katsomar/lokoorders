@@ -78,16 +78,16 @@ class OrderController extends Controller
             'fiscal_document_number' => 'nullable|string|max:255',
             'customer_id' => 'required|exists:customers,id',
             'sales_store_id' => 'required|exists:sales_stores,id',
-            'order_date' => 'required|date',
-            'required_delivery_date' => 'required|date',
+            'order_date' => 'required|date|before_or_equal:today',
+            'required_delivery_date' => 'required|date|after_or_equal:order_date',
             'urgency' => 'required|in:normal,urgent,critical',
-            'order_notes' => 'nullable|string',
+            'order_notes' => 'nullable|string|max:500',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
-            'items.*.batch_reference' => 'nullable|string',
+            'items.*.batch_reference' => 'nullable|string|max:50|regex:/^[A-Za-z0-9\-_]+$/',
             'items.*.quantity' => 'required|numeric|min:0.01',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'admin_override_reason' => 'nullable|string',
+            'admin_override_reason' => 'nullable|string|max:500',
         ]);
 
         return DB::transaction(function () use ($validated) {
