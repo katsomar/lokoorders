@@ -30,6 +30,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { OfflineStorage } from "@/lib/offlineStorage";
+import { SyncQueue } from "@/lib/syncQueue";
+import { NetworkMonitor } from "@/lib/networkMonitor";
+import { OfflineBanner } from "@/components/ui/offline-banner";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 
@@ -288,9 +292,45 @@ export default function DeliveryConfirmationPage() {
           setDeliveryStatus("Assigned");
         }
         setSecondsElapsed(Math.max(0, elapsed));
+        OfflineStorage.setCache("cached_deliveries", { id: d.id, data: d });
       }
     } catch (err) {
-      console.error("Failed to fetch delivery details:", err);
+      console.error("Failed to fetch delivery details, loading from offline cache:", err);
+      const cached = await OfflineStorage.getCache("cached_deliveries", params.id as string);
+      if (cached && cached.data) {
+        const d = cached.data;
+        setDelivery({
+          id: d.id,
+          order: d.order?.order_number || "N/A",
+          order_status: d.order?.status || "N/A",
+          customer: d.order?.customer?.name || "N/A",
+          contact: d.order?.customer?.contact_person || "N/A",
+          phone: d.order?.customer?.phone_primary || "",
+          address: d.order?.customer?.address || "N/A",
+          status: d.status,
+          items: (d.order?.items || []).map((item: any) => ({
+            name: item.product?.name || "Unknown Product",
+            quantity: item.quantity,
+            unit_of_measure: item.product?.unit_of_measure || "trays",
+          })),
+          required_delivery_date: d.order?.required_delivery_date || "",
+          assigned_date: d.dispatched_at ? new Date(d.dispatched_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : "N/A",
+          assigned_time: d.dispatched_at ? new Date(d.dispatched_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : "N/A",
+          customer_latitude: d.order?.customer?.latitude !== null ? Number(d.order?.customer?.latitude) : null,
+          customer_longitude: d.order?.customer?.longitude !== null ? Number(d.order?.customer?.longitude) : null,
+          vehicle: d.driver?.vehicle ? {
+            id: d.driver.vehicle.id,
+            plate: d.driver.vehicle.registration_number || "N/A",
+            make_model: `${d.driver.vehicle.make || ""} ${d.driver.vehicle.model || ""}`.trim() || "N/A",
+            fuel_level: Number(d.driver.vehicle.fuel_level ?? 0),
+            fuel_tank_capacity: Number(d.driver.vehicle.fuel_tank_capacity ?? 80.0),
+            consumption_per_km: Number(d.driver.vehicle.consumption_per_km ?? 0.12),
+          } : null,
+          customer_id: d.order?.customer_id || "N/A",
+          order_id: d.order_id || "N/A",
+          driver_id: d.driver_id || "N/A",
+        });
+      }
     } finally {
       if (!silent) setIsPageLoading(false);
     }
@@ -915,6 +955,49 @@ export default function DeliveryConfirmationPage() {
 
     const proceedConfirm = async (lat: number, lng: number) => {
       try {
+        if (!NetworkMonitor.isOnline()) {
+          const payload: any = {
+            recipient_name: recipientName,
+            recipient_phone: activeDelivery.phone || null,
+            delivered_at: now,
+            notes: "Delivered via Driver Portal Mobile Confirmation",
+            latitude: lat.toString(),
+            longitude: lng.toString(),
+          };
+
+          let signatureBlob: Blob | null = null;
+          if (signatureData) {
+            const arr = signatureData.split(',');
+            const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+            const bstr = atob(arr[1]);
+            let n = bstr.length;
+            const u8arr = new Uint8Array(n);
+            while (n--) {
+              u8arr[n] = bstr.charCodeAt(n);
+            }
+            signatureBlob = new Blob([u8arr], { type: mime });
+          }
+
+          const files: { fieldName: string; blob: Blob; name: string }[] = [];
+          if (proofImageFile) {
+            files.push({ fieldName: "proof_image_file", blob: proofImageFile, name: proofImageFile.name || "proof.jpg" });
+          }
+          if (signatureBlob) {
+            files.push({ fieldName: "signature_data", blob: signatureBlob, name: "signature.png" });
+          }
+
+          await SyncQueue.enqueue("delivery_confirm", `/deliveries/${params.id}/confirm`, "POST", payload, files, 1);
+
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(`transit_start_time_${params.id}`);
+          }
+          setDeliveryStatus("Delivered");
+          alert("Working Offline: Delivery confirmation saved to device queue! Will auto-sync when online.");
+          handleReturnsFlowStart();
+          setIsLoading(false);
+          return;
+        }
+
         // Send final telemetry update
         try {
           await api.post(`/deliveries/${params.id}/track`, {
@@ -975,6 +1058,7 @@ export default function DeliveryConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-[#0E1B15] text-white font-body pb-10">
+      <OfflineBanner />
       {/* Header */}
       <header className="bg-[#132A1C] border-b border-brand-forest/30 p-4 flex items-center justify-between sticky top-0 z-[1010]">
         <div className="flex items-center gap-4">

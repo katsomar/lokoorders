@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
+    Route::get('/health', [App\Http\Controllers\Api\V1\HealthCheckController::class, 'check']);
     Route::post('/auth/login', [App\Http\Controllers\Api\V1\AuthController::class, 'login']);
     Route::post('/auth/register', [App\Http\Controllers\Api\V1\AuthController::class, 'register']);
     

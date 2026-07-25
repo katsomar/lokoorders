@@ -37,6 +37,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { OfflineStorage } from "@/lib/offlineStorage";
+import { SyncQueue } from "@/lib/syncQueue";
+import { NetworkMonitor } from "@/lib/networkMonitor";
+import { OfflineBanner } from "@/components/ui/offline-banner";
+import { SyncEngine } from "@/lib/syncEngine";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { SignatureCanvas } from "@/components/ui/signature-canvas";
@@ -438,9 +443,14 @@ export default function DriverDashboard() {
       const response = await api.get("/driver/dashboard");
       if (response.data?.success) {
         setStats(response.data.data);
+        OfflineStorage.setCache("cached_profile", { key: "driver_stats", value: response.data.data });
       }
     } catch (error) {
-      console.error("Failed to fetch driver stats:", error);
+      console.error("Failed to fetch driver stats, attempting offline cache load:", error);
+      const cached = await OfflineStorage.getCache("cached_profile", "driver_stats");
+      if (cached && cached.value) {
+        setStats(cached.value);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -448,6 +458,10 @@ export default function DriverDashboard() {
 
   useEffect(() => {
     fetchStats();
+    const unsub = SyncEngine.onSyncComplete(() => {
+      fetchStats(true);
+    });
+    return () => unsub();
   }, []);
 
   useRealtime(["delivery.updated", "order.updated", "driver.updated"], () => {
@@ -617,6 +631,30 @@ export default function DriverDashboard() {
     try {
       const destination = stats?.assigned_route?.map(r => r.customer).join(", ") || "Fuel Depot Replenish";
 
+      if (!NetworkMonitor.isOnline()) {
+        const payload: any = {
+          vehicle_id: selectedVehicleId,
+          driver_id: stats?.driver_id,
+          log_type: "refuel",
+          destination: destination,
+          added_fuel: refuelAddedFuel,
+          fuel_price_per_liter: refuelPrice,
+          notes: refuelNotes || "",
+        };
+        const files = refuelEvidenceFile
+          ? [{ fieldName: "evidence_file", blob: refuelEvidenceFile, name: refuelEvidenceFile.name || "receipt.jpg" }]
+          : [];
+
+        await SyncQueue.enqueue("refuel", "/vehicle-logs", "POST", payload, files, 3);
+        alert("Working Offline: Refueling log saved to device queue! Will auto-sync when online.");
+        setRefuelAddedFuel("");
+        setRefuelNotes("");
+        setRefuelEvidenceFile(null);
+        setShowRefuelModal(false);
+        setIsSubmittingRefuel(false);
+        return;
+      }
+
       const formData = new FormData();
       formData.append("vehicle_id", selectedVehicleId);
       if (stats?.driver_id) formData.append("driver_id", stats.driver_id);
@@ -681,6 +719,7 @@ export default function DriverDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F4F6F5] flex flex-col font-body pb-24 text-gray-800">
+      <OfflineBanner />
       
       {/* 🟢 TOP PREMIUM BRAND HEADER */}
       <header className={`bg-brand-forest text-white p-6 rounded-b-[2.5rem] shadow-xl sticky top-0 z-30 overflow-hidden shrink-0 ${loading ? "animate-pulse" : ""}`}>
