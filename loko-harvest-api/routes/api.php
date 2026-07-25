@@ -97,6 +97,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         
         // Sales Store
         Route::apiResource('sales-stores', App\Http\Controllers\Api\V1\SalesStoreController::class);
+        Route::get('/sales-store/dashboard', App\Http\Controllers\Api\V1\SalesStoreDashboardController::class);
         Route::get('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'index']);
         Route::post('/sales-store-transfers', [App\Http\Controllers\Api\V1\SalesStoreTransferController::class, 'store']);
         Route::get('/sales-store-sales', [App\Http\Controllers\Api\V1\SalesStoreSalesController::class, 'index']);

@@ -42,6 +42,7 @@ import api from "@/lib/api";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { useAuth } from "@/store/useAuth";
+import { useLookups } from "@/store/useLookups";
 
 interface SalesStockItem {
   id: string;
@@ -72,12 +73,11 @@ interface SalesStockItem {
 
 export default function SalesStorePage() {
   const { user } = useAuth();
+  const { products, salesStores, productionStores, fetchLookups } = useLookups();
   const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
   const [stockItems, setStockItems] = useState<SalesStockItem[]>([]);
   const [movements, setMovements] = useState<any[]>([]);
-  const [salesStores, setSalesStores] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
   const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
@@ -307,87 +307,117 @@ export default function SalesStorePage() {
     }
   };
 
-  const fetchData = async (silent = false) => {
-    if (!silent) setIsLoading(true);
-    fetchMovements(silent); // Load in background
+  const fetchSalesDashboardData = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setLoadingMovements(true);
+    }
     try {
-      const [stockRes, storesRes, productsRes] = await Promise.all([
-        api.get('/sales-stock', { params: { date: selectedDate } }),
-        api.get('/sales-stores'),
-        api.get('/products?t=' + Date.now())
-      ]);
-
-      const stockData = stockRes.data.data || [];
-      const mappedStock: SalesStockItem[] = stockData.map((item: any) => {
-        let cat = "other";
-        if (item.product.code.includes("CRM")) cat = "cream";
-        else if (item.product.code.includes("WHT")) cat = "white";
-        else if (item.product.code.includes("BRN")) cat = "brown";
-        else if (item.product.code.includes("DMG")) cat = "damaged";
-        else if (item.product.category === "poultry") cat = "poultry";
-        else if (item.product.category === "by_products") cat = "manure";
-
-        let cap = 1000;
-        if (item.product.code.includes("SGL")) cap = 1500;
-        else if (item.product.code.includes("15P")) cap = 1000;
-        else if (item.product.code.includes("06P")) cap = 2500;
-        else if (item.product.code.includes("TRYS")) cap = 1500;
-        else if (item.product.code.includes("LOOSE")) cap = 5000;
-        else if (item.product.code.includes("DRS")) cap = 500;
-        else if (item.product.code.includes("MNR")) cap = 3000;
-
-        return {
-          id: item.id,
-          product_id: item.product_id,
-          product: item.product.name,
-          code: item.product.code,
-          quantity: parseFloat(item.current_quantity),
-          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : item.product.unit_of_measure === 'kg' ? 'Kg' : 'Packs',
-          unitPrice: parseFloat(item.product.sales_unit_price || item.product.default_unit_price),
-          status: parseFloat(item.current_quantity) < 50 ? "low" : "good",
-          category: cat as any,
-          capacity: cap,
-          sales_store_id: item.sales_store_id,
-          sales_store_name: item.sales_store?.name || 'N/A',
-          batch_reference: item.batch_reference || null,
-          opening_stock: parseFloat(item.opening_stock || 0),
-          transferred_in: parseFloat(item.transferred_in || 0),
-          conversions_in: parseFloat(item.conversions_in || 0),
-          conversions_out: parseFloat(item.conversions_out || 0),
-          sold_quantity: parseFloat(item.sold_quantity || 0),
-          transferred_out: parseFloat(item.transferred_out || 0),
-          replacements: parseFloat(item.replacements || 0),
-          returns: parseFloat(item.returns || 0),
-          damages: parseFloat(item.damages || 0),
-          closing_stock: parseFloat(item.closing_stock || 0),
-          unit_price: parseFloat(item.unit_price || item.product.sales_unit_price || item.product.default_unit_price),
-          egg_unit_price: parseFloat(item.egg_unit_price || item.product.sales_egg_unit_price || 0),
-        };
+      const res = await api.get('/sales-store/dashboard', {
+        params: {
+          date: selectedDate,
+          exclude_lookups: 1
+        }
       });
-      setStockItems(mappedStock);
 
-      const storesList = storesRes.data.data || [];
-      setSalesStores(storesList);
-      setProducts(productsRes.data.data || []);
+      const { inventory } = res.data.data || {};
 
-      if (storesList.length > 0 && !convStoreId) {
-        setConvStoreId(storesList[0].id);
+      // 1. Process Movements
+      if (inventory && inventory.movements) {
+        const mappedMovements = inventory.movements.map((move: any) => ({
+          id: move.id,
+          date: new Date(move.created_at || move.movement_date).toLocaleString('en-US', { 
+              year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+          }),
+          product: move.product?.name,
+          type: move.movement_type,
+          quantity: parseFloat(move.quantity),
+          unit: move.product?.unit_of_measure === 'trays' ? 'Trays' : move.product?.unit_of_measure === 'units' ? 'Units' : 'Packs',
+          ref: move.reference_id ? `REF-${move.reference_id.substring(0, 6)}` : 'N/A',
+          store_name: move.sales_store?.name || 'N/A'
+        }));
+        setMovements(mappedMovements);
       }
+
+      // 2. Process Stock
+      if (inventory && inventory.stock) {
+        const mappedStock: SalesStockItem[] = inventory.stock.map((item: any) => {
+          let cat = "other";
+          if (item.product.code.includes("CRM")) cat = "cream";
+          else if (item.product.code.includes("WHT")) cat = "white";
+          else if (item.product.code.includes("BRN")) cat = "brown";
+          else if (item.product.code.includes("DMG")) cat = "damaged";
+          else if (item.product.category === "poultry") cat = "poultry";
+          else if (item.product.category === "by_products") cat = "manure";
+
+          let cap = 1000;
+          if (item.product.code.includes("SGL")) cap = 1500;
+          else if (item.product.code.includes("15P")) cap = 1000;
+          else if (item.product.code.includes("06P")) cap = 2500;
+          else if (item.product.code.includes("TRYS")) cap = 1500;
+          else if (item.product.code.includes("LOOSE")) cap = 5000;
+          else if (item.product.code.includes("DRS")) cap = 500;
+          else if (item.product.code.includes("MNR")) cap = 3000;
+
+          return {
+            id: item.id,
+            product_id: item.product_id,
+            product: item.product.name,
+            code: item.product.code,
+            quantity: parseFloat(item.current_quantity),
+            unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : item.product.unit_of_measure === 'kg' ? 'Kg' : 'Packs',
+            unitPrice: parseFloat(item.product.sales_unit_price || item.product.default_unit_price),
+            status: parseFloat(item.current_quantity) < 50 ? "low" : "good",
+            category: cat as any,
+            capacity: cap,
+            sales_store_id: item.sales_store_id,
+            sales_store_name: item.sales_store?.name || 'N/A',
+            batch_reference: item.batch_reference || null,
+            opening_stock: parseFloat(item.opening_stock || 0),
+            transferred_in: parseFloat(item.transferred_in || 0),
+            conversions_in: parseFloat(item.conversions_in || 0),
+            conversions_out: parseFloat(item.conversions_out || 0),
+            sold_quantity: parseFloat(item.sold_quantity || 0),
+            transferred_out: parseFloat(item.transferred_out || 0),
+            replacements: parseFloat(item.replacements || 0),
+            returns: parseFloat(item.returns || 0),
+            damages: parseFloat(item.damages || 0),
+            closing_stock: parseFloat(item.closing_stock || 0),
+            unit_price: parseFloat(item.unit_price || item.product.sales_unit_price || item.product.default_unit_price),
+            egg_unit_price: parseFloat(item.egg_unit_price || item.product.sales_egg_unit_price || 0),
+          };
+        });
+        setStockItems(mappedStock);
+      }
+
     } catch (err) {
-      console.error("Failed to fetch sales store data", err);
+      console.error("Failed to fetch sales store dashboard data", err);
     } finally {
-      if (!silent) setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+        setLoadingMovements(false);
+      }
     }
   };
 
+  const fetchData = async (silent = false) => {
+    await fetchSalesDashboardData(silent);
+  };
+
   useEffect(() => {
-    fetchData();
+    if (salesStores.length > 0 && !convStoreId) {
+      setConvStoreId(salesStores[0].id);
+    }
+  }, [salesStores, convStoreId]);
+
+  useEffect(() => {
+    fetchSalesDashboardData(false);
   }, [selectedDate]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      fetchData(true);
-    }, 8000);
+      fetchSalesDashboardData(true);
+    }, 30000);
     return () => clearInterval(timer);
   }, [selectedDate]);
 
