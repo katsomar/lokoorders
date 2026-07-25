@@ -139,13 +139,15 @@ export default function NewPaymentPage() {
     ? parseFloat(selectedCustomer.account.current_balance) 
     : 0;
 
-  const customerOptions = dbCustomers.map(c => {
-    const bal = c.account?.current_balance ? parseFloat(c.account.current_balance) : 0;
-    return {
-      label: `${c.name} (Bal: UGX ${bal.toLocaleString()})`,
-      value: c.id
-    };
-  });
+  const customerOptions = React.useMemo(() => {
+    return dbCustomers.map(c => {
+      const bal = c.account?.current_balance ? parseFloat(c.account.current_balance) : 0;
+      return {
+        label: `${c.name}${bal > 0 ? ` (Bal: UGX ${bal.toLocaleString()})` : ''}`,
+        value: c.id
+      };
+    });
+  }, [dbCustomers]);
 
   const getInvoiceOutstanding = (inv: any) => {
     const total = parseFloat(inv.total_amount || 0);

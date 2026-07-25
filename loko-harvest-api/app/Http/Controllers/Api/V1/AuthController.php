@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Product;
 use App\Models\ProductionStore;
 use App\Models\SalesStore;
+use App\Models\Customer;
 use App\Models\Notification;
 use App\Models\StoreTransfer;
 use App\Models\StoreAdjustment;
@@ -137,6 +138,7 @@ class AuthController extends Controller
 
         $productionStores = ProductionStore::select('id', 'name', 'code', 'location')->get();
         $salesStores = SalesStore::select('id', 'name', 'code', 'location')->get();
+        $customers = Customer::select('id', 'name', 'code', 'parent_id', 'phone', 'email')->get();
 
         // 2. System notifications and approvals
         $unreadNotifications = Notification::where('user_id', $user->id)
@@ -155,6 +157,7 @@ class AuthController extends Controller
                     'products' => $products,
                     'production_stores' => $productionStores,
                     'sales_stores' => $salesStores,
+                    'customers' => $customers,
                 ],
                 'system' => [
                     'unread_notifications' => $unreadNotifications,

@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/table";
 import api from "@/lib/api";
 
+import { useLookups } from "@/store/useLookups";
+
 let globalCustomers: any[] = [];
 
 const orderSchema = z.object({
@@ -65,10 +67,7 @@ type OrderFormValues = z.infer<typeof orderSchema>;
 export default function NewOrderPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  
-  const [salesStores, setSalesStores] = useState<any[]>([]);
-  const [dbCustomers, setDbCustomers] = useState<any[]>([]);
-  const [productsList, setProductsList] = useState<any[]>([]);
+  const { products: productsList, salesStores, customers: dbCustomers, fetchLookups } = useLookups();
   const [salesStock, setSalesStock] = useState<any[]>([]);
 
   const {
@@ -99,35 +98,22 @@ export default function NewOrderPage() {
   const watchSalesStoreId = watch("sales_store_id");
   const adminOverrideValue = watch("admin_override_reason");
 
-  // Sync dbCustomers with globalCustomers for access inside the static zod schema
+  // Sync dbCustomers with globalCustomers for access inside static zod schema
   useEffect(() => {
     globalCustomers = dbCustomers;
   }, [dbCustomers]);
 
-  // Load baseline resources
+  // Ensure lookups are fetched
   useEffect(() => {
-    const initPage = async () => {
-      try {
-        const [storesRes, customersRes, productsRes] = await Promise.all([
-          api.get('/sales-stores'),
-          api.get('/customers', { params: { minimal: 1 } }),
-          api.get('/products')
-        ]);
-        
-        const stores = storesRes.data.data || [];
-        setSalesStores(stores);
-        if (stores.length > 0) {
-          setValue("sales_store_id", stores[0].id);
-        }
-        
-        setDbCustomers(customersRes.data.data.data || customersRes.data.data || []);
-        setProductsList(productsRes.data.data || []);
-      } catch (err) {
-        console.error("Failed to load page data", err);
-      }
-    };
-    initPage();
-  }, [setValue]);
+    fetchLookups();
+  }, [fetchLookups]);
+
+  // Set default sales store when loaded
+  useEffect(() => {
+    if (salesStores.length > 0 && !watchSalesStoreId) {
+      setValue("sales_store_id", salesStores[0].id);
+    }
+  }, [salesStores, watchSalesStoreId, setValue]);
 
   // Load sales stock when sales store changes
   useEffect(() => {

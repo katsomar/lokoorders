@@ -5,10 +5,11 @@ interface LookupState {
   products: any[];
   productionStores: any[];
   salesStores: any[];
+  customers: any[];
   isLoading: boolean;
   isLoaded: boolean;
   fetchLookups: (force?: boolean) => Promise<void>;
-  setLookups: (lookups: { products: any[]; production_stores: any[]; sales_stores: any[] }) => void;
+  setLookups: (lookups: { products: any[]; production_stores: any[]; sales_stores: any[]; customers?: any[] }) => void;
   clearLookups: () => void;
 }
 
@@ -16,6 +17,7 @@ export const useLookups = create<LookupState>((set, get) => ({
   products: [],
   productionStores: [],
   salesStores: [],
+  customers: [],
   isLoading: false,
   isLoaded: false,
   fetchLookups: async (force = false) => {
@@ -24,16 +26,20 @@ export const useLookups = create<LookupState>((set, get) => ({
     }
     set({ isLoading: true });
     try {
-      const [productsRes, prodStoresRes, salesStoresRes] = await Promise.all([
+      const [productsRes, prodStoresRes, salesStoresRes, customersRes] = await Promise.all([
         api.get('/products'),
         api.get('/production-stores'),
-        api.get('/sales-stores')
+        api.get('/sales-stores'),
+        api.get('/customers', { params: { minimal: 1 } })
       ]);
+
+      const custData = customersRes.data.data?.data || customersRes.data.data || [];
 
       set({
         products: productsRes.data.data || [],
         productionStores: prodStoresRes.data.data || [],
         salesStores: salesStoresRes.data.data || [],
+        customers: custData,
         isLoaded: true,
         isLoading: false
       });
@@ -47,6 +53,7 @@ export const useLookups = create<LookupState>((set, get) => ({
       products: lookups.products || [],
       productionStores: lookups.production_stores || [],
       salesStores: lookups.sales_stores || [],
+      customers: lookups.customers || [],
       isLoaded: true,
       isLoading: false
     });
@@ -56,6 +63,7 @@ export const useLookups = create<LookupState>((set, get) => ({
       products: [],
       productionStores: [],
       salesStores: [],
+      customers: [],
       isLoaded: false,
       isLoading: false
     });
