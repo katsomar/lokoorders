@@ -8,6 +8,7 @@ interface LookupState {
   isLoading: boolean;
   isLoaded: boolean;
   fetchLookups: (force?: boolean) => Promise<void>;
+  setLookups: (lookups: { products: any[]; production_stores: any[]; sales_stores: any[] }) => void;
   clearLookups: () => void;
 }
 
@@ -40,6 +41,15 @@ export const useLookups = create<LookupState>((set, get) => ({
       console.error("Failed to load static global lookups in Zustand", err);
       set({ isLoading: false });
     }
+  },
+  setLookups: (lookups) => {
+    set({
+      products: lookups.products || [],
+      productionStores: lookups.production_stores || [],
+      salesStores: lookups.sales_stores || [],
+      isLoaded: true,
+      isLoading: false
+    });
   },
   clearLookups: () => {
     set({

@@ -62,15 +62,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const { user, clearAuth } = useAuth();
-  const { fetchLookups, clearLookups } = useLookups();
+  const { setLookups, clearLookups, isLoaded, fetchLookups } = useLookups();
+  const [pendingCount, setPendingCount] = useState(0);
 
   React.useEffect(() => {
-    if (user) {
-      fetchLookups();
+    async function initBootstrap() {
+      if (!user) return;
+      try {
+        const res = await api.get('/auth/bootstrap');
+        if (res.data?.data) {
+          const { lookups, system } = res.data.data;
+          if (lookups) setLookups(lookups);
+          if (system) setPendingCount(system.pending_approvals || 0);
+        }
+      } catch (err) {
+        console.error("Failed to load application bootstrap data:", err);
+        // Fallback to fetchLookups if bootstrap endpoint fails
+        if (!isLoaded) fetchLookups();
+      }
     }
-  }, [user, fetchLookups]);
-
-  const [pendingCount, setPendingCount] = useState(0);
+    initBootstrap();
+  }, [user]);
 
   React.useEffect(() => {
     if (user && user.role === "order_manager" && pathname !== "/production-store/intake") {
@@ -79,22 +91,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user, router, pathname]);
 
   React.useEffect(() => {
-    async function fetchPendingCount() {
+    async function refreshSystemStatus() {
       if (!user || user.role === "order_manager") return;
       try {
-        const [transfersRes, adjustmentsRes] = await Promise.all([
-          api.get("/store-transfers", { params: { status: "pending", per_page: 1 } }),
-          api.get("/store-adjustments", { params: { status: "pending", per_page: 1 } })
-        ]);
-        const transfersCount = transfersRes.data?.data?.total || transfersRes.data?.data?.data?.length || 0;
-        const adjustmentsCount = adjustmentsRes.data?.data?.total || adjustmentsRes.data?.data?.data?.length || adjustmentsRes.data?.data?.length || 0;
-        setPendingCount(transfersCount + adjustmentsCount);
+        const res = await api.get('/auth/bootstrap');
+        if (res.data?.data?.system) {
+          setPendingCount(res.data.data.system.pending_approvals || 0);
+        }
       } catch (err) {
-        console.error("Failed to load pending requests count:", err);
+        console.error("Failed to refresh system status:", err);
       }
     }
-    fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 8000);
+    const interval = setInterval(refreshSystemStatus, 45000);
     return () => clearInterval(interval);
   }, [user]);
 

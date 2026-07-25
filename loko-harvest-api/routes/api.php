@@ -10,6 +10,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [App\Http\Controllers\Api\V1\AuthController::class, 'logout']);
         Route::get('/auth/me', [App\Http\Controllers\Api\V1\AuthController::class, 'me']);
+        Route::get('/auth/bootstrap', [App\Http\Controllers\Api\V1\AuthController::class, 'bootstrap']);
         Route::post('/auth/change-password', [App\Http\Controllers\Api\V1\AuthController::class, 'changePassword']);
         
         // Admin User Management

@@ -4,6 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Product;
+use App\Models\ProductionStore;
+use App\Models\SalesStore;
+use App\Models\Notification;
+use App\Models\StoreTransfer;
+use App\Models\StoreAdjustment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -117,6 +123,45 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Password changed successfully.'
+        ]);
+    }
+
+    public function bootstrap(Request $request)
+    {
+        $user = $request->user();
+
+        // 1. Static lookups (optimizing columns to reduce payload size)
+        $products = Product::where('is_active', true)
+            ->select('id', 'name', 'code', 'category', 'unit_of_measure', 'default_unit_price', 'production_unit_price', 'sales_unit_price', 'production_egg_unit_price', 'sales_egg_unit_price')
+            ->get();
+
+        $productionStores = ProductionStore::select('id', 'name', 'code', 'location')->get();
+        $salesStores = SalesStore::select('id', 'name', 'code', 'location')->get();
+
+        // 2. System notifications and approvals
+        $unreadNotifications = Notification::where('user_id', $user->id)
+            ->where('is_read', false)
+            ->count();
+
+        $pendingTransfers = StoreTransfer::where('status', 'pending')->count();
+        $pendingAdjustments = StoreAdjustment::where('status', 'pending')->count();
+        $pendingApprovals = $pendingTransfers + $pendingAdjustments;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'user' => $user,
+                'lookups' => [
+                    'products' => $products,
+                    'production_stores' => $productionStores,
+                    'sales_stores' => $salesStores,
+                ],
+                'system' => [
+                    'unread_notifications' => $unreadNotifications,
+                    'pending_approvals' => $pendingApprovals,
+                ]
+            ],
+            'message' => 'Application bootstrap configuration loaded'
         ]);
     }
 }
