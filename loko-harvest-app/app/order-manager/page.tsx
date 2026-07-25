@@ -679,7 +679,7 @@ export default function OrderManagerDashboard() {
   useEffect(() => {
     const timer = setInterval(() => {
       fetchOrders(true);
-    }, 8000);
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 

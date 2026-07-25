@@ -89,10 +89,9 @@ export default function ReportsPage() {
   useEffect(() => {
     const fetchInit = async () => {
       try {
-        const res = await api.get("/customers", { params: { per_page: 1000 } });
-        if (res.data?.data?.data) {
-          setCustomers(res.data.data.data);
-        }
+        const res = await api.get("/customers", { params: { minimal: 1 } });
+        const list = res.data?.data?.data || res.data?.data || [];
+        setCustomers(list);
       } catch (err) {
         console.error("Failed to load customers:", err);
       }

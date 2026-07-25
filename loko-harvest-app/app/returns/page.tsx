@@ -212,9 +212,9 @@ export default function ReturnsPage() {
 
   const fetchDependencies = async () => {
     try {
-      const custRes = await api.get("/customers", { params: { per_page: 200 } });
+      const custRes = await api.get("/customers", { params: { minimal: 1 } });
       if (custRes.data && custRes.data.success) {
-        setCustomers(custRes.data.data.data || []);
+        setCustomers(custRes.data.data.data || custRes.data.data || []);
       }
     } catch (err) {
       console.error("Error fetching dependencies:", err);

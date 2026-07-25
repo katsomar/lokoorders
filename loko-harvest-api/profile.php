@@ -38,3 +38,11 @@ if (method_exists($response, 'getContent')) {
     $response->getContent();
 }
 echo "Total Controller Time: " . ((microtime(true) - $start) * 1000) . "ms\n\n";
+
+echo "--- Profiling Admin Dashboard ---\n";
+$start = microtime(true);
+$response = app(App\Http\Controllers\Api\V1\DashboardController::class)->adminDashboard($request);
+if (method_exists($response, 'getContent')) {
+    $response->getContent();
+}
+echo "Total Controller Time: " . ((microtime(true) - $start) * 1000) . "ms\n\n";

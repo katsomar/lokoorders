@@ -110,7 +110,7 @@ export default function NewOrderPage() {
       try {
         const [storesRes, customersRes, productsRes] = await Promise.all([
           api.get('/sales-stores'),
-          api.get('/customers', { params: { per_page: 1000 } }),
+          api.get('/customers', { params: { minimal: 1 } }),
           api.get('/products')
         ]);
         

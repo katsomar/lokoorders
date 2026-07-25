@@ -197,7 +197,7 @@ export default function DriverDashboard() {
   const fetchCustomers = async () => {
     setLoadingCustomers(true);
     try {
-      const res = await api.get("/customers", { params: { per_page: 200 } });
+      const res = await api.get("/customers", { params: { minimal: 1 } });
       setCustomers(res.data?.data?.data || res.data?.data || []);
     } catch (err) {
       console.error("Failed to fetch customers:", err);
@@ -452,7 +452,7 @@ export default function DriverDashboard() {
   useEffect(() => {
     const timer = setInterval(() => {
       fetchStats(true);
-    }, 8000);
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 

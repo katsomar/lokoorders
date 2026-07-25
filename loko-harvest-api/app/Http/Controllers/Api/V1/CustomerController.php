@@ -13,6 +13,22 @@ class CustomerController extends Controller
 
     public function index(Request $request)
     {
+        if ($request->minimal) {
+            $query = Customer::select('id', 'name', 'parent_id');
+
+            if ($request->only_branches) {
+                $query->whereNotNull('parent_id');
+            }
+            if ($request->with_balance) {
+                $query->with(['account' => function($q) {
+                    $q->select('customer_id', 'current_balance');
+                }]);
+            }
+
+            $customers = $query->orderBy('name')->get();
+            return $this->success($customers);
+        }
+
         $customers = Customer::with(['zone', 'account', 'parent'])
             ->when($request->search, function($q) use ($request) {
                 $q->where('name', 'like', "%{$request->search}%")

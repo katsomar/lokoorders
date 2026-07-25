@@ -79,7 +79,7 @@ export default function NewPaymentPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const res = await api.get("/customers", { params: { per_page: 200 } });
+        const res = await api.get("/customers", { params: { minimal: 1, with_balance: 1 } });
         const list = res.data.data?.data || res.data.data || [];
         
         // Filter out customers with 0 balance

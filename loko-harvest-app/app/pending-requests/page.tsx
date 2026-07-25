@@ -106,7 +106,7 @@ export default function PendingRequestsPage() {
       fetchTransfers(true);
       fetchAdjustments(true);
       fetchConversions(true);
-    }, 8000);
+    }, 30000);
     return () => clearInterval(timer);
   }, []);
 
