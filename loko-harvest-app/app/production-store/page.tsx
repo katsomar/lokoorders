@@ -411,50 +411,6 @@ export default function ProductionStorePage() {
     }
   };
 
-  const fetchIntakes = async (silent = false) => {
-    if (!silent) setLoadingIntakes(true);
-    try {
-      const intakeRes = await api.get('/production-intakes');
-      const groupedMap: { [key: string]: any } = {};
-
-      (intakeRes.data?.data?.data || intakeRes.data?.data || []).forEach((intake: any) => {
-        const createdAtTime = new Date(intake.created_at).getTime();
-        const roundedTime = Math.round(createdAtTime / 60000) * 60000;
-        const key = `${intake.intake_date}_${intake.production_store_id}_${intake.batch_reference || ''}_${roundedTime}`;
-
-        if (!groupedMap[key]) {
-          groupedMap[key] = {
-            id: intake.id,
-            date: new Date(intake.created_at || intake.intake_date).toLocaleString('en-US', { 
-              year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
-            }),
-            store_name: intake.production_store?.name || 'N/A',
-            batch: intake.batch_reference || 'N/A',
-            recorded_by: intake.user?.name || 'System',
-            raw_created_at: intake.created_at,
-            items: []
-          };
-        }
-
-        groupedMap[key].items.push({
-          product: intake.product?.name || 'Unknown Product',
-          quantity: parseFloat(intake.quantity),
-          unit: intake.product?.unit_of_measure === 'trays' ? 'Trays' : intake.product?.unit_of_measure === 'units' ? 'Units' : 'Kg'
-        });
-      });
-
-      const mappedIntakes = Object.values(groupedMap).sort((a: any, b: any) => {
-        return new Date(b.raw_created_at).getTime() - new Date(a.raw_created_at).getTime();
-      });
-
-      setIntakeLogs(mappedIntakes);
-    } catch (err) {
-      console.error("Failed to fetch intakes", err);
-    } finally {
-      if (!silent) setLoadingIntakes(false);
-    }
-  };
-
   const fetchInterTransfers = async () => {
     setLoadingInterTransfers(true);
     try {
@@ -467,99 +423,144 @@ export default function ProductionStorePage() {
     }
   };
 
-  const fetchData = async (silent = false) => {
-    if (!silent) setIsLoading(true);
-    fetchIntakes(silent); // Load in background
+  const fetchDashboardData = async (isInitial = false, silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setLoadingIntakes(true);
+    }
     try {
-      const todayStr = (() => {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      })();
-      const isHistorical = selectedDate !== todayStr;
-
-      const [stockRes, storesRes, productsRes, salesStoresRes] = await Promise.all([
-        api.get('/production-stock', { params: { date: selectedDate } }),
-        api.get('/production-stores'),
-        api.get('/products'),
-        api.get('/sales-stores')
-      ]);
-      
-      const stockData = stockRes.data.data || [];
-      const mappedStock: ProductionStockItem[] = stockData.map((item: any) => {
-        let cat = "damaged";
-        if (item.product.code.includes("WHT")) cat = "white";
-        else if (item.product.code.includes("CRM")) cat = "cream";
-        else if (item.product.code.includes("BRN")) cat = "brown";
-        else if (item.product.category === "poultry") cat = "poultry";
-        
-        let cap = 5000;
-        if (cat === "white") cap = 4000;
-        else if (cat === "cream") cap = 3000;
-        else if (cat === "brown") cap = 2000;
-        else if (cat === "damaged") cap = 10000;
-
-        return {
-          id: item.id,
-          product_id: item.product_id,
-          product: item.product.name,
-          code: item.product.code,
-          quantity: parseFloat(item.current_quantity),
-          unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
-          capacity: cap,
-          unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.production_unit_price || item.product.default_unit_price),
-          category: cat as any,
-          batch_reference: item.batch_reference || 'N/A',
-          production_store_id: item.production_store_id,
-          production_store_name: item.production_store?.name || 'N/A',
-          incoming: parseFloat(item.incoming || 0),
-          opening_stock: parseFloat(item.opening_stock || 0),
-          stock_taken: parseFloat(item.stock_taken || 0),
-          replacements: parseFloat(item.replacements || 0),
-          damages: parseFloat(item.damages || 0),
-          closing_stock: parseFloat(item.closing_stock || 0),
-          unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
-          egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
-        };
+      const res = await api.get('/production-store/dashboard', { 
+        params: { date: selectedDate } 
       });
-      setStockItems(mappedStock);
 
-      setProductionStores(storesRes.data.data || []);
-      const productsData = productsRes.data.data || [];
-      setProducts(productsData);
-      
-      const allowedProds = productsData.filter((p: any) => 
-        ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)
-      );
-      if (allowedProds.length > 0) {
-        setTransferProductId(allowedProds[0].id);
+      const { lookups, inventory } = res.data.data || {};
+
+      // 1. Process Lookups
+      if (lookups) {
+        if (lookups.production_stores) {
+          setProductionStores(lookups.production_stores);
+        }
+        if (lookups.products) {
+          const productsData = lookups.products;
+          setProducts(productsData);
+          const allowedProds = productsData.filter((p: any) => 
+            ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'].includes(p.code)
+          );
+          if (allowedProds.length > 0) {
+            setTransferProductId(allowedProds[0].id);
+          }
+        }
+        if (lookups.sales_stores) {
+          const salesData = lookups.sales_stores;
+          setSalesStores(salesData);
+          if (salesData.length > 0) {
+            setSalesTransferStoreDestId(salesData[0].id);
+          }
+        }
       }
-      
-      const salesData = salesStoresRes.data.data || [];
-      setSalesStores(salesData);
-      if (salesData.length > 0) {
-        setSalesTransferStoreDestId(salesData[0].id);
+
+      // 2. Process Intakes
+      if (inventory && inventory.intakes) {
+        const groupedMap: { [key: string]: any } = {};
+        inventory.intakes.forEach((intake: any) => {
+          const createdAtTime = new Date(intake.created_at).getTime();
+          const roundedTime = Math.round(createdAtTime / 60000) * 60000;
+          const key = `${intake.intake_date}_${intake.production_store_id}_${intake.batch_reference || ''}_${roundedTime}`;
+
+          if (!groupedMap[key]) {
+            groupedMap[key] = {
+              id: intake.id,
+              date: new Date(intake.created_at || intake.intake_date).toLocaleString('en-US', { 
+                year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' 
+              }),
+              store_name: intake.production_store?.name || 'N/A',
+              batch: intake.batch_reference || 'N/A',
+              recorded_by: intake.user?.name || 'System',
+              raw_created_at: intake.created_at,
+              items: []
+            };
+          }
+
+          groupedMap[key].items.push({
+            product: intake.product?.name || 'Unknown Product',
+            quantity: parseFloat(intake.quantity),
+            unit: intake.product?.unit_of_measure === 'trays' ? 'Trays' : intake.product?.unit_of_measure === 'units' ? 'Units' : 'Kg'
+          });
+        });
+
+        const mappedIntakes = Object.values(groupedMap).sort((a: any, b: any) => {
+          return new Date(b.raw_created_at).getTime() - new Date(a.raw_created_at).getTime();
+        });
+
+        setIntakeLogs(mappedIntakes);
       }
-      
+
+      // 3. Process Stock
+      if (inventory && inventory.stock) {
+        const mappedStock: ProductionStockItem[] = inventory.stock.map((item: any) => {
+          let cat = "damaged";
+          if (item.product.code.includes("WHT")) cat = "white";
+          else if (item.product.code.includes("CRM")) cat = "cream";
+          else if (item.product.code.includes("BRN")) cat = "brown";
+          else if (item.product.category === "poultry") cat = "poultry";
+          
+          let cap = 5000;
+          if (cat === "white") cap = 4000;
+          else if (cat === "cream") cap = 3000;
+          else if (cat === "brown") cap = 2000;
+          else if (cat === "damaged") cap = 10000;
+
+          return {
+            id: item.id,
+            product_id: item.product_id,
+            product: item.product.name,
+            code: item.product.code,
+            quantity: parseFloat(item.current_quantity),
+            unit: item.product.unit_of_measure === 'trays' ? 'Trays' : item.product.unit_of_measure === 'units' ? 'Units' : 'Kg',
+            capacity: cap,
+            unitValuePrice: item.valuation_price ? parseFloat(item.valuation_price) : parseFloat(item.product.production_unit_price || item.product.default_unit_price),
+            category: cat as any,
+            batch_reference: item.batch_reference || 'N/A',
+            production_store_id: item.production_store_id,
+            production_store_name: item.production_store?.name || 'N/A',
+            incoming: parseFloat(item.incoming || 0),
+            opening_stock: parseFloat(item.opening_stock || 0),
+            stock_taken: parseFloat(item.stock_taken || 0),
+            replacements: parseFloat(item.replacements || 0),
+            damages: parseFloat(item.damages || 0),
+            closing_stock: parseFloat(item.closing_stock || 0),
+            unit_price: parseFloat(item.unit_price || item.valuation_price || item.product.production_unit_price || item.product.default_unit_price),
+            egg_unit_price: parseFloat(item.egg_unit_price || item.egg_valuation_price || item.product.production_egg_unit_price || 0),
+          };
+        });
+        setStockItems(mappedStock);
+      }
+
     } catch (err) {
-      console.error("Failed to fetch production store data", err);
+      console.error("Failed to fetch production store dashboard data", err);
     } finally {
-      if (!silent) setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+        setLoadingIntakes(false);
+      }
     }
   };
 
+  const fetchData = async (silent = false) => {
+    await fetchDashboardData(false, silent);
+  };
+
   useEffect(() => {
-    fetchData();
+    fetchDashboardData(true, false);
   }, [selectedDate]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      fetchData(true);
-    }, 8000);
+      fetchDashboardData(false, true);
+    }, 30000);
     return () => clearInterval(timer);
   }, [selectedDate]);
+
 
   useEffect(() => {
     if (activeTab === "transfers") {

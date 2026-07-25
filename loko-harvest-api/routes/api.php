@@ -80,9 +80,10 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/accounts/{customerId}', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'show']);
         Route::get('/accounts/{customerId}/ledger', [App\Http\Controllers\Api\V1\CustomerAccountController::class, 'ledger']);
         
-        // Production Store
         Route::apiResource('production-stores', App\Http\Controllers\Api\V1\ProductionStoreController::class);
+        Route::get('/production-store/dashboard', App\Http\Controllers\Api\V1\ProductionStoreDashboardController::class);
         Route::get('/production-store-transfers', [App\Http\Controllers\Api\V1\ProductionStoreTransferController::class, 'index']);
+
         Route::post('/production-store-transfers', [App\Http\Controllers\Api\V1\ProductionStoreTransferController::class, 'store']);
 
         Route::get('/production-stock', [App\Http\Controllers\Api\V1\ProductionStoreStockController::class, 'index']);
