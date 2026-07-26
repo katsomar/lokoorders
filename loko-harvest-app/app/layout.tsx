@@ -26,6 +26,8 @@ export const metadata: Metadata = {
 
 
 import { ToastContainer } from "@/components/ui/toast";
+import { PwaRegister } from "@/components/PwaRegister";
+
 
 export default function RootLayout({
   children,
@@ -90,9 +92,11 @@ export default function RootLayout({
             `,
           }}
         />
+        <PwaRegister />
         {children}
         <ToastContainer />
       </body>
     </html>
   );
 }
+
