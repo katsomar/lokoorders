@@ -263,13 +263,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen bg-gray-50 overflow-hidden relative">
       
       {/* 1. DESKTOP SIDEBAR (Visible lg and above) */}
-      <motion.aside
-        initial={false}
-        animate={{ width: isSidebarOpen ? 240 : 80 }}
-        className="hidden lg:flex relative z-20 flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out shrink-0"
-      >
-        {renderNavContent(isSidebarOpen)}
-      </motion.aside>
+      <div className="hidden lg:block shrink-0 h-full">
+        <motion.aside
+          initial={false}
+          animate={{ width: isSidebarOpen ? 240 : 80 }}
+          className="h-full relative z-20 flex flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out"
+        >
+          {renderNavContent(isSidebarOpen)}
+        </motion.aside>
+      </div>
 
       {/* 2. MOBILE OVERLAY BACKDROP (< lg) */}
       <AnimatePresence>
