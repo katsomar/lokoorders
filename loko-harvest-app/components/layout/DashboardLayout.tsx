@@ -251,7 +251,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <PushPermissionBanner />
 
         {/* Top Nav */}
-        <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-8 z-10 text-white">
+        <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-8 z-30 text-white">
+
           <div className="flex items-center gap-4">
             <h2 className="text-lg font-bold text-white font-heading tracking-tight flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-brand-yellow animate-pulse" />
