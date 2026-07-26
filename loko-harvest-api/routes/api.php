@@ -116,6 +116,14 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('/notifications/{id}/read', [App\Http\Controllers\Api\V1\NotificationController::class, 'markAsRead']);
         Route::post('/notifications/read-all', [App\Http\Controllers\Api\V1\NotificationController::class, 'markAllAsRead']);
         
+        // Push Subscriptions & Preferences
+        Route::get('/push-subscriptions/vapid-public-key', [App\Http\Controllers\Api\V1\PushSubscriptionController::class, 'getVapidPublicKey']);
+        Route::post('/push-subscriptions', [App\Http\Controllers\Api\V1\PushSubscriptionController::class, 'store']);
+        Route::delete('/push-subscriptions', [App\Http\Controllers\Api\V1\PushSubscriptionController::class, 'destroy']);
+        Route::get('/notification-preferences', [App\Http\Controllers\Api\V1\NotificationPreferenceController::class, 'show']);
+        Route::put('/notification-preferences', [App\Http\Controllers\Api\V1\NotificationPreferenceController::class, 'update']);
+
+        
         // Reports
         Route::get('/reports/sales-summary', [App\Http\Controllers\Api\V1\ReportController::class, 'salesSummary']);
         Route::get('/reports/aging', [App\Http\Controllers\Api\V1\ReportController::class, 'agingReport']);

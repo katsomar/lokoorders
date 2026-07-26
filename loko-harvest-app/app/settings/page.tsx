@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { useAuth } from "@/store/useAuth";
+import api from "@/lib/api";
+
 
 type TabType = "general" | "security" | "notifications" | "logistics";
 
@@ -49,25 +51,58 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // Notification Preferences
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [smsAlerts, setSmsAlerts] = useState(false);
-  const [stockThresholdAlerts, setStockThresholdAlerts] = useState(true);
+  const [prefTransfers, setPrefTransfers] = useState(true);
+  const [prefDamages, setPrefDamages] = useState(true);
+  const [prefStockAlerts, setPrefStockAlerts] = useState(true);
+  const [prefDeliveries, setPrefDeliveries] = useState(true);
+  const [prefPayments, setPrefPayments] = useState(true);
 
   // Logistics parameters
   const [baseDeliveryFee, setBaseDeliveryFee] = useState("15000");
   const [fuelAdjustmentFactor, setFuelAdjustmentFactor] = useState("1.2");
 
-  const handleSave = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    async function loadNotificationPreferences() {
+      try {
+        const res = await api.get('/notification-preferences');
+        if (res.data?.data) {
+          const p = res.data.data;
+          setPrefTransfers(p.channel_transfers ?? true);
+          setPrefDamages(p.channel_damages ?? true);
+          setPrefStockAlerts(p.channel_stock_alerts ?? true);
+          setPrefDeliveries(p.channel_deliveries ?? true);
+          setPrefPayments(p.channel_payments ?? true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch notification preferences:", err);
+      }
+    }
+    loadNotificationPreferences();
+  }, []);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API update
-    setTimeout(() => {
+    try {
+      if (activeTab === "notifications") {
+        await api.put('/notification-preferences', {
+          channel_transfers: prefTransfers,
+          channel_damages: prefDamages,
+          channel_stock_alerts: prefStockAlerts,
+          channel_deliveries: prefDeliveries,
+          channel_payments: prefPayments,
+        });
+      }
       setIsLoading(false);
       setIsSuccess(true);
       setTimeout(() => setIsSuccess(false), 3000);
-    }, 1200);
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      setIsLoading(false);
+    }
   };
+
 
   const tabs = [
     { id: "general", label: "General & Profile", icon: Building },
@@ -277,43 +312,70 @@ export default function SettingsPage() {
                     <div className="space-y-4">
                       <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-150">
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-brand-forest">E-mail Administrative Alerts</p>
-                          <p className="text-xs text-gray-500 max-w-md">Receive email notifications for order status changes, logistics assignments, and payment postings.</p>
+                          <p className="text-sm font-semibold text-brand-forest">Store Transfer Requests & Approvals</p>
+                          <p className="text-xs text-gray-500 max-w-md">Receive push and in-app notifications when store transfers are requested, approved, or rejected.</p>
                         </div>
                         <input
                           type="checkbox"
-                          checked={emailAlerts}
-                          onChange={(e) => setEmailAlerts(e.target.checked)}
+                          checked={prefTransfers}
+                          onChange={(e) => setPrefTransfers(e.target.checked)}
                           className="h-5 w-5 rounded border-gray-300 text-brand-forest focus:ring-brand-forest"
                         />
                       </div>
 
                       <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-150">
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-brand-forest">SMS Dispatch & Order Alerts</p>
-                          <p className="text-xs text-gray-500 max-w-md">Send SMS alerts directly to administrators when new orders are created or deliveries are initiated (additional SMS credits apply).</p>
+                          <p className="text-sm font-semibold text-brand-forest">Egg Damages & Breakage Reports</p>
+                          <p className="text-xs text-gray-500 max-w-md">Receive alerts when managers log breakages or when admins audit and approve damage claims.</p>
                         </div>
                         <input
                           type="checkbox"
-                          checked={smsAlerts}
-                          onChange={(e) => setSmsAlerts(e.target.checked)}
+                          checked={prefDamages}
+                          onChange={(e) => setPrefDamages(e.target.checked)}
                           className="h-5 w-5 rounded border-gray-300 text-brand-forest focus:ring-brand-forest"
                         />
                       </div>
 
                       <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-150">
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-brand-forest">Intake & Stock Threshold Alerts</p>
-                          <p className="text-xs text-gray-500 max-w-md">Trigger critical dashboard warnings if production/sales store stock drops below standard minimum thresholds.</p>
+                          <p className="text-sm font-semibold text-brand-forest">Stock Safety Threshold Warnings</p>
+                          <p className="text-xs text-gray-500 max-w-md">Trigger urgent warnings when Production or Sales Store egg trays drop below safety reorder limits.</p>
                         </div>
                         <input
                           type="checkbox"
-                          checked={stockThresholdAlerts}
-                          onChange={(e) => setStockThresholdAlerts(e.target.checked)}
+                          checked={prefStockAlerts}
+                          onChange={(e) => setPrefStockAlerts(e.target.checked)}
+                          className="h-5 w-5 rounded border-gray-300 text-brand-forest focus:ring-brand-forest"
+                        />
+                      </div>
+
+                      <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-150">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-brand-forest">Logistics & Driver Delivery Updates</p>
+                          <p className="text-xs text-gray-500 max-w-md">Receive alerts when driver shifts start, route assignments change, or deliveries are confirmed.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={prefDeliveries}
+                          onChange={(e) => setPrefDeliveries(e.target.checked)}
+                          className="h-5 w-5 rounded border-gray-300 text-brand-forest focus:ring-brand-forest"
+                        />
+                      </div>
+
+                      <div className="flex items-start justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-150">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-brand-forest">Payment Postings & Invoice Receipts</p>
+                          <p className="text-xs text-gray-500 max-w-md">Receive confirmations when customer payments are posted or invoices clear.</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={prefPayments}
+                          onChange={(e) => setPrefPayments(e.target.checked)}
                           className="h-5 w-5 rounded border-gray-300 text-brand-forest focus:ring-brand-forest"
                         />
                       </div>
                     </div>
+
                   </CardContent>
                 </Card>
               )}

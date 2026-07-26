@@ -24,6 +24,9 @@ import {
 import { useAuth } from "@/store/useAuth";
 import { useLookups } from "@/store/useLookups";
 import api from "@/lib/api";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { PushPermissionBanner } from "@/components/notifications/PushPermissionBanner";
+
 
 const navItems = [
   { group: "General", items: [
@@ -245,6 +248,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        <PushPermissionBanner />
+
         {/* Top Nav */}
         <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-8 z-10 text-white">
           <div className="flex items-center gap-4">
@@ -255,14 +260,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           
           <div className="flex items-center gap-6">
-            <button className="relative text-white/80 hover:text-brand-yellow transition-colors">
-              <Bell size={22} />
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brand-yellow text-[10px] font-extrabold text-brand-forest">
-                3
-              </span>
-            </button>
+            <NotificationCenter />
             
             <div className="flex items-center gap-3 border-l border-white/10 pl-6">
+
               <div className="text-right hidden sm:block">
                 <p className="text-sm font-semibold text-white leading-none">{user?.name || "Admin User"}</p>
                 <p className="text-xs text-brand-yellow/80 mt-1 capitalize font-medium">{user?.role?.replace('_', ' ') || "Administrator"}</p>

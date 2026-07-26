@@ -120,7 +120,23 @@ class StoreTransferController extends Controller
                 'status' => 'pending',
             ]);
 
+            // Notify Admin users of new pending transfer request
+            try {
+                $adminUsers = \App\Models\User::where('role', 'admin')->get();
+                foreach ($adminUsers as $admin) {
+                    $admin->notify(new \App\Notifications\TransferRequestedNotification(
+                        $transfer->id,
+                        $user->name ?? 'Order Manager',
+                        $product->name,
+                        (float)$validated['quantity']
+                    ));
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("Notification failed: " . $e->getMessage());
+            }
+
             return $this->success($transfer, 'Stock transfer request submitted successfully and is pending approval.', 201);
+
         }
 
         return DB::transaction(function () use ($validated, $product, $supportsBatch, $batchRef, $user) {
@@ -473,7 +489,22 @@ class StoreTransferController extends Controller
             'rejection_reason' => $request->input('rejection_reason'),
         ]);
 
+        try {
+            $requester = \App\Models\User::find($transfer->transferred_by);
+            if ($requester) {
+                $product = \App\Models\Product::find($transfer->product_id);
+                $requester->notify(new \App\Notifications\TransferRejectedNotification(
+                    $transfer->id,
+                    $product->name ?? 'Egg Trays',
+                    $request->input('rejection_reason') ?? 'No reason specified'
+                ));
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("Notification failed: " . $e->getMessage());
+        }
+
         return $this->success($transfer->load(['product', 'user', 'productionStore', 'salesStore']), 'Stock transfer request rejected successfully.');
+
     }
 
     private function productSupportsBatch($product)

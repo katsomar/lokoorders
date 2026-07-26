@@ -18,10 +18,12 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "LOKO Harvest ODS",
   description: "Orders & Delivery Management System for Loko Harvest Limited",
+  manifest: "/manifest.json",
   icons: {
     icon: "/logo/loko.png",
   },
 };
+
 
 import { ToastContainer } from "@/components/ui/toast";
 
