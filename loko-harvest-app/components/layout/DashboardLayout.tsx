@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   React.useEffect(() => {
     async function initBootstrap() {
-      if (!user) return;
+      if (!user || isLoaded) return;
       try {
         const res = await api.get('/auth/bootstrap');
         if (res.data?.data) {
@@ -97,12 +97,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       } catch (err) {
         console.error("Failed to load application bootstrap data:", err);
-        // Fallback to fetchLookups if bootstrap endpoint fails
         if (!isLoaded) fetchLookups();
       }
     }
     initBootstrap();
-  }, [user]);
+  }, [user, isLoaded]);
+
 
   React.useEffect(() => {
     if (user && user.role === "order_manager" && pathname !== "/production-store/intake") {
