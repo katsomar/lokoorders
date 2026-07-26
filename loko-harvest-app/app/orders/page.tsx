@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+
 
 const isCarriedOverUncompleted = (order: any) => {
   if (!order || !order.order_date) return false;
@@ -233,16 +235,22 @@ export default function OrdersPage() {
         {/* Standardized Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-black text-brand-forest font-heading">Order Pipeline & Fulfillment</h1>
-            <p className="text-gray-500 font-body text-sm mt-0.5">Track, schedule, and dispatch bulk deliveries to client outlets</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-brand-forest font-heading">Order Pipeline & Fulfillment</h1>
+              <InfoTooltip title="Order Pipeline System" text="Manage customer orders from initial booking through store reservation, driver dispatch, and delivery proof clearance." side="right" />
+            </div>
+            <p className="text-gray-500 font-body text-xs mt-0.5">Track, schedule, and dispatch bulk deliveries to client outlets</p>
           </div>
-          <Link href="/orders/new">
-            <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs">
-              <Plus size={15} />
-              New Order
-            </Button>
-          </Link>
+          <UITooltip content="Create a new sales order with custom delivery dates and customer credit terms" side="bottom">
+            <Link href="/orders/new">
+              <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs">
+                <Plus size={15} />
+                New Order
+              </Button>
+            </Link>
+          </UITooltip>
         </div>
+
 
         {/* Dynamic Orders Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">

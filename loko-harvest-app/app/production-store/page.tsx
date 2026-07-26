@@ -43,6 +43,8 @@ import { useRealtime } from "@/hooks/useRealtime";
 import { useLookups } from "@/store/useLookups";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+
 
 interface ProductionStockItem {
   id: string;
@@ -108,11 +110,11 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
   }
 
   const categories = [
-    { label: "Good", key: "good", colorClass: "text-green-700 bg-green-50/80 border border-green-200/50" },
-    { label: "D1", key: "d1", colorClass: "text-amber-700 bg-amber-50/80 border border-amber-200/50" },
-    { label: "D2", key: "d2", colorClass: "text-orange-700 bg-orange-50/80 border border-orange-200/50" },
-    { label: "D3", key: "d3", colorClass: "text-gray-700 bg-gray-50/80 border border-gray-200" },
-    { label: "Shell", key: "shell", colorClass: "text-blue-700 bg-blue-50/80 border border-blue-200/50" }
+    { label: "Good", key: "good", tooltip: "Good Quality Eggs (Standard unbroken eggs)", colorClass: "text-green-700 bg-green-50/80 border border-green-200/50" },
+    { label: "D1", key: "d1", tooltip: "D1 - Hairline Cracks (Light shell crack)", colorClass: "text-amber-700 bg-amber-50/80 border border-amber-200/50" },
+    { label: "D2", key: "d2", tooltip: "D2 - Medium Cracks (Slight albumen leak)", colorClass: "text-orange-700 bg-orange-50/80 border border-orange-200/50" },
+    { label: "D3", key: "d3", tooltip: "D3 - Heavy Cracks (Severe damage for pulp)", colorClass: "text-gray-700 bg-gray-50/80 border border-gray-200" },
+    { label: "Shell", key: "shell", tooltip: "Soft / Shell-less (Eggs without hard outer shell)", colorClass: "text-blue-700 bg-blue-50/80 border border-blue-200/50" }
   ];
 
   return (
@@ -123,7 +125,9 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
         if (field !== "price" && val === 0) {
           return (
             <div key={cat.key} className="flex justify-between items-center text-[10px] font-medium text-gray-400 whitespace-nowrap">
-              <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
+              <UITooltip content={cat.tooltip} side="right">
+                <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap cursor-help`}>{cat.label}</span>
+              </UITooltip>
               <span className={field === "damages" ? "text-red-600/40 font-medium whitespace-nowrap" : "font-medium whitespace-nowrap"}>0</span>
             </div>
           );
@@ -131,8 +135,11 @@ const RenderBreakdown = ({ group, field, unit, onViewDamage }: { group: any; fie
 
         return (
           <div key={cat.key} className="flex justify-between items-center gap-3 text-[10px] whitespace-nowrap">
-            <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap`}>{cat.label}</span>
+            <UITooltip content={cat.tooltip} side="right">
+              <span className={`px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${cat.colorClass} whitespace-nowrap cursor-help`}>{cat.label}</span>
+            </UITooltip>
             {field === "damages" ? (
+
               <button
                 type="button"
                 onClick={() => onViewDamage && onViewDamage(catData.item)}
@@ -1076,36 +1083,44 @@ export default function ProductionStorePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-brand-forest font-heading">Production Store</h1>
-            <p className="text-gray-500 font-body">Manage farm bulk egg intake, manage multiple stores, and route transfers to Sales packaging</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-brand-forest font-heading">Production Store</h1>
+              <InfoTooltip title="Production Store System" text="Central farm intake repository for tracking raw egg harvests by quality category (Good, D1, D2, D3, Shell) and batch references." side="right" />
+            </div>
+            <p className="text-gray-500 font-body text-xs mt-0.5">Manage farm bulk egg intake, manage multiple stores, and route transfers to Sales packaging</p>
           </div>
           
           <div className="flex gap-2.5 items-center">
-            <Button 
-              onClick={() => {
-                if (productionStores.length > 0) {
-                  setSalesTransferStoreId(productionStores[0].id);
-                }
-                setShowTransferModal(true);
-              }}
-              className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
-            >
-              <ArrowRightLeft size={15} />
-              Transfer to Sales
-            </Button>
+            <UITooltip content="Transfer bulk egg stock to Sales Store for packaging into retail trays and packs" side="bottom">
+              <Button 
+                onClick={() => {
+                  if (productionStores.length > 0) {
+                    setSalesTransferStoreId(productionStores[0].id);
+                  }
+                  setShowTransferModal(true);
+                }}
+                className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
+              >
+                <ArrowRightLeft size={15} />
+                Transfer to Sales
+              </Button>
+            </UITooltip>
             <Link href="/production-store/activity">
               <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
                 <History size={15} />
                 Transfer Activity
               </Button>
             </Link>
-            <Link href="/production-store/intake">
-              <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
-                <ArrowDownToLine size={15} />
-                New Harvest Intake
-              </Button>
-            </Link>
+            <UITooltip content="Record fresh daily egg collection harvest into production inventory" side="bottom">
+              <Link href="/production-store/intake">
+                <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+                  <ArrowDownToLine size={15} />
+                  New Harvest Intake
+                </Button>
+              </Link>
+            </UITooltip>
           </div>
+
         </div>
 
         {/* Global Valuation & Stock Cards */}

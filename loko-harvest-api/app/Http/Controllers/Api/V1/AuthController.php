@@ -138,7 +138,7 @@ class AuthController extends Controller
 
         $productionStores = ProductionStore::select('id', 'name', 'code', 'location')->get();
         $salesStores = SalesStore::select('id', 'name', 'code', 'location')->get();
-        $customers = Customer::select('id', 'name', 'code', 'parent_id', 'phone', 'email')->get();
+        $customers = Customer::select('id', 'name', 'parent_id', 'phone_primary as phone', 'email')->get();
 
         // 2. System notifications and approvals
         $unreadNotifications = Notification::where('user_id', $user->id)
@@ -147,7 +147,8 @@ class AuthController extends Controller
 
         $pendingTransfers = StoreTransfer::where('status', 'pending')->count();
         $pendingAdjustments = StoreAdjustment::where('status', 'pending')->count();
-        $pendingApprovals = $pendingTransfers + $pendingAdjustments;
+        $pendingConversions = \App\Models\SalesStoreConversion::where('status', 'pending')->count();
+        $pendingApprovals = $pendingTransfers + $pendingAdjustments + $pendingConversions;
 
         return response()->json([
             'success' => true,
@@ -166,5 +167,6 @@ class AuthController extends Controller
             ],
             'message' => 'Application bootstrap configuration loaded'
         ]);
+
     }
 }

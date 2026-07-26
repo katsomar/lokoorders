@@ -1,10 +1,11 @@
 "use client";
 
 import React from "react";
-import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, LucideIcon, FileText } from "lucide-react";
 import { useCountUp } from "@/lib/hooks/useCountUp";
 import { Card } from "@/components/ui/card";
+import { InfoTooltip } from "@/components/ui/tooltip";
+
 
 interface KPICardProps {
   label: string;
@@ -13,18 +14,21 @@ interface KPICardProps {
   suffix?: string;
   icon: LucideIcon;
   subtitle?: string;
+  tooltipText?: string;
   rightIcon?: LucideIcon;
   subMetrics?: {
     label: string;
     value: string | number;
     icon?: LucideIcon;
     color?: string;
+    tooltipText?: string;
   }[];
   breakdownTitle?: string;
   breakdown?: {
     name: string;
     value: string | number;
     color?: string;
+    tooltipText?: string;
   }[];
   trend?: {
     value: number;
@@ -41,6 +45,7 @@ export function KPICard({
   suffix = "", 
   icon: Icon, 
   subtitle,
+  tooltipText,
   rightIcon: RightIcon = FileText,
   subMetrics,
   breakdownTitle,
@@ -59,10 +64,17 @@ export function KPICard({
         
         {/* Top Header Badge */}
         <div className="flex justify-between items-start mb-4">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-brand-forest text-white font-heading shadow-sm">
-            <Icon size={13} className="text-brand-yellow" />
-            {label}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-brand-forest text-white font-heading shadow-sm">
+              <Icon size={13} className="text-brand-yellow" />
+              {label}
+            </span>
+            {tooltipText && (
+              <InfoTooltip text={tooltipText} title={label} side="bottom" className="text-gray-400 hover:text-brand-forest" />
+            )}
+
+          </div>
+
           
           {/* Trend Tag */}
           {trend && (

@@ -25,7 +25,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
 import api from "@/lib/api";
+
 // Sub-component to handle driver avatar with error boundary/fallback
 function DriverAvatar({ src, alt }: { src: string | null; alt: string }) {
   const [hasError, setHasError] = useState(false);
@@ -631,26 +633,34 @@ export default function DriversPage() {
         {/* Header Block */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Driver & Fleet Management</h1>
-            <p className="text-gray-500 font-body text-sm">Coordinate operational delivery personnel, registered vehicle assets, and shared shift mappings</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Driver & Fleet Management</h1>
+              <InfoTooltip title="Driver & Fleet Operations" text="Manage delivery drivers, vehicle allocations, fuel level logs, and shift performance records." side="right" />
+            </div>
+            <p className="text-gray-500 font-body text-xs mt-0.5">Coordinate operational delivery personnel, registered vehicle assets, and shared shift mappings</p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              onClick={() => setShowRegisterVehicleModal(true)}
-              className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
-            >
-              <Plus size={16} />
-              Register Vehicle
-            </Button>
-            <Button 
-              onClick={() => setShowRegisterDriverModal(true)}
-              className="gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
-            >
-              <Plus size={16} />
-              Register New Driver
-            </Button>
+            <UITooltip content="Register a new fleet transport vehicle with cargo crate capacity" side="bottom">
+              <Button 
+                onClick={() => setShowRegisterVehicleModal(true)}
+                className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+              >
+                <Plus size={16} />
+                Register Vehicle
+              </Button>
+            </UITooltip>
+            <UITooltip content="Register a new delivery driver with license documents and avatar" side="bottom">
+              <Button 
+                onClick={() => setShowRegisterDriverModal(true)}
+                className="gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+              >
+                <Plus size={16} />
+                Register New Driver
+              </Button>
+            </UITooltip>
           </div>
         </div>
+
 
         {/* Directory Search & Directory Filter Toggle Tabs */}
         <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 py-2">

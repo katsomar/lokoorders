@@ -37,6 +37,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/api";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+
 
 interface Branch {
   id: string;
@@ -489,19 +491,25 @@ export default function CustomersPage() {
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-brand-forest font-heading">Customer Directory & Branches</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-brand-forest font-heading">Customer Directory & Branches</h1>
+              <InfoTooltip title="Customer Directory & Hierarchy" text="Unified customer registry supporting Corporate HQ parent accounts with nested branch delivery locations and credit limits." side="right" />
+            </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">
               Manage unified corporate customer structures, branches, balances and credit limits • {isLoading ? "—" : `${dbCustomers.length} Active Accounts`}
             </p>
           </div>
-          <Button 
-            onClick={() => setShowAddModal(true)}
-            className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
-          >
-            <Plus size={15} />
-            Register Customer / Branch
-          </Button>
+          <UITooltip content="Register a standalone store, file-opener HQ corporation, or branch outlet" side="bottom">
+            <Button 
+              onClick={() => setShowAddModal(true)}
+              className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
+            >
+              <Plus size={15} />
+              Register Customer / Branch
+            </Button>
+          </UITooltip>
         </div>
+
 
         {/* Dynamic Financial Overview Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

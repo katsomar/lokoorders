@@ -27,6 +27,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+
 
 export default function PendingRequestsPage() {
   const router = useRouter();
@@ -207,13 +209,17 @@ export default function PendingRequestsPage() {
             <Sliders size={120} />
           </div>
           <div className="space-y-1 z-10">
-            <h1 className="text-lg md:text-xl font-extrabold font-heading tracking-tight uppercase flex items-center gap-1.5">
-              <Clock className="text-brand-yellow" size={18} />
-              Pending Requests
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg md:text-xl font-extrabold font-heading tracking-tight uppercase flex items-center gap-1.5">
+                <Clock className="text-brand-yellow" size={18} />
+                Pending Requests
+              </h1>
+              <InfoTooltip title="Pending Authorization Workflow" text="Review and approve stock transfers, packaging yield conversions, and damage claim adjustments before store balances update." side="right" className="text-white/70 hover:text-brand-yellow" />
+            </div>
             <p className="text-[11px] text-brand-sage font-medium max-w-xl">
               Authorize stock movements and inventory adjustments submitted by order managers and warehouse team members.
             </p>
+
           </div>
           <div className="flex gap-2 z-10">
             <button

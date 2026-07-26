@@ -34,7 +34,9 @@ import { useRealtime } from "@/hooks/useRealtime";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
 import dynamic from "next/dynamic";
+
 
 const AdminTrackingMap = dynamic(() => import("@/components/AdminTrackingMap"), {
   ssr: false,
@@ -454,23 +456,29 @@ export default function DeliveriesPage() {
         {/* Header Block */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Logistics & Deliveries</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Logistics & Deliveries</h1>
+              <InfoTooltip title="Logistics & Dispatch Operations" text="Fleet route planning, live driver GPS tracking, delivery proof verification (signature/photo), and shift manifests." side="right" />
+            </div>
             <p className="text-gray-500 text-sm mt-0.5">Track fleet status, allocate dispatch orders, and secure shipping manifests</p>
           </div>
           <div className="flex gap-2.5">
-            <Button 
-              onClick={() => {
-                setSelectedOrderId("");
-                setSelectedDriverId("");
-                setShowAssignModal(true);
-              }}
-              className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold rounded-xl text-xs px-4.5 h-10.5 cursor-pointer shadow-sm transition-all duration-200"
-            >
-              <Plus size={16} />
-              Assign Delivery
-            </Button>
+            <UITooltip content="Assign unallocated customer orders or missed shipments to an active driver and vehicle" side="bottom">
+              <Button 
+                onClick={() => {
+                  setSelectedOrderId("");
+                  setSelectedDriverId("");
+                  setShowAssignModal(true);
+                }}
+                className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold rounded-xl text-xs px-4.5 h-10.5 cursor-pointer shadow-sm transition-all duration-200"
+              >
+                <Plus size={16} />
+                Assign Delivery
+              </Button>
+            </UITooltip>
           </div>
         </div>
+
 
         {/* Dashboard Metrics Panel */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

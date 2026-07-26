@@ -35,7 +35,10 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
 import api from "@/lib/api";
+
+
 
 export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -137,14 +140,17 @@ export default function AdminDashboard() {
             <h1 className="text-2xl font-black text-brand-forest font-heading">HQ Control Center</h1>
             <p className="text-gray-500 font-body text-xs mt-1">Real-time operational overview and performance statistics</p>
           </div>
-          <Button 
-            onClick={fetchDashboardData}
-            variant="outline"
-            className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white"
-          >
-            <RefreshCw size={14} className="animate-spin-slow" />
-            Refresh Control Panel
-          </Button>
+          <UITooltip content="Fetch fresh operational metrics from API databases" side="bottom">
+            <Button 
+              onClick={fetchDashboardData}
+              variant="outline"
+              className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white"
+            >
+              <RefreshCw size={14} className="animate-spin-slow" />
+              Refresh Control Panel
+            </Button>
+          </UITooltip>
+
         </div>
 
         {/* ROW 1: Upgraded Operations Cards & Donut Chart (Grid of 3 columns) */}
@@ -155,6 +161,7 @@ export default function AdminDashboard() {
             label="Fulfillment Operations" 
             value={dashboardData.fulfillment.active_orders} 
             subtitle="Active orders currently in pipeline"
+            tooltipText="Number of customer orders currently being processed, dispatched, or delivered in the active logistics pipeline."
             icon={ShoppingBag} 
             rightIcon={Truck}
             trend={dashboardData.fulfillment.trend}
@@ -176,6 +183,7 @@ export default function AdminDashboard() {
             value={dashboardData.financials.total_collections} 
             prefix="UGX "
             subtitle="Total collections posted this month"
+            tooltipText="Total cash and bank payments received from customers month-to-date."
             icon={Wallet} 
             rightIcon={TrendingUp}
             trend={dashboardData.financials.trend}
@@ -192,11 +200,14 @@ export default function AdminDashboard() {
             iconColor="text-green-600"
           />
 
-          {/* Card 3: Order Status Distribution (Pie Chart matching screenshot style) */}
+          {/* Card 3: Order Status Distribution (Pie Chart) */}
           <Card className="border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between h-full">
-            <div className="bg-brand-forest text-white px-5 py-3.5 flex items-center gap-2">
-              <Activity size={16} className="text-brand-yellow" />
-              <h3 className="font-heading font-semibold text-sm">Order Status Distribution</h3>
+            <div className="bg-brand-forest text-white px-5 py-3.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity size={16} className="text-brand-yellow" />
+                <h3 className="font-heading font-semibold text-sm">Order Status Distribution</h3>
+              </div>
+              <InfoTooltip title="Order Status Share" text="Percentage breakdown of orders across delivered, dispatched, processing, and return states." side="left" className="text-white/70 hover:text-brand-yellow" />
             </div>
             
             <CardContent className="p-5 flex flex-col justify-between flex-1">
@@ -246,8 +257,10 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
-            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
               <CardTitle className="text-base font-bold text-brand-forest font-heading">Revenue Trends (Last 30 Days)</CardTitle>
+              <InfoTooltip title="Revenue & Collections" text="Daily comparison between total invoices generated (yellow) vs actual cash collected (green)." side="left" />
+
             </CardHeader>
             <CardContent className="p-6">
               <div className="h-[300px] w-full">
@@ -284,6 +297,7 @@ export default function AdminDashboard() {
             value={dashboardData.warehouse.total_value} 
             prefix="UGX "
             subtitle="Combined financial worth of production & sales stores"
+            tooltipText="Combined financial asset valuation of bulk eggs in Production Store plus packaged products in Sales Store."
             icon={Warehouse} 
             rightIcon={Warehouse}
             subMetrics={[
@@ -306,8 +320,10 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
           
           <Card className="lg:col-span-2 border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
-            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6">
+            <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
               <CardTitle className="text-base font-bold text-brand-forest font-heading">Top Customers by Outstanding Balance</CardTitle>
+              <InfoTooltip title="Accounts Receivable" text="Top customer accounts with unpaid invoice credit balances requiring collection follow-up." side="left" />
+
             </CardHeader>
             <CardContent className="p-6">
               <div className="h-[300px] w-full">
@@ -336,9 +352,13 @@ export default function AdminDashboard() {
 
           <Card className="border border-brand-sage/40 bg-white shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl overflow-hidden flex flex-col justify-between">
             <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 py-4 px-6 flex flex-row items-center justify-between">
-              <CardTitle className="text-base font-bold text-brand-forest font-heading font-heading">Live System Feed</CardTitle>
-              <History size={18} className="text-brand-mid" />
+              <CardTitle className="text-base font-bold text-brand-forest font-heading">Live System Feed</CardTitle>
+              <div className="flex items-center gap-2">
+                <InfoTooltip title="Real-Time System Log" text="Real-time audit log of order updates, driver dispatches, damage reports, and payment postings." side="left" />
+                <History size={18} className="text-brand-mid" />
+              </div>
             </CardHeader>
+
             <CardContent className="p-6 flex-1 flex flex-col justify-between">
               <div className="space-y-6">
                 {dashboardData.activity_feed.length === 0 ? (

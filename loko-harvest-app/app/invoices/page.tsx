@@ -27,6 +27,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import api from "@/lib/api";
+import { InfoTooltip } from "@/components/ui/tooltip";
+
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
@@ -99,8 +101,11 @@ export default function InvoicesPage() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-brand-forest font-heading">Invoices</h1>
-            <p className="text-gray-500 font-body">Manage billing and customer accounts receivable</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-brand-forest font-heading">Invoices & Billing</h1>
+              <InfoTooltip title="Billing & Accounts Receivable" text="Monitor customer invoices, credit payment terms, aging accounts, and outstanding debt balances." side="right" />
+            </div>
+            <p className="text-gray-500 font-body text-xs mt-0.5">Manage billing and customer accounts receivable</p>
           </div>
           <Button className="gap-2" variant="outline">
             <Download size={18} />

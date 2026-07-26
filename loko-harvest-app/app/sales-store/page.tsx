@@ -44,6 +44,8 @@ import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { useAuth } from "@/store/useAuth";
 import { useLookups } from "@/store/useLookups";
+import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+
 
 interface SalesStockItem {
   id: string;
@@ -943,8 +945,11 @@ export default function SalesStorePage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-brand-forest font-heading">Sales Store</h1>
-            <p className="text-gray-500 font-body">Track packaged products, manage sales stores, monitor sales valuation worth, and perform transfers</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-brand-forest font-heading">Sales Store</h1>
+              <InfoTooltip title="Sales & Packaging Management" text="Retail distribution inventory for managing converted egg products (15-pack, 6-pack, Single packs) and dispatch transfers." side="right" />
+            </div>
+            <p className="text-gray-500 font-body text-xs mt-0.5">Track packaged products, manage sales stores, monitor sales valuation worth, and perform transfers</p>
           </div>
           
           <div className="flex gap-2">
@@ -954,14 +959,17 @@ export default function SalesStorePage() {
                 Transfer Activity
               </Button>
             </Link>
-            <Link href="/sales-store/transfers">
-              <Button className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none h-9.5 px-4 font-extrabold rounded-xl text-xs shadow-sm cursor-pointer">
-                <ArrowRightLeft size={15} />
-                Fulfill Stock Transfer
-              </Button>
-            </Link>
+            <UITooltip content="Fulfill incoming transfer vouchers from production stores or initiate inter-store transfers" side="bottom">
+              <Link href="/sales-store/transfers">
+                <Button className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none h-9.5 px-4 font-extrabold rounded-xl text-xs shadow-sm cursor-pointer">
+                  <ArrowRightLeft size={15} />
+                  Fulfill Stock Transfer
+                </Button>
+              </Link>
+            </UITooltip>
           </div>
         </div>
+
 
         {/* Global Valuation Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
