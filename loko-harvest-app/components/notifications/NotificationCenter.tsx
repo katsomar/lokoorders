@@ -132,15 +132,15 @@ export function NotificationCenter() {
       {/* Popover Drawer */}
       <AnimatePresence>
         {isOpen && (
-          <>
+          <React.Fragment>
             <div className="sm:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setIsOpen(false)} />
             <motion.div
               initial={{ opacity: 0, y: 10, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.96 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
-            className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-3 sm:w-96 rounded-2xl bg-white shadow-2xl border border-gray-100 z-50 overflow-hidden text-gray-800"
-          >
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.96 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="fixed inset-x-3 top-16 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-3 sm:w-96 rounded-2xl bg-white shadow-2xl border border-gray-100 z-50 overflow-hidden text-gray-800"
+            >
             {/* Header */}
             <div className="p-4 bg-brand-forest text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ export function NotificationCenter() {
               )}
             </div>
           </motion.div>
-          </>
+          </React.Fragment>
         )}
       </AnimatePresence>
     </div>
