@@ -8,8 +8,10 @@ use App\Models\SalesStoreStock;
 use App\Models\SalesStoreMovement;
 use App\Models\SalesStoreTransfer;
 use App\Models\StoreTransfer;
+use App\Models\Order;
 use App\Traits\ApiResponses;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SalesStoreController extends Controller
 {
@@ -42,13 +44,19 @@ class SalesStoreController extends Controller
 
     public function show($id)
     {
-        $store = SalesStore::findOrFail($id);
+        $store = SalesStore::find($id);
+        if (!$store) {
+            return $this->error('Sales store not found', 404);
+        }
         return $this->success($store);
     }
 
     public function update(Request $request, $id)
     {
-        $store = SalesStore::findOrFail($id);
+        $store = SalesStore::find($id);
+        if (!$store) {
+            return $this->error('Sales store not found', 404);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|min:3|max:100',
@@ -69,8 +77,31 @@ class SalesStoreController extends Controller
 
     public function destroy($id)
     {
-        $store = SalesStore::findOrFail($id);
-        $store->delete();
-        return $this->success(null, 'Sales store deleted successfully');
+        $store = SalesStore::find($id);
+        if (!$store) {
+            return $this->error('Sales store not found or already deleted.', 404);
+        }
+
+        // Check if store has active orders attached to it
+        $activeOrders = Order::where('sales_store_id', $store->id)
+            ->whereIn('status', ['pending', 'processing', 'ready_for_dispatch', 'dispatched'])
+            ->exists();
+
+        if ($activeOrders) {
+            return $this->error('Cannot delete store with active pending or dispatched orders.', 422);
+        }
+
+        return DB::transaction(function () use ($store) {
+            SalesStoreStock::where('sales_store_id', $store->id)->delete();
+            SalesStoreMovement::where('sales_store_id', $store->id)->delete();
+            SalesStoreTransfer::where('from_sales_store_id', $store->id)
+                ->orWhere('to_sales_store_id', $store->id)
+                ->delete();
+            StoreTransfer::where('sales_store_id', $store->id)->delete();
+
+            $store->delete();
+
+            return $this->success(null, 'Sales store deleted successfully');
+        });
     }
 }

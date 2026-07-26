@@ -12,25 +12,36 @@ class UserSeeder extends Seeder
     {
         $users = [
             [
-                'name' => 'Loko Admin',
-                'email' => 'admin@lokoharvest.com',
-                'password' => Hash::make('password'),
+                'name' => 'HQ Admin User',
+                'email' => 'admin@loko.com',
+                'password' => Hash::make('password123'),
                 'role' => 'admin',
                 'status' => 'active',
-                'phone' => '0700000000',
+                'phone' => '+256700000001',
             ],
             [
-                'name' => 'Loko Manager',
-                'email' => 'manager@lokoharvest.com',
-                'password' => Hash::make('password'),
+                'name' => 'Order Manager User',
+                'email' => 'ordermanager@loko.com',
+                'password' => Hash::make('password123'),
                 'role' => 'order_manager',
                 'status' => 'active',
-                'phone' => '0700000001',
+                'phone' => '+256700000002',
+            ],
+            [
+                'name' => 'Driver User',
+                'email' => 'driver@loko.com',
+                'password' => Hash::make('password123'),
+                'role' => 'driver',
+                'status' => 'active',
+                'phone' => '+256700000003',
             ],
         ];
 
         foreach ($users as $userData) {
-            User::create($userData);
+            User::updateOrCreate(
+                ['email' => $userData['email']],
+                $userData
+            );
         }
     }
 }

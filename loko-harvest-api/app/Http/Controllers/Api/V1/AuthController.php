@@ -33,7 +33,7 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->status !== 'active') {
+        if (! in_array($user->status, ['active', 'approved'])) {
             $message = 'Your account is inactive.';
             if ($user->status === 'pending') {
                 $message = 'Your account is pending administrator approval.';
@@ -47,6 +47,7 @@ class AuthController extends Controller
                 'email' => [$message],
             ]);
         }
+
 
         return response()->json([
             'success' => true,

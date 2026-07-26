@@ -10,6 +10,7 @@ use App\Models\ProductionStoreTransfer;
 use App\Models\StoreTransfer;
 use App\Traits\ApiResponses;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductionStoreController extends Controller
 {
@@ -42,13 +43,19 @@ class ProductionStoreController extends Controller
 
     public function show($id)
     {
-        $store = ProductionStore::findOrFail($id);
+        $store = ProductionStore::find($id);
+        if (!$store) {
+            return $this->error('Production store not found', 404);
+        }
         return $this->success($store);
     }
 
     public function update(Request $request, $id)
     {
-        $store = ProductionStore::findOrFail($id);
+        $store = ProductionStore::find($id);
+        if (!$store) {
+            return $this->error('Production store not found', 404);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|min:3|max:100',
@@ -69,8 +76,22 @@ class ProductionStoreController extends Controller
 
     public function destroy($id)
     {
-        $store = ProductionStore::findOrFail($id);
-        $store->delete();
-        return $this->success(null, 'Production store deleted successfully');
+        $store = ProductionStore::find($id);
+        if (!$store) {
+            return $this->error('Production store not found or already deleted.', 404);
+        }
+
+        return DB::transaction(function () use ($store) {
+            ProductionStoreStock::where('production_store_id', $store->id)->delete();
+            ProductionStoreIntake::where('production_store_id', $store->id)->delete();
+            ProductionStoreTransfer::where('from_production_store_id', $store->id)
+                ->orWhere('to_production_store_id', $store->id)
+                ->delete();
+            StoreTransfer::where('production_store_id', $store->id)->delete();
+
+            $store->delete();
+
+            return $this->success(null, 'Production store deleted successfully');
+        });
     }
 }
