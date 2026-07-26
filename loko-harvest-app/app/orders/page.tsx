@@ -29,6 +29,9 @@ import { format } from "date-fns";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/store/useToast";
+
 
 
 const isCarriedOverUncompleted = (order: any) => {
@@ -134,18 +137,26 @@ export default function OrdersPage() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string, orderNumber: string) => {
-    if (!window.confirm(`Are you sure you want to delete order ${orderNumber}? This will refund store stock and reverse account invoices.`)) {
-      return;
-    }
+  const toast = useToast();
+  const [deleteTargetOrder, setDeleteTargetOrder] = useState<{ id: string; orderNumber: string } | null>(null);
+  const [isDeletingOrder, setIsDeletingOrder] = useState(false);
+
+  const confirmDeleteOrder = async () => {
+    if (!deleteTargetOrder) return;
+    setIsDeletingOrder(true);
     try {
-      await api.delete(`/orders/${orderId}`);
-      alert("Order deleted successfully!");
+      await api.delete(`/orders/${deleteTargetOrder.id}`);
+      toast.success(`Order ${deleteTargetOrder.orderNumber} deleted successfully.`);
+      setDeleteTargetOrder(null);
       fetchOrdersData();
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to delete order.");
+      toast.error(err.response?.data?.message || "Failed to delete order.");
+    } finally {
+      setIsDeletingOrder(false);
     }
   };
+
+
 
   useEffect(() => {
     fetchOrdersData();
@@ -558,7 +569,7 @@ export default function OrdersPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="icon" 
-                                  onClick={() => handleDeleteOrder(order.id, order.order_number)}
+                                  onClick={() => setDeleteTargetOrder({ id: order.id, orderNumber: order.order_number })}
                                   className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg"
                                 >
                                   <Trash2 size={14} />
@@ -616,6 +627,17 @@ export default function OrdersPage() {
         </div>
 
       </div>
+
+      <ConfirmDialog
+        isOpen={Boolean(deleteTargetOrder)}
+        onClose={() => setDeleteTargetOrder(null)}
+        onConfirm={confirmDeleteOrder}
+        title="Delete Sales Order"
+        description={`Are you sure you want to delete order ${deleteTargetOrder?.orderNumber}? This will refund store stock and reverse account invoices.`}
+        confirmText="Delete Order"
+        variant="danger"
+        isLoading={isDeletingOrder}
+      />
     </DashboardLayout>
   );
 }

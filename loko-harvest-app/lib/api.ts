@@ -21,6 +21,16 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  // Idempotency key for mutating state requests
+  if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase() || '')) {
+    if (!config.headers['X-Request-ID'] && !config.headers['X-Idempotency-Key']) {
+      const requestId = 'REQ-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+      config.headers['X-Request-ID'] = requestId;
+      config.headers['X-Idempotency-Key'] = requestId;
+    }
+  }
+
   return config;
 });
 
