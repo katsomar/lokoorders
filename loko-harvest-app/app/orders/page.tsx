@@ -238,25 +238,24 @@ export default function OrdersPage() {
     link.click();
     document.body.removeChild(link);
   };
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
         
-        {/* Standardized Header Section */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-brand-forest font-heading">Order Pipeline & Fulfillment</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-brand-forest font-heading">Order Pipeline & Fulfillment</h1>
               <InfoTooltip title="Order Pipeline System" text="Manage customer orders from initial booking through store reservation, driver dispatch, and delivery proof clearance." side="right" />
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Track, schedule, and dispatch bulk deliveries to client outlets</p>
           </div>
           <UITooltip content="Create a new sales order with custom delivery dates and customer credit terms" side="bottom">
             <Link href="/orders/new">
-              <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs">
+              <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs w-full sm:w-auto justify-center">
                 <Plus size={15} />
-                New Order
+                <span>New Order</span>
               </Button>
             </Link>
           </UITooltip>

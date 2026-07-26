@@ -946,24 +946,24 @@ export default function SalesStorePage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-brand-forest font-heading">Sales Store</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-brand-forest font-heading">Sales Store</h1>
               <InfoTooltip title="Sales & Packaging Management" text="Retail distribution inventory for managing converted egg products (15-pack, 6-pack, Single packs) and dispatch transfers." side="right" />
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Track packaged products, manage sales stores, monitor sales valuation worth, and perform transfers</p>
           </div>
           
-          <div className="flex gap-2">
-            <Link href="/sales-store/activity">
-              <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 items-center w-full sm:w-auto">
+            <Link href="/sales-store/activity" className="flex-1 sm:flex-initial">
+              <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
                 <History size={15} />
-                Transfer Activity
+                <span>Transfer Activity</span>
               </Button>
             </Link>
             <UITooltip content="Fulfill incoming transfer vouchers from production stores or initiate inter-store transfers" side="bottom">
-              <Link href="/sales-store/transfers">
-                <Button className="gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none h-9.5 px-4 font-extrabold rounded-xl text-xs shadow-sm cursor-pointer">
+              <Link href="/sales-store/transfers" className="flex-1 sm:flex-initial">
+                <Button className="w-full gap-1.5 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none h-9.5 px-3 sm:px-4 font-extrabold rounded-xl text-xs shadow-sm cursor-pointer justify-center">
                   <ArrowRightLeft size={15} />
-                  Fulfill Stock Transfer
+                  <span>Fulfill Stock Transfer</span>
                 </Button>
               </Link>
             </UITooltip>
@@ -984,7 +984,7 @@ export default function SalesStorePage() {
                   </p>
                   <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[9px]">TOTAL SALES VALUE</Badge>
                 </div>
-                <h3 className="text-3xl font-black font-heading mt-2">
+                <h3 className="text-2xl sm:text-3xl font-black font-heading mt-2 truncate">
                   UGX {calculateTotalValuation().toLocaleString()}
                 </h3>
               </div>
@@ -1003,7 +1003,7 @@ export default function SalesStorePage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Converted Packs</p>
-              <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
+              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
                 {getFilteredStock()
                   .filter(item => item.unit === "Packs")
                   .reduce((acc, item) => acc + item.closing_stock, 0)
@@ -1019,7 +1019,7 @@ export default function SalesStorePage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Plain & Single Trays</p>
-              <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
+              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
                 {getFilteredStock()
                   .filter(item => item.unit === "Trays")
                   .reduce((acc, item) => acc + item.closing_stock, 0)
@@ -1034,10 +1034,10 @@ export default function SalesStorePage() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-brand-sage/40 gap-6 text-sm font-bold pt-2">
+        <div className="flex overflow-x-auto no-scrollbar border-b border-brand-sage/40 gap-4 sm:gap-6 text-xs sm:text-sm font-bold pt-2 whitespace-nowrap">
           <button 
             onClick={() => setActiveTab("inventory")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "inventory" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "inventory" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <Warehouse size={16} />
@@ -1047,7 +1047,7 @@ export default function SalesStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("stores")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "stores" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "stores" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <Layers size={16} />
@@ -1057,7 +1057,7 @@ export default function SalesStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("transfers")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "transfers" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "transfers" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <ArrowRightLeft size={16} />
@@ -1067,7 +1067,7 @@ export default function SalesStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("prices")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "prices" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "prices" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <DollarSign size={16} />

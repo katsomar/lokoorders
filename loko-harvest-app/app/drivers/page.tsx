@@ -602,28 +602,28 @@ export default function DriversPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Driver & Fleet Management</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-brand-forest font-heading tracking-tight">Driver & Fleet Management</h1>
               <InfoTooltip title="Driver & Fleet Operations" text="Manage delivery drivers, vehicle allocations, fuel level logs, and shift performance records." side="right" />
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Coordinate operational delivery personnel, registered vehicle assets, and shared shift mappings</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center w-full sm:w-auto">
             <UITooltip content="Register a new fleet transport vehicle with cargo crate capacity" side="bottom">
               <Button 
                 onClick={() => setShowRegisterVehicleModal(true)}
-                className="gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+                className="flex-1 sm:flex-initial gap-2 bg-brand-forest hover:bg-brand-forest/90 text-white font-bold rounded-xl text-xs px-3.5 sm:px-4 h-10.5 cursor-pointer justify-center"
               >
                 <Plus size={16} />
-                Register Vehicle
+                <span>Register Vehicle</span>
               </Button>
             </UITooltip>
             <UITooltip content="Register a new delivery driver with license documents and avatar" side="bottom">
               <Button 
                 onClick={() => setShowRegisterDriverModal(true)}
-                className="gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-4 h-11 cursor-pointer"
+                className="flex-1 sm:flex-initial gap-2 bg-brand-mid hover:bg-brand-mid/90 text-white font-bold rounded-xl text-xs px-3.5 sm:px-4 h-10.5 cursor-pointer justify-center"
               >
                 <Plus size={16} />
-                Register New Driver
+                <span>Register New Driver</span>
               </Button>
             </UITooltip>
           </div>

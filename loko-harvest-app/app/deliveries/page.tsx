@@ -454,15 +454,15 @@ export default function DeliveriesPage() {
       <div className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 font-body">
         
         {/* Header Block */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black text-brand-forest font-heading tracking-tight">Logistics & Deliveries</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-brand-forest font-heading tracking-tight">Logistics & Deliveries</h1>
               <InfoTooltip title="Logistics & Dispatch Operations" text="Fleet route planning, live driver GPS tracking, delivery proof verification (signature/photo), and shift manifests." side="right" />
             </div>
-            <p className="text-gray-500 text-sm mt-0.5">Track fleet status, allocate dispatch orders, and secure shipping manifests</p>
+            <p className="text-gray-500 text-xs sm:text-sm mt-0.5">Track fleet status, allocate dispatch orders, and secure shipping manifests</p>
           </div>
-          <div className="flex gap-2.5">
+          <div className="flex gap-2.5 w-full sm:w-auto">
             <UITooltip content="Assign unallocated customer orders or missed shipments to an active driver and vehicle" side="bottom">
               <Button 
                 onClick={() => {
@@ -470,10 +470,10 @@ export default function DeliveriesPage() {
                   setSelectedDriverId("");
                   setShowAssignModal(true);
                 }}
-                className="gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold rounded-xl text-xs px-4.5 h-10.5 cursor-pointer shadow-sm transition-all duration-200"
+                className="w-full sm:w-auto justify-center gap-2 bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-bold rounded-xl text-xs px-4.5 h-10.5 cursor-pointer shadow-sm transition-all duration-200"
               >
                 <Plus size={16} />
-                Assign Delivery
+                <span>Assign Delivery</span>
               </Button>
             </UITooltip>
           </div>
@@ -514,7 +514,7 @@ export default function DeliveriesPage() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex border-b border-gray-200 gap-6">
+        <div className="flex overflow-x-auto no-scrollbar border-b border-gray-200 gap-4 sm:gap-6 whitespace-nowrap">
           <button
             onClick={() => setSelectedTab("registry")}
             className={`pb-3 text-xs font-bold transition-all border-b-2 uppercase tracking-wider cursor-pointer ${

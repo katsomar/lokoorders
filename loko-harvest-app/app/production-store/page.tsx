@@ -1084,13 +1084,13 @@ export default function ProductionStorePage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-brand-forest font-heading">Production Store</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-brand-forest font-heading">Production Store</h1>
               <InfoTooltip title="Production Store System" text="Central farm intake repository for tracking raw egg harvests by quality category (Good, D1, D2, D3, Shell) and batch references." side="right" />
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Manage farm bulk egg intake, manage multiple stores, and route transfers to Sales packaging</p>
           </div>
           
-          <div className="flex gap-2.5 items-center">
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 items-center w-full sm:w-auto">
             <UITooltip content="Transfer bulk egg stock to Sales Store for packaging into retail trays and packs" side="bottom">
               <Button 
                 onClick={() => {
@@ -1099,23 +1099,23 @@ export default function ProductionStorePage() {
                   }
                   setShowTransferModal(true);
                 }}
-                className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
+                className="flex-1 sm:flex-initial gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-3 sm:px-4 rounded-xl text-xs cursor-pointer justify-center"
               >
                 <ArrowRightLeft size={15} />
-                Transfer to Sales
+                <span>Transfer to Sales</span>
               </Button>
             </UITooltip>
-            <Link href="/production-store/activity">
-              <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+            <Link href="/production-store/activity" className="flex-1 sm:flex-initial">
+              <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
                 <History size={15} />
-                Transfer Activity
+                <span>Transfer Activity</span>
               </Button>
             </Link>
             <UITooltip content="Record fresh daily egg collection harvest into production inventory" side="bottom">
-              <Link href="/production-store/intake">
-                <Button className="gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer">
+              <Link href="/production-store/intake" className="flex-1 sm:flex-initial">
+                <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
                   <ArrowDownToLine size={15} />
-                  New Harvest Intake
+                  <span>New Harvest Intake</span>
                 </Button>
               </Link>
             </UITooltip>
@@ -1136,7 +1136,7 @@ export default function ProductionStorePage() {
                   </p>
                   <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[9px]">ACTIVE VALUE</Badge>
                 </div>
-                <h3 className="text-3xl font-black font-heading mt-2">
+                <h3 className="text-2xl sm:text-3xl font-black font-heading mt-2 truncate">
                   UGX {calculateTotalValuation().toLocaleString()}
                 </h3>
               </div>
@@ -1155,7 +1155,7 @@ export default function ProductionStorePage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Bulk Egg Trays</p>
-              <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
+              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
                 {formatQuantityGlobal(
                   filteredStock
                     .filter(item => item.unit === "Trays")
@@ -1174,7 +1174,7 @@ export default function ProductionStorePage() {
           <Card className="border border-brand-sage/40 shadow-sm">
             <CardContent className="pt-6">
               <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Loose Damaged Eggs</p>
-              <h3 className="text-2xl font-black text-brand-forest font-heading mt-1.5">
+              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
                 {formatQuantityGlobal(
                   filteredStock
                     .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
@@ -1182,7 +1182,7 @@ export default function ProductionStorePage() {
                   "trays"
                 )}
               </h3>
-              <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1">
+              <p className="text-xs text-red-500 font-bold mt-4 flex items-center gap-1 truncate">
                 Worth UGX {(filteredStock
                   .filter(item => item.code.includes("-D1") || item.code.includes("-D2") || item.code.includes("-D3") || item.code.includes("-SHL") || item.code.includes("EGG-DMG"))
                   .reduce((acc, item) => acc + getStockItemValuation(item), 0)).toLocaleString()}
@@ -1193,10 +1193,10 @@ export default function ProductionStorePage() {
         </div>
 
         {/* Tab Selection */}
-        <div className="flex border-b border-brand-sage/40 gap-6 text-sm font-bold pt-2">
+        <div className="flex overflow-x-auto no-scrollbar border-b border-brand-sage/40 gap-4 sm:gap-6 text-xs sm:text-sm font-bold pt-2 whitespace-nowrap">
           <button 
             onClick={() => setActiveTab("inventory")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "inventory" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "inventory" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <Warehouse size={16} />
@@ -1206,7 +1206,7 @@ export default function ProductionStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("stores")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "stores" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "stores" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <Layers size={16} />
@@ -1216,7 +1216,7 @@ export default function ProductionStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("transfers")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "transfers" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "transfers" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <ArrowRightLeft size={16} />
@@ -1226,7 +1226,7 @@ export default function ProductionStorePage() {
           </button>
           <button 
             onClick={() => setActiveTab("prices")}
-            className={`pb-3 px-1 relative transition-colors cursor-pointer ${activeTab === "prices" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "prices" ? "text-brand-forest" : "text-gray-400 hover:text-brand-forest"}`}
           >
             <span className="flex items-center gap-1.5">
               <DollarSign size={16} />

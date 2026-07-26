@@ -135,22 +135,21 @@ export default function AdminDashboard() {
       <div className="space-y-8">
         
         {/* Header Block */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-black text-brand-forest font-heading">HQ Control Center</h1>
-            <p className="text-gray-500 font-body text-xs mt-1">Real-time operational overview and performance statistics</p>
+            <h1 className="text-xl sm:text-2xl font-black text-brand-forest font-heading">HQ Control Center</h1>
+            <p className="text-gray-500 font-body text-xs mt-0.5 sm:mt-1">Real-time operational overview and performance statistics</p>
           </div>
           <UITooltip content="Fetch fresh operational metrics from API databases" side="bottom">
             <Button 
               onClick={fetchDashboardData}
               variant="outline"
-              className="h-9.5 px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white"
+              className="h-9.5 px-3.5 sm:px-4 text-xs font-extrabold border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 rounded-xl gap-1.5 shadow-sm bg-white self-start sm:self-auto"
             >
               <RefreshCw size={14} className="animate-spin-slow" />
-              Refresh Control Panel
+              <span>Refresh Control Panel</span>
             </Button>
           </UITooltip>
-
         </div>
 
         {/* ROW 1: Upgraded Operations Cards & Donut Chart (Grid of 3 columns) */}
@@ -215,7 +214,7 @@ export default function AdminDashboard() {
                 {dashboardData.status_distribution.every((d: any) => d.value === 0) ? (
                   <div className="text-gray-400 text-xs italic">No active order records this month</div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={100}>
                     <PieChart>
                       <Pie
                         data={dashboardData.status_distribution}
@@ -264,7 +263,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent className="p-6">
               <div className="h-[300px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={100}>
                   <AreaChart data={dashboardData.revenue_trend}>
                     <defs>
                       <linearGradient id="colorCollected" x1="0" y1="0" x2="0" y2="1">
@@ -332,7 +331,7 @@ export default function AdminDashboard() {
                     No customers with outstanding credit balance.
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={100}>
                     <BarChart data={dashboardData.top_customers} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E8F0E9" />
                       <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(val) => `UGX ${(val/1_000_000).toFixed(1)}M`} />

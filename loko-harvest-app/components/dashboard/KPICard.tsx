@@ -89,12 +89,12 @@ export function KPICard({
 
         {/* Large Stat Section */}
         <div className="flex justify-between items-center mt-2">
-          <div>
-            <h3 className="text-3xl font-black text-brand-forest font-heading tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-2xl sm:text-3xl font-black text-brand-forest font-heading tracking-tight truncate">
               {prefix}{displayValue}{suffix}
             </h3>
             {subtitle && (
-              <p className="text-xs text-gray-400 mt-1 font-body font-medium">
+              <p className="text-xs text-gray-400 mt-1 font-body font-medium truncate">
                 {subtitle}
               </p>
             )}

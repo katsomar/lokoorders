@@ -102,14 +102,14 @@ export default function InvoicesPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-brand-forest font-heading">Invoices & Billing</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-brand-forest font-heading">Invoices & Billing</h1>
               <InfoTooltip title="Billing & Accounts Receivable" text="Monitor customer invoices, credit payment terms, aging accounts, and outstanding debt balances." side="right" />
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Manage billing and customer accounts receivable</p>
           </div>
-          <Button className="gap-2" variant="outline">
+          <Button className="gap-2 w-full sm:w-auto justify-center" variant="outline">
             <Download size={18} />
-            Export Aging Report
+            <span>Export Aging Report</span>
           </Button>
         </div>
 

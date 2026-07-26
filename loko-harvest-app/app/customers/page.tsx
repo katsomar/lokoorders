@@ -502,10 +502,10 @@ export default function CustomersPage() {
           <UITooltip content="Register a standalone store, file-opener HQ corporation, or branch outlet" side="bottom">
             <Button 
               onClick={() => setShowAddModal(true)}
-              className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer"
+              className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer w-full sm:w-auto justify-center"
             >
               <Plus size={15} />
-              Register Customer / Branch
+              <span>Register Customer / Branch</span>
             </Button>
           </UITooltip>
         </div>

@@ -69,6 +69,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return true;
   });
 
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
   const toggleSidebar = () => {
     setIsSidebarOpen((prev) => {
       const next = !prev;
@@ -84,6 +86,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, clearAuth } = useAuth();
   const { setLookups, clearLookups, isLoaded, fetchLookups } = useLookups();
   const [pendingCount, setPendingCount] = useState(0);
+
+  // Close mobile sidebar on route change
+  React.useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
 
   React.useEffect(() => {
     async function initBootstrap() {
@@ -102,7 +109,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     initBootstrap();
   }, [user, isLoaded]);
-
 
   React.useEffect(() => {
     if (user && user.role === "order_manager" && pathname !== "/production-store/intake") {
@@ -127,7 +133,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user]);
 
   const handleLogout = () => {
-
     clearAuth();
     clearLookups();
     router.push("/login");
@@ -146,66 +151,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             Back
           </button>
           <span className="text-xs font-extrabold tracking-wider uppercase font-heading">Harvest Intake</span>
-          <div className="w-10"></div> {/* spacer */}
+          <div className="w-10"></div>
         </header>
-        <main className="flex-1 p-4">
+        <main className="flex-1 p-3 sm:p-4">
           {children}
         </main>
       </div>
     );
   }
 
-  return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <motion.aside
-        initial={false}
-        animate={{ width: isSidebarOpen ? 240 : 80 }}
-        className="relative z-20 flex flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out"
-      >
-        <div className="flex h-16 items-center justify-between px-5 border-b border-white/10">
-          {isSidebarOpen ? (
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center"
-            >
-              <img 
-                src="/logo/loko.png" 
-                alt="Loko Harvest Logo" 
-                className="h-9 w-auto object-contain"
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center justify-center w-6 h-6"
-            >
-              <img 
-                src="/logo/loko.png" 
-                alt="Loko Harvest Logo" 
-                className="h-6 w-auto object-contain"
-              />
-            </motion.div>
-          )}
-          <button onClick={toggleSidebar} className="text-white hover:text-brand-yellow shrink-0">
-            <Menu size={20} />
-          </button>
+  const renderNavContent = (isExpanded: boolean) => (
+    <>
+      <div className="flex h-16 items-center justify-between px-5 border-b border-white/10 shrink-0">
+        <div className="flex items-center gap-2">
+          <img 
+            src="/logo/loko.png" 
+            alt="Loko Harvest Logo" 
+            className="h-8 w-auto object-contain"
+          />
         </div>
+        
+        {/* Desktop Collapse Toggle */}
+        <button 
+          onClick={toggleSidebar} 
+          className="hidden lg:flex text-white hover:text-brand-yellow shrink-0 cursor-pointer p-1 rounded-lg hover:bg-white/10"
+          title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
+        >
+          <Menu size={20} />
+        </button>
 
-        <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-hide">
-          {navItems
-            .map((group) => ({
-              ...group,
-              items: group.items.filter(
-                (item) => (item.href !== "/users" && item.name !== "External POS") || user?.role === "admin"
-              ),
-            }))
-            .filter((group) => group.items.length > 0)
-            .map((group) => (
-              <div key={group.group} className="space-y-2">
-              {isSidebarOpen && (
+        {/* Mobile Drawer Close Button */}
+        <button 
+          onClick={() => setIsMobileOpen(false)} 
+          className="lg:hidden text-white hover:text-brand-yellow shrink-0 cursor-pointer p-1 rounded-lg hover:bg-white/10"
+        >
+          <X size={22} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-6 px-4 space-y-8 scrollbar-hide">
+        {navItems
+          .map((group) => ({
+            ...group,
+            items: group.items.filter(
+              (item) => (item.href !== "/users" && item.name !== "External POS") || user?.role === "admin"
+            ),
+          }))
+          .filter((group) => group.items.length > 0)
+          .map((group) => (
+            <div key={group.group} className="space-y-2">
+              {isExpanded && (
                 <h3 className="px-2 text-xs font-semibold uppercase tracking-wider text-sage-300 opacity-50 font-heading">
                   {group.group}
                 </h3>
@@ -219,29 +214,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       href={item.href}
                       target={item.external ? "_blank" : undefined}
                       rel={item.external ? "noopener noreferrer" : undefined}
-                      className={`relative flex items-center gap-3 rounded-lg px-3 py-2 transition-all group ${
+                      onClick={() => setIsMobileOpen(false)}
+                      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all group ${
                         isActive 
-                          ? "bg-white/10 text-brand-yellow border-l-4 border-brand-yellow" 
+                          ? "bg-white/15 text-brand-yellow border-l-4 border-brand-yellow font-bold" 
                           : "text-white/70 hover:bg-white/5 hover:text-white"
                       }`}
                     >
-                      <item.icon size={20} className={isActive ? "text-brand-yellow" : ""} />
-                      {isSidebarOpen && (
-                        <span className="text-sm font-medium flex-1">{item.name}</span>
+                      <item.icon size={20} className={isActive ? "text-brand-yellow shrink-0" : "shrink-0"} />
+                      {isExpanded && (
+                        <span className="text-sm font-medium flex-1 truncate">{item.name}</span>
                       )}
-                      {isSidebarOpen && item.name === "Pending Requests" && pendingCount > 0 && (
-                        <span className="bg-red-550 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
+                      {isExpanded && item.name === "Pending Requests" && pendingCount > 0 && (
+                        <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
                           {pendingCount}
                         </span>
                       )}
-                      {!isSidebarOpen && item.name === "Pending Requests" && pendingCount > 0 && (
+                      {!isExpanded && item.name === "Pending Requests" && pendingCount > 0 && (
                         <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
                         </span>
                       )}
-                      {!isSidebarOpen && isActive && (
-                         <div className="absolute left-0 w-1 h-6 bg-brand-yellow rounded-r-full" />
+                      {!isExpanded && isActive && (
+                        <div className="absolute left-0 w-1 h-6 bg-brand-yellow rounded-r-full" />
                       )}
                     </Link>
                   );
@@ -249,51 +245,100 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
             </div>
           ))}
-        </div>
+      </div>
 
-        <div className="p-4 border-t border-white/10">
-          <button 
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-white/70 hover:bg-red-500/10 hover:text-red-400 transition-colors"
-          >
-            <LogOut size={20} />
-            {isSidebarOpen && <span className="text-sm font-medium">Logout</span>}
-          </button>
-        </div>
+      <div className="p-4 border-t border-white/10 shrink-0">
+        <button 
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-white/70 hover:bg-red-500/10 hover:text-red-400 transition-colors cursor-pointer"
+        >
+          <LogOut size={20} className="shrink-0" />
+          {isExpanded && <span className="text-sm font-medium">Logout</span>}
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex h-screen bg-gray-50 overflow-hidden relative">
+      
+      {/* 1. DESKTOP SIDEBAR (Visible lg and above) */}
+      <motion.aside
+        initial={false}
+        animate={{ width: isSidebarOpen ? 240 : 80 }}
+        className="hidden lg:flex relative z-20 flex-col bg-brand-forest text-white transition-all duration-300 ease-in-out shrink-0"
+      >
+        {renderNavContent(isSidebarOpen)}
       </motion.aside>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 2. MOBILE OVERLAY BACKDROP (< lg) */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileOpen(false)}
+            className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 3. MOBILE SLIDE-OVER DRAWER (< lg) */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.aside
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 250 }}
+            className="lg:hidden fixed inset-y-0 left-0 z-50 w-72 bg-brand-forest text-white flex flex-col shadow-2xl"
+          >
+            {renderNavContent(true)}
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <PushPermissionBanner />
 
-        {/* Top Nav */}
-        <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-8 z-30 text-white">
+        {/* Top Header Navbar */}
+        <header className="h-16 bg-brand-forest border-b border-white/10 flex items-center justify-between px-4 sm:px-6 lg:px-8 z-30 text-white shrink-0">
+          
+          <div className="flex items-center gap-3">
+            {/* Mobile Hamburger Toggle Button */}
+            <button 
+              onClick={() => setIsMobileOpen(true)}
+              className="lg:hidden text-white hover:text-brand-yellow p-1.5 rounded-lg hover:bg-white/10 cursor-pointer"
+              title="Open Navigation Menu"
+            >
+              <Menu size={22} />
+            </button>
 
-          <div className="flex items-center gap-4">
-            <h2 className="text-lg font-bold text-white font-heading tracking-tight flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-brand-yellow animate-pulse" />
-              {navItems.flatMap(g => g.items).find(i => i.href === pathname)?.name || "Dashboard"}
+            <h2 className="text-base sm:text-lg font-bold text-white font-heading tracking-tight flex items-center gap-2 truncate">
+              <span className="h-2 w-2 rounded-full bg-brand-yellow animate-pulse shrink-0" />
+              <span className="truncate">{navItems.flatMap(g => g.items).find(i => i.href === pathname)?.name || "Dashboard"}</span>
             </h2>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
             <NotificationCenter />
             
-            <div className="flex items-center gap-3 border-l border-white/10 pl-6">
-
+            <div className="flex items-center gap-2 sm:gap-3 border-l border-white/10 pl-3 sm:pl-6">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold text-white leading-none">{user?.name || "Admin User"}</p>
-                <p className="text-xs text-brand-yellow/80 mt-1 capitalize font-medium">{user?.role?.replace('_', ' ') || "Administrator"}</p>
+                <p className="text-xs sm:text-sm font-semibold text-white leading-none">{user?.name || "Admin User"}</p>
+                <p className="text-[10px] sm:text-xs text-brand-yellow/80 mt-1 capitalize font-medium">{user?.role?.replace('_', ' ') || "Administrator"}</p>
               </div>
-              <div className="h-10 w-10 rounded-full bg-brand-yellow flex items-center justify-center text-brand-forest font-extrabold border border-white/20 shadow-inner">
+              <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-brand-yellow flex items-center justify-center text-brand-forest font-extrabold text-xs sm:text-sm border border-white/20 shadow-inner shrink-0">
                 {user?.name?.charAt(0) || "A"}
               </div>
             </div>
           </div>
         </header>
 
-        {/* Page Body */}
-        <main className="flex-1 overflow-y-auto p-8 scrollbar-hide">
+        {/* Page Body Container */}
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 scrollbar-hide">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}

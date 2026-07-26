@@ -237,10 +237,10 @@ export default function PendingRequestsPage() {
         </div>
 
         {/* Tab Switching Menu */}
-        <div className="flex bg-[#F0F4F2] p-1 rounded-xl border border-brand-sage/20 max-w-sm shadow-inner">
+        <div className="flex overflow-x-auto no-scrollbar bg-[#F0F4F2] p-1 rounded-xl border border-brand-sage/20 w-full sm:max-w-md shadow-inner whitespace-nowrap">
           <button
             onClick={() => setActiveTab("transfers")}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={`flex-1 min-w-[100px] py-1.5 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === "transfers"
                 ? "bg-brand-forest text-white shadow-sm"
                 : "text-brand-forest hover:bg-brand-sage/15"
