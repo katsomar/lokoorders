@@ -61,7 +61,24 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("loko_sidebar_open");
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        localStorage.setItem("loko_sidebar_open", JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
   const pathname = usePathname();
   const router = useRouter();
   const { user, clearAuth } = useAuth();
@@ -109,9 +126,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => clearInterval(interval);
   }, [user]);
 
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
-
   const handleLogout = () => {
+
     clearAuth();
     clearLookups();
     router.push("/login");
