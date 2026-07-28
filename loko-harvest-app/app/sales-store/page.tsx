@@ -414,6 +414,10 @@ export default function SalesStorePage() {
   }, [salesStores, convStoreId]);
 
   useEffect(() => {
+    fetchLookups(true);
+  }, [fetchLookups]);
+
+  useEffect(() => {
     fetchSalesDashboardData(false);
   }, [selectedDate]);
 

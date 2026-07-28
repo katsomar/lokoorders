@@ -231,7 +231,7 @@ export default function ProductionStorePage() {
   const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
   const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
-  const { products, productionStores, salesStores } = useLookups();
+  const { products, productionStores, salesStores, fetchLookups } = useLookups();
   const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
@@ -575,6 +575,10 @@ export default function ProductionStorePage() {
       setSalesTransferStoreDestId(salesStores[0].id);
     }
   }, [salesStores, salesTransferStoreDestId]);
+
+  useEffect(() => {
+    fetchLookups(true);
+  }, [fetchLookups]);
 
   useEffect(() => {
     fetchDashboardData(true, false);
