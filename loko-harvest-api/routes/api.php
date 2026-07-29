@@ -5,15 +5,15 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::get('/health', [App\Http\Controllers\Api\V1\HealthCheckController::class, 'check']);
-    Route::post('/auth/login', [App\Http\Controllers\Api\V1\AuthController::class, 'login']);
+    Route::post('/auth/login', [App\Http\Controllers\Api\V1\AuthController::class, 'login'])->name('login');
     Route::post('/auth/register', [App\Http\Controllers\Api\V1\AuthController::class, 'register']);
+    Route::get('/stream', [App\Http\Controllers\Api\V1\RealtimeEventController::class, 'stream']);
     
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [App\Http\Controllers\Api\V1\AuthController::class, 'logout']);
         Route::get('/auth/me', [App\Http\Controllers\Api\V1\AuthController::class, 'me']);
         Route::get('/auth/bootstrap', [App\Http\Controllers\Api\V1\AuthController::class, 'bootstrap']);
         Route::post('/auth/change-password', [App\Http\Controllers\Api\V1\AuthController::class, 'changePassword']);
-        Route::get('/stream', [App\Http\Controllers\Api\V1\RealtimeEventController::class, 'stream']);
         
         // Admin User Management
         Route::get('/admin/users', [App\Http\Controllers\Api\V1\AdminUserController::class, 'index']);
