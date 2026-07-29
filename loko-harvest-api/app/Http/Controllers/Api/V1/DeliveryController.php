@@ -341,6 +341,13 @@ class DeliveryController extends Controller
             }
 
             $delivery->save();
+
+            \App\Services\RealtimePublisher::publish('delivery.updated', [
+                'delivery_id' => $delivery->id,
+                'driver_id' => $delivery->driver_id,
+                'latitude' => $lat,
+                'longitude' => $lng
+            ]);
         }
 
         return $this->success($delivery, 'Tracking location updated successfully');

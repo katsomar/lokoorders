@@ -50,6 +50,7 @@ export default function DriverRouteMap({ assignedRoute, vehicleConsumption }: Dr
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setDriverLocation([position.coords.latitude, position.coords.longitude]);
+          setGeoWarning(null);
           setLoading(false);
         },
         (error) => {
@@ -58,13 +59,13 @@ export default function DriverRouteMap({ assignedRoute, vehicleConsumption }: Dr
           if (error.code === error.PERMISSION_DENIED) {
             warningMsg = "Location access denied. Please enable location permissions.";
           } else if (error.code === error.TIMEOUT) {
-            warningMsg = "Location request timed out. Using default Kampala coordinates.";
+            warningMsg = "Location request timed out. Retrying GPS satellite fix...";
           }
           setGeoWarning(warningMsg);
           setDriverLocation([0.3476, 32.5825]);
           setLoading(false);
         },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else {
       setGeoWarning("Geolocation not supported by browser. Using default Kampala coordinates.");

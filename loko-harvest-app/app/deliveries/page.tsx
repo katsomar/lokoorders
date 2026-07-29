@@ -1364,17 +1364,15 @@ export default function DeliveriesPage() {
                     </div>
 
                     {/* Leaflet Map for Admin Tracking */}
-                    {selectedDelivery.order?.customer?.latitude !== null && selectedDelivery.order?.customer?.longitude !== null && (
-                      <AdminTrackingMap
-                        customerLat={Number(selectedDelivery.order.customer.latitude)}
-                        customerLng={Number(selectedDelivery.order.customer.longitude)}
-                        customerName={selectedDelivery.order.customer.name}
-                        currentLat={selectedDelivery.current_latitude ? Number(selectedDelivery.current_latitude) : null}
-                        currentLng={selectedDelivery.current_longitude ? Number(selectedDelivery.current_longitude) : null}
-                        locationHistory={selectedDelivery.location_history}
-                        status={selectedDelivery.status}
-                      />
-                    )}
+                    <AdminTrackingMap
+                      customerLat={selectedDelivery.order?.customer?.latitude ? Number(selectedDelivery.order.customer.latitude) : 0.3476}
+                      customerLng={selectedDelivery.order?.customer?.longitude ? Number(selectedDelivery.order.customer.longitude) : 32.5825}
+                      customerName={selectedDelivery.order?.customer?.name || "Customer Destination"}
+                      currentLat={selectedDelivery.current_latitude ? Number(selectedDelivery.current_latitude) : null}
+                      currentLng={selectedDelivery.current_longitude ? Number(selectedDelivery.current_longitude) : null}
+                      locationHistory={selectedDelivery.location_history}
+                      status={selectedDelivery.status}
+                    />
                   </div>
                   
                   <div className="relative pl-6 space-y-4.5 border-l border-brand-sage/40 ml-3">
