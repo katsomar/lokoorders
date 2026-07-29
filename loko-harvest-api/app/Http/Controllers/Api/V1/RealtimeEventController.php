@@ -34,8 +34,9 @@ class RealtimeEventController extends Controller
             $lastTimestamp = 0.0;
             $startTime = time();
 
-            // Stream for up to 5 minutes per connection (browser EventSource will auto-reconnect)
-            while ((time() - $startTime) < 300) {
+            // Stream for 5 seconds per connection (browser EventSource will auto-reconnect seamlessly)
+            // This immediately releases the PHP worker process to keep all API requests super fast!
+            while ((time() - $startTime) < 5) {
                 if (connection_aborted()) {
                     break;
                 }
