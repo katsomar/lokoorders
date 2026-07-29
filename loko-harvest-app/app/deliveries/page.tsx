@@ -115,7 +115,7 @@ export default function DeliveriesPage() {
         } catch (err) {
           console.error("Failed to poll active delivery tracking updates:", err);
         }
-      }, 5000); // Poll every 5 seconds for smooth live admin tracking
+      }, 3000); // Fast 3-second live polling for active driver tracking
     }
     return () => clearInterval(trackingInterval);
   }, [selectedDelivery?.id, selectedDelivery?.status]);

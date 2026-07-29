@@ -30,12 +30,17 @@ export default function AdminTrackingMap({
   const pathTakenPolylineRef = useRef<L.Polyline | null>(null);
   const pathRemainingPolylineRef = useRef<L.Polyline | null>(null);
 
-  const [loading, setLoading] = useState(true);
+  const hasFittedBoundsRef = useRef(false);
 
   useEffect(() => {
     // Wait for client-side mounting
     setLoading(false);
   }, []);
+
+  // Reset initial fit when switching to a different delivery (customer location changes)
+  useEffect(() => {
+    hasFittedBoundsRef.current = false;
+  }, [customerLat, customerLng]);
 
   useEffect(() => {
     if (loading || !mapContainerRef.current) return;
@@ -226,8 +231,10 @@ export default function AdminTrackingMap({
         console.error("Failed to fetch OSRM route:", err);
       }
 
-      if (isMounted) {
+      // ONLY fit bounds once on initial map load so manual zooming is preserved!
+      if (isMounted && !hasFittedBoundsRef.current) {
         map.fitBounds(bounds, { padding: [40, 40] });
+        hasFittedBoundsRef.current = true;
       }
     }
 
@@ -237,6 +244,15 @@ export default function AdminTrackingMap({
       isMounted = false;
     };
   }, [customerLat, customerLng, currentLat, currentLng, locationHistory, status, loading]);
+
+  const handleRecenter = () => {
+    if (!mapRef.current) return;
+    const bounds = L.latLngBounds([[customerLat, customerLng]]);
+    if (currentLat !== null && currentLng !== null) {
+      bounds.extend([currentLat, currentLng]);
+    }
+    mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+  };
 
   if (loading) {
     return (
@@ -248,11 +264,20 @@ export default function AdminTrackingMap({
   }
 
   return (
-    <div className="w-full h-64 rounded-2xl border border-brand-forest/20 overflow-hidden shadow-inner z-10 relative">
+    <div className="w-full h-64 rounded-2xl border border-brand-forest/20 overflow-hidden shadow-inner z-10 relative group">
       <div 
         ref={mapContainerRef} 
         className="w-full h-full" 
       />
+      <button
+        type="button"
+        onClick={handleRecenter}
+        className="absolute bottom-3 right-3 z-[400] bg-white/90 backdrop-blur-md hover:bg-white text-brand-forest px-3 py-1.5 rounded-lg shadow-md border border-gray-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+        title="Recenter Map Overview"
+      >
+        <span>🎯</span> Recenter
+      </button>
     </div>
   );
+}
 }
