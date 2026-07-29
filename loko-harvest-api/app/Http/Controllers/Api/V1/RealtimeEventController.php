@@ -11,21 +11,24 @@ class RealtimeEventController extends Controller
 {
     public function stream(Request $request): StreamedResponse
     {
-        $token = $request->bearerToken() ?? $request->query('token');
-        if ($token && !auth()->check()) {
-            $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
-            if ($accessToken) {
-                auth()->setUser($accessToken->tokenable);
+        try {
+            $token = $request->bearerToken() ?? $request->query('token');
+            if ($token && !auth()->check()) {
+                $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+                if ($accessToken && $accessToken->tokenable) {
+                    auth()->setUser($accessToken->tokenable);
+                }
             }
+        } catch (\Throwable $e) {
+            // Ignore auth token parsing failure for SSE stream
         }
 
         $response = new StreamedResponse(function () {
-            // Set max execution time to 0 to prevent timeout
-            set_time_limit(0);
+            @set_time_limit(0);
             
-            // Turn off output buffering
-            if (ob_get_level() > 0) {
-                ob_end_clean();
+            // Turn off output buffering safely
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
             }
 
             $lastTimestamp = 0.0;
@@ -37,28 +40,28 @@ class RealtimeEventController extends Controller
                     break;
                 }
 
-                $latest = RealtimePublisher::getLatest();
+                try {
+                    $latest = RealtimePublisher::getLatest();
 
-                if ($latest && isset($latest['timestamp']) && $latest['timestamp'] > $lastTimestamp) {
-                    $lastTimestamp = $latest['timestamp'];
-                    
-                    $event = $latest['event'];
-                    $payload = json_encode($latest);
+                    if ($latest && isset($latest['timestamp']) && $latest['timestamp'] > $lastTimestamp) {
+                        $lastTimestamp = $latest['timestamp'];
+                        
+                        $event = $latest['event'];
+                        $payload = json_encode($latest);
 
-                    echo "event: {$event}\n";
-                    echo "data: {$payload}\n\n";
-                    
-                    if (ob_get_level() > 0) {
-                        ob_flush();
+                        echo "event: {$event}\n";
+                        echo "data: {$payload}\n\n";
+                    } else {
+                        // Send heartbeat ping every iteration
+                        echo ": heartbeat\n\n";
                     }
-                    flush();
-                } else {
-                    // Send heartbeat ping every 10 iterations (approx 10s)
-                    echo ": heartbeat\n\n";
+
                     if (ob_get_level() > 0) {
-                        ob_flush();
+                        @ob_flush();
                     }
-                    flush();
+                    @flush();
+                } catch (\Throwable $e) {
+                    // Suppress transient stream loop errors
                 }
 
                 // Sleep for 1 second before checking for new events
