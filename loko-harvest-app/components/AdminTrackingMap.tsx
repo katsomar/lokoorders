@@ -30,6 +30,7 @@ export default function AdminTrackingMap({
   const pathTakenPolylineRef = useRef<L.Polyline | null>(null);
   const pathRemainingPolylineRef = useRef<L.Polyline | null>(null);
 
+  const [loading, setLoading] = useState(true);
   const hasFittedBoundsRef = useRef(false);
 
   useEffect(() => {
