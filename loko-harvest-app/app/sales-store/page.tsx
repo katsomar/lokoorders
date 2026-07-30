@@ -2619,38 +2619,35 @@ export default function SalesStorePage() {
             color: "blue"
           }
         ]}
+        primaryTableTitle="Section 1: Production Bulk Inflow & Store Inventory Ledger"
         tableHeaders={[
-          "Product Name",
+          "Store Name",
+          "Batch No",
+          "Bulk Product",
           "Code",
-          "Facility",
-          "Batch Ref",
-          "Category",
           "Opening Stock",
           "Transferred In",
-          "Conversions In/Out",
-          "Stock Sold",
           "Transferred Out",
           "Damages",
-          "Closing Stock",
-          "Retail Unit Price",
-          "Worth Sold (UGX)",
-          "Worth Closing (UGX)"
+          "Closing Bulk Stock",
+          "Unit Price",
+          "Worth Outflow",
+          "Worth Closing"
         ]}
         tableRows={React.useMemo(() => {
           const filtered = getFilteredStock();
-          const rows: (string | React.ReactNode)[][] = filtered.map(item => {
+          const bulkItems = filtered.filter(item => isBulkProduct(item.code));
+
+          const rows: (string | React.ReactNode)[][] = bulkItems.map(item => {
             const worthTaken = getStockItemValuationTaken(item);
             const worthClosing = getStockItemValuation(item);
             return [
-              <span className="font-extrabold text-brand-forest text-xs">{item.product}</span>,
+              <span className="font-extrabold text-brand-forest text-xs">{item.sales_store_name}</span>,
+              <Badge className="border border-brand-sage/50 bg-gray-50 text-gray-700 font-mono text-[9px] px-1.5 py-0.2">{item.batch_reference || 'N/A'}</Badge>,
+              <span className="font-extrabold text-gray-900 text-xs">{item.product}</span>,
               <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8.5px] font-mono font-bold px-1.5 py-0.2">{item.code}</Badge>,
-              <span className="text-gray-600 font-semibold text-[9.5px]">{item.sales_store_name}</span>,
-              <span className="font-mono text-gray-500 font-bold text-[9px]">{item.batch_reference || 'N/A'}</span>,
-              <Badge className="bg-brand-sage/40 text-brand-forest border-none text-[8px] font-extrabold uppercase px-1.5 py-0.2">{item.category}</Badge>,
               <span className={item.opening_stock > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantity(item.opening_stock, item.unit)}</span>,
               <span className={item.transferred_in > 0 ? "text-blue-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantity(item.transferred_in, item.unit)}</span>,
-              <span className="font-mono text-[9px] font-bold text-purple-700">{item.conversions_in > 0 ? `+${item.conversions_in}` : ''} {item.conversions_out > 0 ? `-${item.conversions_out}` : '0'}</span>,
-              <span className={item.sold_quantity > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantity(item.sold_quantity, item.unit)}</span>,
               <span className={item.transferred_out > 0 ? "text-sky-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantity(item.transferred_out, item.unit)}</span>,
               <span className={(item.damages || 0) > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantity(item.damages || 0, item.unit)}</span>,
               <span className="text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs">{formatQuantity(item.closing_stock, item.unit)}</span>,
@@ -2660,23 +2657,104 @@ export default function SalesStorePage() {
             ];
           });
 
-          // Summary TOTAL Row
+          // Summary TOTAL Row for Bulk Section
           rows.push([
-            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
-            "",
+            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">BULK TOTAL</span>,
             "",
             "",
             <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
-            <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + i.opening_stock, 0))}</span>,
-            <span className="font-bold font-mono text-blue-700 text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + i.transferred_in, 0))}</span>,
+            <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(bulkItems.reduce((s, i) => s + i.opening_stock, 0))}</span>,
+            <span className="font-bold font-mono text-blue-700 text-xs">{formatTotalQuantity(bulkItems.reduce((s, i) => s + i.transferred_in, 0))}</span>,
+            <span className="font-bold font-mono text-sky-700 text-xs">{formatTotalQuantity(bulkItems.reduce((s, i) => s + i.transferred_out, 0))}</span>,
+            <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(bulkItems.reduce((s, i) => s + (i.damages || 0), 0))}</span>,
+            <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(bulkItems.reduce((s, i) => s + i.closing_stock, 0))}</span>,
             "—",
-            <span className="font-bold font-mono text-amber-800 text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + i.sold_quantity, 0))}</span>,
-            <span className="font-bold font-mono text-sky-700 text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + i.transferred_out, 0))}</span>,
-            <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + (i.damages || 0), 0))}</span>,
-            <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(filtered.reduce((s, i) => s + i.closing_stock, 0))}</span>,
+            <span className="font-black font-mono text-amber-900 text-xs">UGX {bulkItems.reduce((s, i) => s + getStockItemValuationTaken(i), 0).toLocaleString()}</span>,
+            <span className="font-black font-mono text-brand-forest text-xs">UGX {bulkItems.reduce((s, i) => s + getStockItemValuation(i), 0).toLocaleString()}</span>
+          ]);
+
+          return rows;
+        }, [stockItems, selectedStoreFilter, selectedBatchFilter])}
+
+        secondTableTitle="Section 2: Converted Retail Packaged Stock Ledger (Grouped by Category & Batch)"
+        secondTableHeaders={[
+          "Category Group",
+          "Packaged Product",
+          "Code",
+          "Batch Ref",
+          "Opening Packs",
+          "Conversions In",
+          "Conversions Out",
+          "Stock Sold",
+          "Transferred Out",
+          "Damages",
+          "Closing Packs",
+          "Retail Price",
+          "Worth Sold",
+          "Worth Closing"
+        ]}
+        secondTableRows={React.useMemo(() => {
+          const filtered = getFilteredStock();
+          const convertedItems = filtered.filter(item => !isBulkProduct(item.code));
+
+          // Group by Category: White, Cream, Brown, Other
+          const categoriesOrder: { key: string; label: string; badge: string }[] = [
+            { key: "white", label: "WHITE EGG PACKS", badge: "bg-emerald-100 text-emerald-900 border border-emerald-300" },
+            { key: "cream", label: "CREAM EGG PACKS", badge: "bg-amber-100 text-amber-900 border border-amber-300" },
+            { key: "brown", label: "BROWN EGG PACKS", badge: "bg-amber-800 text-white" },
+            { key: "other", label: "OTHER PACKS & RETAIL", badge: "bg-purple-100 text-purple-900 border border-purple-300" },
+          ];
+
+          const rows: (string | React.ReactNode)[][] = [];
+
+          categoriesOrder.forEach(catGroup => {
+            const catItems = convertedItems.filter(item => {
+              if (catGroup.key === "other") return !["white", "cream", "brown"].includes(item.category.toLowerCase());
+              return item.category.toLowerCase() === catGroup.key;
+            });
+
+            if (catItems.length === 0) return;
+
+            catItems.forEach((item, idx) => {
+              const isFirst = idx === 0;
+              const worthTaken = getStockItemValuationTaken(item);
+              const worthClosing = getStockItemValuation(item);
+
+              rows.push([
+                isFirst ? <Badge className={`${catGroup.badge} text-[8px] font-black px-2 py-0.5 uppercase shadow-xs`}>{catGroup.label}</Badge> : "",
+                <span className="font-extrabold text-brand-forest text-xs">{item.product}</span>,
+                <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8.5px] font-mono font-bold px-1.5 py-0.2">{item.code}</Badge>,
+                <span className="font-mono text-gray-500 font-bold text-[9px]">{item.batch_reference || 'N/A'}</span>,
+                <span className={item.opening_stock > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantity(item.opening_stock, item.unit)}</span>,
+                <span className={item.conversions_in > 0 ? "text-purple-700 font-bold" : "text-gray-400 font-mono"}>{item.conversions_in > 0 ? `+${item.conversions_in}` : '0'}</span>,
+                <span className={item.conversions_out > 0 ? "text-red-600 font-bold" : "text-gray-400 font-mono"}>{item.conversions_out > 0 ? `-${item.conversions_out}` : '0'}</span>,
+                <span className={item.sold_quantity > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantity(item.sold_quantity, item.unit)}</span>,
+                <span className={item.transferred_out > 0 ? "text-sky-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantity(item.transferred_out, item.unit)}</span>,
+                <span className={(item.damages || 0) > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantity(item.damages || 0, item.unit)}</span>,
+                <span className={item.closing_stock > 0 ? "text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs" : "text-gray-400 font-mono"}>{formatQuantity(item.closing_stock, item.unit)}</span>,
+                <span className="font-mono text-gray-600 font-semibold">UGX {item.unit_price.toLocaleString()}</span>,
+                <span className={worthTaken > 0 ? "font-mono font-black text-amber-900" : "text-gray-400 font-mono"}>{worthTaken > 0 ? `UGX ${worthTaken.toLocaleString()}` : '0'}</span>,
+                <span className={worthClosing > 0 ? "font-mono font-black text-brand-forest" : "text-gray-400 font-mono"}>{worthClosing > 0 ? `UGX ${worthClosing.toLocaleString()}` : '0'}</span>
+              ]);
+            });
+          });
+
+          // Summary TOTAL Row for Converted Section
+          rows.push([
+            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">PACKS TOTAL</span>,
+            "",
+            "",
+            "",
+            <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(convertedItems.reduce((s, i) => s + i.opening_stock, 0))}</span>,
+            <span className="font-bold font-mono text-purple-700 text-xs">+{convertedItems.reduce((s, i) => s + i.conversions_in, 0)}</span>,
+            <span className="font-bold font-mono text-red-600 text-xs">-{convertedItems.reduce((s, i) => s + i.conversions_out, 0)}</span>,
+            <span className="font-bold font-mono text-amber-800 text-xs">{formatTotalQuantity(convertedItems.reduce((s, i) => s + i.sold_quantity, 0))}</span>,
+            <span className="font-bold font-mono text-sky-700 text-xs">{formatTotalQuantity(convertedItems.reduce((s, i) => s + i.transferred_out, 0))}</span>,
+            <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(convertedItems.reduce((s, i) => s + (i.damages || 0), 0))}</span>,
+            <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(convertedItems.reduce((s, i) => s + i.closing_stock, 0))}</span>,
             "—",
-            <span className="font-black font-mono text-amber-900 text-xs">UGX {filtered.reduce((s, i) => s + getStockItemValuationTaken(i), 0).toLocaleString()}</span>,
-            <span className="font-black font-mono text-brand-forest text-xs">UGX {calculateTotalValuation().toLocaleString()}</span>
+            <span className="font-black font-mono text-amber-900 text-xs">UGX {convertedItems.reduce((s, i) => s + getStockItemValuationTaken(i), 0).toLocaleString()}</span>,
+            <span className="font-black font-mono text-brand-forest text-xs">UGX {convertedItems.reduce((s, i) => s + getStockItemValuation(i), 0).toLocaleString()}</span>
           ]);
 
           return rows;

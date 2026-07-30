@@ -2510,6 +2510,14 @@ export default function ProductionStorePage() {
             color: "blue"
           }
         ]}
+        selectedStoreFilter={selectedStoreFilter}
+        selectedBatchFilter={selectedBatchFilter}
+        selectedDateFilter={selectedDate}
+        storeOptions={productionStores}
+        batchOptions={getUniqueBatches().filter(b => b !== "all")}
+        onStoreFilterChange={setSelectedStoreFilter}
+        onBatchFilterChange={setSelectedBatchFilter}
+        onDateFilterChange={setSelectedDate}
         tableHeaders={[
           "Production Store",
           "Batch No",
@@ -2517,6 +2525,7 @@ export default function ProductionStorePage() {
           "Quality",
           "Opening Stock",
           "Incoming",
+          "Current Stock",
           "Stock Outflow",
           "Damages",
           "Closing Stock",
@@ -2541,6 +2550,7 @@ export default function ProductionStorePage() {
             types.forEach((t, idx) => {
               const subData = group[t.key];
               const isFirst = idx === 0;
+              const currentStock = subData.opening + subData.incoming;
               const worthTaken = subData.item ? getStockItemValuationTaken(subData.item) : 0;
               const worthClosing = subData.item ? getStockItemValuation(subData.item) : 0;
 
@@ -2551,6 +2561,7 @@ export default function ProductionStorePage() {
                 <Badge className={`${t.badge} text-[8px] font-black px-1.5 py-0.2 uppercase`}>{t.label}</Badge>,
                 <span className={subData.opening > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.opening, group.unit, group.isEgg)}</span>,
                 <span className={subData.incoming > 0 ? "text-emerald-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.incoming, group.unit, group.isEgg)}</span>,
+                <span className={currentStock > 0 ? "font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono" : "text-gray-400 font-mono"}>{formatQuantityGlobal(currentStock, group.unit, group.isEgg)}</span>,
                 <span className={subData.taken > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.taken, group.unit, group.isEgg)}</span>,
                 <span className={subData.damages > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.damages, group.unit, group.isEgg)}</span>,
                 <span className={subData.closing > 0 ? "text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.closing, group.unit, group.isEgg)}</span>,
@@ -2569,6 +2580,7 @@ export default function ProductionStorePage() {
             <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
             <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock, 0))}</span>,
             <span className="font-bold font-mono text-emerald-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.incoming, 0))}</span>,
+            <span className="font-bold font-mono text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock + i.incoming, 0))}</span>,
             <span className="font-bold font-mono text-amber-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.stock_taken, 0))}</span>,
             <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.damages, 0))}</span>,
             <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.closing_stock, 0))}</span>,
