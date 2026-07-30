@@ -100,26 +100,38 @@ class ReportController extends Controller
             $customerId = null;
         }
 
-        // 1. Best Performing Spenders
+        // 1. Best Performing Spenders & Volume
+        $traysPerCustomer = DB::table('orders')
+            ->join('order_items', 'orders.id', '=', 'order_items.order_id')
+            ->select('orders.customer_id', DB::raw('SUM(order_items.quantity) as total_trays'))
+            ->whereBetween('orders.order_date', [$startDate, $endDate])
+            ->where('orders.status', '!=', 'cancelled')
+            ->groupBy('orders.customer_id');
+
         $bestPerformers = DB::table('orders')
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
+            ->leftJoinSub($traysPerCustomer, 'trays_sub', function ($join) {
+                $join->on('customers.id', '=', 'trays_sub.customer_id');
+            })
             ->select(
                 'customers.id',
                 'customers.name',
                 'customers.customer_type',
                 DB::raw('SUM(orders.total_amount) as total_spent'),
                 DB::raw('COUNT(orders.id) as order_count'),
+                DB::raw('COALESCE(MAX(trays_sub.total_trays), 0) as total_trays'),
                 DB::raw('AVG(orders.total_amount) as avg_order_value')
             )
             ->whereBetween('orders.order_date', [$startDate, $endDate])
             ->where('orders.status', '!=', 'cancelled')
             ->when($customerId, fn($q) => $q->where('orders.customer_id', $customerId))
             ->groupBy('customers.id', 'customers.name', 'customers.customer_type')
-            ->orderBy('total_spent', 'desc')
+            ->orderBy(DB::raw('COALESCE(MAX(trays_sub.total_trays), 0)'), 'desc')
             ->get()
             ->map(function($c) {
                 $c->total_spent = (float)$c->total_spent;
                 $c->order_count = (int)$c->order_count;
+                $c->total_trays = (float)$c->total_trays;
                 $c->avg_order_value = (float)$c->avg_order_value;
                 return $c;
             });

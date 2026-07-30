@@ -232,25 +232,51 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
-  // Section 1: Supermarket Competitive Comparison Rows
+  // Section 1: Supermarket Competitive Comparison Rows (Ranked by Total Volume Purchased Descending)
   const reportTableRows = React.useMemo(() => {
     const totalRevenueSum = analytics.best_performers.reduce((s, c) => s + (c.total_spent || 0), 0);
 
-    return analytics.best_performers.map((c, idx) => {
+    // Sort Descending by Total Trays Purchased
+    const sortedPerformers = [...analytics.best_performers].sort((a, b) => {
+      const traysA = (a.total_trays && a.total_trays > 0) ? a.total_trays : (a.total_spent > 0 ? Math.round(a.total_spent / 14200) : 0);
+      const traysB = (b.total_trays && b.total_trays > 0) ? b.total_trays : (b.total_spent > 0 ? Math.round(b.total_spent / 14200) : 0);
+      if (traysB !== traysA) return traysB - traysA;
+      return (b.total_spent || 0) - (a.total_spent || 0);
+    });
+
+    return sortedPerformers.map((c, idx) => {
       const share = totalRevenueSum > 0 ? ((c.total_spent / totalRevenueSum) * 100).toFixed(1) : "0";
       const pred = analytics.predictions.find(p => p.customer_name === c.name);
-      const interval = pred ? `${pred.avg_interval_days} Days` : "3-5 Days";
+      
+      const realTrays = (c.total_trays && c.total_trays > 0) 
+        ? c.total_trays 
+        : (c.total_spent > 0 ? Math.round(c.total_spent / 14200) : 0);
+
+      // Order Velocity Formatting
+      let velocityText = "3-5 Days";
+      if (pred && pred.avg_interval_days) {
+        if (pred.avg_interval_days <= 3) velocityText = `Every ${pred.avg_interval_days} Days (High Velocity)`;
+        else if (pred.avg_interval_days <= 7) velocityText = `Every ${pred.avg_interval_days} Days (Weekly)`;
+        else velocityText = `Every ${pred.avg_interval_days} Days (Bi-weekly)`;
+      }
 
       return [
-        <span key={`rnk-${idx}`} className="font-extrabold font-mono text-gray-500 text-xs">#{idx + 1}</span>,
+        <div key={`rnk-${idx}`} className="flex items-center gap-1">
+          <span className={`font-mono font-black text-xs ${idx === 0 ? 'text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300' : 'text-gray-500'}`}>
+            #{idx + 1}
+          </span>
+          {idx === 0 && <Badge key={`top-${idx}`} className="bg-brand-yellow text-brand-forest text-[7px] font-black uppercase border-none px-1">#1 BUYER</Badge>}
+        </div>,
         <div key={`nm-${idx}`} className="font-extrabold text-brand-forest text-xs">{c.name}</div>,
         <Badge key={`tp-${idx}`} className="bg-brand-sage/50 text-brand-forest border-none text-[8.5px] font-black uppercase">
           {c.customer_type}
         </Badge>,
-        <span key={`cnt-${idx}`} className="font-mono text-gray-800 font-bold text-xs">{c.order_count * 45} Trays</span>,
+        <span key={`cnt-${idx}`} className="font-mono text-gray-900 font-black text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+          {realTrays.toLocaleString()} Trays
+        </span>,
         <span key={`sp-${idx}`} className="font-mono text-brand-forest font-black text-xs">UGX {(c.total_spent || 0).toLocaleString()}</span>,
         <span key={`avg-${idx}`} className="font-mono text-blue-900 font-bold text-xs">UGX {(c.avg_order_value || 0).toLocaleString()}</span>,
-        <span key={`freq-${idx}`} className="font-mono text-gray-600 text-xs font-semibold">{interval}</span>,
+        <span key={`freq-${idx}`} className="font-mono text-gray-700 text-xs font-semibold">{velocityText}</span>,
         <Badge key={`sh-${idx}`} className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-black uppercase">
           {share}% SHARE
         </Badge>
@@ -291,7 +317,18 @@ export default function ReportsPage() {
 
   const reportKpiCards = React.useMemo(() => {
     const maxBal = analytics.outstanding_aging.reduce((max, c) => Math.max(max, c.current_balance || 0), 0);
-    const topCustomer = analytics.best_performers[0]?.name || "Shoprite Stores";
+    
+    // Sort performers by total trays descending
+    const sortedPerformers = [...analytics.best_performers].sort((a, b) => {
+      const traysA = (a.total_trays && a.total_trays > 0) ? a.total_trays : (a.total_spent > 0 ? Math.round(a.total_spent / 14200) : 0);
+      const traysB = (b.total_trays && b.total_trays > 0) ? b.total_trays : (b.total_spent > 0 ? Math.round(b.total_spent / 14200) : 0);
+      return traysB - traysA;
+    });
+
+    const topCust = sortedPerformers[0];
+    const topCustTrays = topCust ? ((topCust.total_trays && topCust.total_trays > 0) ? topCust.total_trays : Math.round(topCust.total_spent / 14200)) : 0;
+    const topCustomerLabel = topCust ? `${topCust.name} (${topCustTrays.toLocaleString()} Trays)` : "Shoprite Stores";
+
     const topProduct = analytics.product_mix[0]?.product_name || "White Eggs (Standard Tray)";
     const topProductQty = analytics.product_mix[0]?.total_quantity || 0;
 
@@ -304,13 +341,13 @@ export default function ReportsPage() {
       },
       {
         label: "#1 Top Volume Supermarket Outlet",
-        value: topCustomer,
+        value: topCustomerLabel,
         subtitle: "Highest total volume purchaser",
         color: "green"
       },
       {
         label: "#1 Best Selling Product",
-        value: `${topProduct} (${topProductQty})`,
+        value: `${topProduct} (${topProductQty.toLocaleString()} Units)`,
         subtitle: "Highest sales outflow volume",
         color: "blue"
       },
@@ -1051,6 +1088,7 @@ export default function ReportsPage() {
                         <th className="px-6 py-4">Rank</th>
                         <th className="px-6 py-4">Supermarket Outlet</th>
                         <th className="px-6 py-4 text-center">Type</th>
+                        <th className="px-6 py-4 text-center">Total Trays Purchased</th>
                         <th className="px-6 py-4 text-center">Total Orders</th>
                         <th className="px-6 py-4 text-right">Avg Order Value</th>
                         <th className="px-6 py-4 text-right">Net Revenue Spent</th>
@@ -1058,9 +1096,18 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {analytics.best_performers.map((c: any, idx: number) => {
+                      {[...analytics.best_performers].sort((a, b) => {
+                        const traysA = (a.total_trays && a.total_trays > 0) ? a.total_trays : (a.total_spent > 0 ? Math.round(a.total_spent / 14200) : 0);
+                        const traysB = (b.total_trays && b.total_trays > 0) ? b.total_trays : (b.total_spent > 0 ? Math.round(b.total_spent / 14200) : 0);
+                        if (traysB !== traysA) return traysB - traysA;
+                        return (b.total_spent || 0) - (a.total_spent || 0);
+                      }).map((c: any, idx: number) => {
                         const totalRev = analytics.best_performers.reduce((s, item) => s + (item.total_spent || 0), 0);
                         const share = totalRev > 0 ? ((c.total_spent / totalRev) * 100).toFixed(1) : "0";
+                        const realTrays = (c.total_trays && c.total_trays > 0) 
+                          ? c.total_trays 
+                          : (c.total_spent > 0 ? Math.round(c.total_spent / 14200) : 0);
+
                         return (
                           <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
                             <td className="px-6 py-4 font-mono font-bold text-gray-400 text-xs">#{idx + 1}</td>
@@ -1069,6 +1116,11 @@ export default function ReportsPage() {
                               <Badge className="bg-brand-forest text-brand-yellow border-none text-[8px] font-black uppercase">
                                 {c.customer_type}
                               </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-center text-xs font-black text-gray-900 font-mono">
+                              <span className="bg-emerald-50 text-emerald-900 px-2 py-0.5 rounded border border-emerald-200">
+                                {realTrays.toLocaleString()} Trays
+                              </span>
                             </td>
                             <td className="px-6 py-4 text-center text-xs font-bold text-gray-700">{c.order_count}</td>
                             <td className="px-6 py-4 text-right text-xs font-semibold text-blue-900">{formatCurrency(c.avg_order_value)}</td>
