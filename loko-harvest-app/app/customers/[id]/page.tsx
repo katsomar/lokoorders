@@ -2049,22 +2049,28 @@ export default function CustomerDetailPage() {
         storeLocation={`${customer.zone || 'Kampala'} Outlet Network`}
         kpiCards={[
           {
-            label: "Current Outstanding Balance",
+            label: "Total Demanded Balance",
             value: `UGX ${currentDues.toLocaleString()}`,
-            subtitle: "Current account dues demanded",
+            subtitle: "Outstanding account dues demanded",
             color: "red"
           },
           {
-            label: "Total Invoiced Orders",
-            value: `UGX ${ledger.reduce((s, tx) => s + tx.debit, 0).toLocaleString()}`,
-            subtitle: "Gross lifetime invoiced sales",
+            label: "Total Paid Back So Far",
+            value: `UGX ${ledger.reduce((s, tx) => s + tx.credit, 0).toLocaleString()}`,
+            subtitle: "Total lifetime payments remitted",
+            color: "green"
+          },
+          {
+            label: "Receivable Clearance Rate",
+            value: `${ledger.reduce((s, tx) => s + tx.debit, 0) > 0 ? Math.round((ledger.reduce((s, tx) => s + tx.credit, 0) / ledger.reduce((s, tx) => s + tx.debit, 0)) * 100) : 0}%`,
+            subtitle: "Percentage cleared vs invoiced total",
             color: "blue"
           },
           {
-            label: "Total Payments Remitted",
-            value: `UGX ${ledger.reduce((s, tx) => s + tx.credit, 0).toLocaleString()}`,
-            subtitle: "Total payments cleared",
-            color: "green"
+            label: "Total Gross Invoiced",
+            value: `UGX ${ledger.reduce((s, tx) => s + tx.debit, 0).toLocaleString()}`,
+            subtitle: "Gross lifetime invoiced sales",
+            color: "yellow"
           }
         ]}
         tableHeaders={[
