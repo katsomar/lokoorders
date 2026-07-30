@@ -134,9 +134,44 @@ export default function ReportGeneratorModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
+    <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn print:static print:inset-auto print:block print:bg-white print:p-0 print:m-0 print:overflow-visible">
+      {/* Global CSS for Print Optimization */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
+          }
+          body {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .print-full-page {
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            max-height: none !important;
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: #ffffff !important;
+          }
+          .print-no-card {
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+          }
+        }
+      `}</style>
+
       {/* Container Node */}
-      <div className="bg-white w-full max-w-[95vw] sm:max-w-7xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="bg-white w-full max-w-[95vw] sm:max-w-7xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden print-full-page">
         
         {/* Top Control Bar (Hidden on Print) */}
         <div className="print:hidden bg-gradient-to-r from-brand-forest via-emerald-900 to-brand-forest text-white px-6 py-4 flex items-center justify-between border-b border-brand-sage/20 shrink-0">
@@ -362,7 +397,7 @@ export default function ReportGeneratorModal({
               </span>
             </div>
 
-            <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm">
+            <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm print:rounded-none print:shadow-none print:border-gray-300 print:overflow-visible">
               <table className="w-full text-left text-[9.5px] border-collapse">
                 <thead className="bg-brand-forest text-white uppercase text-[8.5px] font-black tracking-wider">
                   <tr>
@@ -411,7 +446,7 @@ export default function ReportGeneratorModal({
                 </span>
               </div>
 
-              <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm">
+              <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm print:rounded-none print:shadow-none print:border-gray-300 print:overflow-visible">
                 <table className="w-full text-left text-[9.5px] border-collapse">
                   <thead className="bg-emerald-950 text-brand-yellow uppercase text-[8.5px] font-black tracking-wider">
                     <tr>
