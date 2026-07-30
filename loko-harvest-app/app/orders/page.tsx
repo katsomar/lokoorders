@@ -692,28 +692,56 @@ export default function OrdersPage() {
           }
         ]}
         tableHeaders={[
-          "Order Number",
-          "Customer Name",
-          "Store Source",
-          "Urgency",
-          "Order Status",
-          "Order Date",
-          "Required Delivery",
-          "Total Amount (UGX)"
+          "ORDER #",
+          "FDN",
+          "CUSTOMER DETAILS",
+          "FULFILLMENT STORE",
+          "BATCH REFERENCE",
+          "ORDER DATE",
+          "REQUIRED DELIVERY",
+          "URGENCY",
+          "STATUS",
+          "TOTAL VALUE"
         ]}
-        tableRows={orders
-          .filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate))
-          .map(o => [
-            <span className="font-extrabold font-mono text-brand-forest text-xs">{o.order_number}</span>,
-            <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>,
+        tableRows={React.useMemo(() => {
+          const filtered = orders.filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate));
+          const rows: (string | React.ReactNode)[][] = filtered.map(o => [
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold font-mono text-brand-forest text-xs">{o.order_number}</span>
+              {isCarriedOverUncompleted(o) && <span className="h-2 w-2 rounded-full bg-red-500 inline-block animate-pulse" title="Carried Over (Action Required)" />}
+            </div>,
+            <span className="font-mono text-gray-500 text-[9px]">{o.fdn || o.fiscal_document_number || "—"}</span>,
+            <div className="flex items-center gap-2">
+              <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${getLogoColor(o.customer?.name)}`}>
+                {(o.customer?.name || "C")[0].toUpperCase()}
+              </div>
+              <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>
+            </div>,
             <span className="text-gray-600 font-semibold text-[9.5px]">{o.sales_store?.name || "Main Hub"}</span>,
+            <Badge className="border border-brand-sage/50 bg-gray-50 text-gray-600 font-mono text-[8.5px] px-1.5 py-0.2">{o.batch_reference || o.batch_no || "N/A"}</Badge>,
+            <span className="font-mono text-gray-600 font-semibold">{o.order_date ? o.order_date.split(' ')[0] : 'N/A'}</span>,
+            <span className="font-mono text-gray-600 font-semibold">{o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A'}</span>,
             getUrgencyBadge(o.urgency),
             getStatusBadge(o.status, o.required_delivery_date),
-            <span className="font-mono text-gray-500 font-semibold">{o.order_date ? o.order_date.split(' ')[0] : 'N/A'}</span>,
-            <span className="font-mono text-gray-500 font-semibold">{o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A'}</span>,
             <span className="font-mono font-black text-brand-forest text-xs">UGX {parseFloat(o.total_amount || 0).toLocaleString()}</span>
-          ])
-        }
+          ]);
+
+          // Summary TOTAL Row (Matching Screenshot)
+          rows.push([
+            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
+            "—",
+            "—",
+            "—",
+            "—",
+            "—",
+            "—",
+            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
+            <span className="font-bold font-mono text-brand-forest text-xs">{filtered.length} Orders</span>,
+            <span className="font-black font-mono text-brand-forest text-xs">UGX {filtered.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0).toLocaleString()}</span>
+          ]);
+
+          return rows;
+        }, [orders, reportStartDate, reportEndDate])}
       />
     </DashboardLayout>
   );
