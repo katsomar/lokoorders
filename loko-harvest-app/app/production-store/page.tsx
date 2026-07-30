@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   X,
   Loader2,
-  Camera
+  Camera,
+  FileText
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
