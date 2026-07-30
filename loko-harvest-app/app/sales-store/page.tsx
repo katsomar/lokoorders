@@ -92,7 +92,6 @@ export default function SalesStorePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "cream" | "white" | "brown" | "other">("all");
   
-  const { user } = useAuth();
   const [showReportModal, setShowReportModal] = useState(false);
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
@@ -2642,6 +2641,7 @@ export default function SalesStorePage() {
         ])}
       />
 
+      </div>
     </DashboardLayout>
   );
 }

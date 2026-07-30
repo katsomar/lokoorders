@@ -2478,6 +2478,8 @@ export default function ProductionStorePage() {
           onCapture={handleAdjustCameraCapture}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
       {/* Production Store Report Generator Modal */}
       <ReportGeneratorModal
         isOpen={showReportModal}
