@@ -102,7 +102,7 @@ export default function ReportGeneratorModal({
   return (
     <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
       {/* Container Node */}
-      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden">
+      <div className="bg-white w-full max-w-[95vw] sm:max-w-7xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden">
         
         {/* Top Control Bar (Hidden on Print) */}
         <div className="print:hidden bg-gradient-to-r from-brand-forest via-emerald-900 to-brand-forest text-white px-6 py-4 flex items-center justify-between border-b border-brand-sage/20 shrink-0">
@@ -200,7 +200,7 @@ export default function ReportGeneratorModal({
             </p>
 
             {/* Official Metadata Grid */}
-            <div className="pt-4 max-w-3xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3 text-left bg-brand-sage/10 p-4 rounded-2xl border border-brand-sage/30 text-xs">
+            <div className="pt-4 max-w-4xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3 text-left bg-brand-sage/10 p-4 rounded-2xl border border-brand-sage/30 text-xs">
               <div>
                 <span className="text-[10px] font-extrabold uppercase text-gray-400 block tracking-wider">Report Subject</span>
                 <span className="font-extrabold text-brand-forest text-xs">{title}</span>
@@ -261,19 +261,19 @@ export default function ReportGeneratorModal({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-[11px] font-black uppercase tracking-wider text-brand-forest">
-                Comprehensive Line Ledger ({tableRows.length} Records)
+                Comprehensive Detailed Stock & Movement Audit Ledger ({tableRows.length} Line Items)
               </h4>
               <span className="text-[10px] text-gray-400 font-bold font-mono">
                 Facility: {storeLocation}
               </span>
             </div>
 
-            <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-brand-forest text-white uppercase text-[10px] font-black tracking-wider">
+            <div className="border border-brand-sage/40 rounded-2xl overflow-x-auto shadow-sm">
+              <table className="w-full text-left text-xs min-w-[900px]">
+                <thead className="bg-brand-forest text-white uppercase text-[9px] font-black tracking-wider">
                   <tr>
                     {tableHeaders.map((head, idx) => (
-                      <th key={idx} className="px-4 py-3.5 border-b border-brand-forest/30">
+                      <th key={idx} className="px-3.5 py-3 border-b border-brand-forest/30 whitespace-nowrap">
                         {head}
                       </th>
                     ))}
@@ -290,10 +290,10 @@ export default function ReportGeneratorModal({
                     tableRows.map((row, rowIdx) => (
                       <tr 
                         key={rowIdx} 
-                        className={rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                        className={rowIdx % 2 === 0 ? "bg-white hover:bg-brand-sage/5" : "bg-gray-50/50 hover:bg-brand-sage/5"}
                       >
                         {row.map((cell, cellIdx) => (
-                          <td key={cellIdx} className="px-4 py-3 text-gray-800 font-medium border-b border-gray-100">
+                          <td key={cellIdx} className="px-3.5 py-2.5 text-gray-800 font-medium border-b border-gray-100 whitespace-nowrap">
                             {cell}
                           </td>
                         ))}

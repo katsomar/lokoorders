@@ -2512,21 +2512,31 @@ export default function ProductionStorePage() {
         ]}
         tableHeaders={[
           "Product Name",
-          "Product Code",
-          "Store Facility",
+          "Code",
+          "Facility",
           "Batch Ref",
-          "Closing Stock",
-          "Stock Taken (Outflow)",
-          "Valuation Unit Price"
+          "Opening Stock",
+          "Incoming Harvest",
+          "Stock Outflow (Taken)",
+          "Damages / Loss",
+          "Closing Available Stock",
+          "Valuation Price",
+          "Worth Outflow",
+          "Worth Closing Stock"
         ]}
         tableRows={filteredStock.map(item => [
           item.product,
           item.code,
           item.production_store_name,
           item.batch_reference || 'N/A',
-          formatQuantityGlobal(item.closing_stock, item.unit),
+          formatQuantityGlobal(item.opening_stock, item.unit),
+          formatQuantityGlobal(item.incoming, item.unit),
           formatQuantityGlobal(item.stock_taken, item.unit),
-          `UGX ${item.unit_price.toLocaleString()}`
+          formatQuantityGlobal(item.damages, item.unit),
+          formatQuantityGlobal(item.closing_stock, item.unit),
+          `UGX ${item.unit_price.toLocaleString()}`,
+          `UGX ${getStockItemValuationTaken(item).toLocaleString()}`,
+          `UGX ${getStockItemValuation(item).toLocaleString()}`
         ])}
       />
 

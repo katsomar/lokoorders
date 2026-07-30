@@ -2621,13 +2621,20 @@ export default function SalesStorePage() {
         ]}
         tableHeaders={[
           "Product Name",
-          "Product Code",
-          "Store Facility",
+          "Code",
+          "Facility",
           "Batch Ref",
           "Category",
+          "Opening Stock",
+          "Transferred In",
+          "Conversions In/Out",
+          "Stock Sold",
+          "Transferred Out",
+          "Damages",
           "Closing Stock",
-          "Stock Sold / Outflow",
-          "Retail Unit Price"
+          "Retail Unit Price",
+          "Worth Sold (UGX)",
+          "Worth Closing (UGX)"
         ]}
         tableRows={getFilteredStock().map(item => [
           item.product,
@@ -2635,9 +2642,16 @@ export default function SalesStorePage() {
           item.sales_store_name,
           item.batch_reference || 'N/A',
           item.category.toUpperCase(),
+          formatQuantity(item.opening_stock, item.unit),
+          formatQuantity(item.transferred_in, item.unit),
+          `${item.conversions_in > 0 ? '+' + item.conversions_in : ''} ${item.conversions_out > 0 ? '-' + item.conversions_out : '0'}`,
+          formatQuantity(item.sold_quantity, item.unit),
+          formatQuantity(item.transferred_out, item.unit),
+          formatQuantity(item.damages || 0, item.unit),
           formatQuantity(item.closing_stock, item.unit),
-          formatQuantity(item.sold_quantity + item.transferred_out, item.unit),
-          `UGX ${item.unit_price.toLocaleString()}`
+          `UGX ${item.unit_price.toLocaleString()}`,
+          `UGX ${getStockItemValuationTaken(item).toLocaleString()}`,
+          `UGX ${getStockItemValuation(item).toLocaleString()}`
         ])}
       />
 
