@@ -279,8 +279,12 @@ export default function ReportGeneratorModal({
           
           {/* Centered Company Branding & Logo */}
           <div className="text-center border-b border-brand-sage/40 pb-6 space-y-3">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-brand-forest text-brand-yellow font-black text-2xl shadow-md mb-1 mx-auto">
-              LH
+            <div className="inline-flex items-center justify-center mb-1 mx-auto">
+              <img 
+                src="/logo/loko.png" 
+                alt="LOKO Harvest" 
+                className="h-16 w-auto object-contain drop-shadow-sm" 
+              />
             </div>
             <h1 className="text-2xl font-black font-heading text-brand-forest tracking-tight uppercase">
               LOKO Harvest ODS
