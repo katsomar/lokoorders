@@ -268,12 +268,12 @@ export default function ReportGeneratorModal({
               </span>
             </div>
 
-            <div className="border border-brand-sage/40 rounded-2xl overflow-x-auto shadow-sm">
-              <table className="w-full text-left text-xs min-w-[900px]">
-                <thead className="bg-brand-forest text-white uppercase text-[9px] font-black tracking-wider">
+            <div className="border border-brand-sage/40 rounded-2xl overflow-hidden shadow-sm">
+              <table className="w-full text-left text-[9.5px] border-collapse">
+                <thead className="bg-brand-forest text-white uppercase text-[8.5px] font-black tracking-wider">
                   <tr>
                     {tableHeaders.map((head, idx) => (
-                      <th key={idx} className="px-3.5 py-3 border-b border-brand-forest/30 whitespace-nowrap">
+                      <th key={idx} className="px-2 py-2.5 border-b border-brand-forest/30 whitespace-nowrap">
                         {head}
                       </th>
                     ))}
@@ -293,7 +293,7 @@ export default function ReportGeneratorModal({
                         className={rowIdx % 2 === 0 ? "bg-white hover:bg-brand-sage/5" : "bg-gray-50/50 hover:bg-brand-sage/5"}
                       >
                         {row.map((cell, cellIdx) => (
-                          <td key={cellIdx} className="px-3.5 py-2.5 text-gray-800 font-medium border-b border-gray-100 whitespace-nowrap">
+                          <td key={cellIdx} className="px-2 py-1.5 text-gray-800 font-medium border-b border-gray-100 whitespace-nowrap">
                             {cell}
                           </td>
                         ))}

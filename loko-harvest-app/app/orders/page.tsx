@@ -704,14 +704,14 @@ export default function OrdersPage() {
         tableRows={orders
           .filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate))
           .map(o => [
-            o.order_number,
-            o.customer?.name || "N/A",
-            o.sales_store?.name || "Main Hub",
-            (o.urgency || "normal").toUpperCase(),
-            (o.status || "pending").toUpperCase().replace(/_/g, " "),
-            o.order_date ? o.order_date.split(' ')[0] : 'N/A',
-            o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A',
-            `UGX ${parseFloat(o.total_amount || 0).toLocaleString()}`
+            <span className="font-extrabold font-mono text-brand-forest text-xs">{o.order_number}</span>,
+            <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>,
+            <span className="text-gray-600 font-semibold text-[9.5px]">{o.sales_store?.name || "Main Hub"}</span>,
+            getUrgencyBadge(o.urgency),
+            getStatusBadge(o.status, o.required_delivery_date),
+            <span className="font-mono text-gray-500 font-semibold">{o.order_date ? o.order_date.split(' ')[0] : 'N/A'}</span>,
+            <span className="font-mono text-gray-500 font-semibold">{o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A'}</span>,
+            <span className="font-mono font-black text-brand-forest text-xs">UGX {parseFloat(o.total_amount || 0).toLocaleString()}</span>
           ])
         }
       />

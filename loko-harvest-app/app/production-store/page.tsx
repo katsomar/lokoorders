@@ -2524,20 +2524,24 @@ export default function ProductionStorePage() {
           "Worth Outflow",
           "Worth Closing Stock"
         ]}
-        tableRows={filteredStock.map(item => [
-          item.product,
-          item.code,
-          item.production_store_name,
-          item.batch_reference || 'N/A',
-          formatQuantityGlobal(item.opening_stock, item.unit),
-          formatQuantityGlobal(item.incoming, item.unit),
-          formatQuantityGlobal(item.stock_taken, item.unit),
-          formatQuantityGlobal(item.damages, item.unit),
-          formatQuantityGlobal(item.closing_stock, item.unit),
-          `UGX ${item.unit_price.toLocaleString()}`,
-          `UGX ${getStockItemValuationTaken(item).toLocaleString()}`,
-          `UGX ${getStockItemValuation(item).toLocaleString()}`
-        ])}
+        tableRows={filteredStock.map(item => {
+          const worthTaken = getStockItemValuationTaken(item);
+          const worthClosing = getStockItemValuation(item);
+          return [
+            <span className="font-extrabold text-brand-forest text-xs">{item.product}</span>,
+            <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8.5px] font-mono font-bold px-1.5 py-0.2">{item.code}</Badge>,
+            <span className="text-gray-600 font-semibold text-[9.5px]">{item.production_store_name}</span>,
+            <span className="font-mono text-gray-500 font-bold text-[9px]">{item.batch_reference || 'N/A'}</span>,
+            <span className={item.opening_stock > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantityGlobal(item.opening_stock, item.unit)}</span>,
+            <span className={item.incoming > 0 ? "text-emerald-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantityGlobal(item.incoming, item.unit)}</span>,
+            <span className={item.stock_taken > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(item.stock_taken, item.unit)}</span>,
+            <span className={item.damages > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(item.damages, item.unit)}</span>,
+            <span className="text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs">{formatQuantityGlobal(item.closing_stock, item.unit)}</span>,
+            <span className="font-mono text-gray-600 font-semibold">UGX {item.unit_price.toLocaleString()}</span>,
+            <span className={worthTaken > 0 ? "font-mono font-black text-amber-900" : "text-gray-400 font-mono"}>UGX {worthTaken.toLocaleString()}</span>,
+            <span className={worthClosing > 0 ? "font-mono font-black text-brand-forest" : "text-gray-400 font-mono"}>UGX {worthClosing.toLocaleString()}</span>
+          ];
+        })}
       />
 
     </DashboardLayout>
