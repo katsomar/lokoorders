@@ -734,12 +734,14 @@ export default function OrdersPage() {
               ? batchRefs.join(", ") 
               : "N/A";
 
-            // Extract Completion / Fulfillment Timestamp
-            const isCompleted = ['delivered', 'dispatched'].includes((o.status || '').toLowerCase());
-            const rawCompletedDate = o.delivered_at || o.completed_at || (isCompleted ? o.updated_at : null);
+            // Extract Completion / Fulfillment Timestamp (ONLY for Delivered orders)
+            const isDelivered = (o.status || '').toLowerCase() === 'delivered';
+            const rawCompletedDate = o.delivered_at || (isDelivered ? o.completed_at || o.updated_at : null);
             const completedDisplay = rawCompletedDate 
               ? String(rawCompletedDate).replace('T', ' ').slice(0, 16) 
               : null;
+
+            const customerLogo = o.customer?.logo_url || o.customer?.logo;
 
             return [
               <div className="flex items-center gap-1.5">
@@ -748,9 +750,17 @@ export default function OrdersPage() {
               </div>,
               <span className="font-mono text-gray-500 text-[9px]">{o.fdn || o.fiscal_document_number || "—"}</span>,
               <div className="flex items-center gap-2">
-                <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${getLogoColor(o.customer?.name)}`}>
-                  {(o.customer?.name || "C")[0].toUpperCase()}
-                </div>
+                {customerLogo ? (
+                  <img 
+                    src={customerLogo} 
+                    alt={o.customer?.name || "Customer"} 
+                    className="h-6 w-6 rounded-full object-cover border border-brand-sage/40 bg-white shrink-0 shadow-2xs"
+                  />
+                ) : (
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${getLogoColor(o.customer?.name)}`}>
+                    {(o.customer?.name || "C")[0].toUpperCase()}
+                  </div>
+                )}
                 <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>
               </div>,
               <span className="text-gray-600 font-semibold text-[9.5px]">{o.sales_store?.name || "Main Hub"}</span>,
