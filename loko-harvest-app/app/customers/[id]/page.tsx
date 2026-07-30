@@ -671,24 +671,38 @@ export default function CustomerDetailPage() {
   }, [datesList, filteredOrderHistory, productNames]);
 
   const reportTableRows = useMemo(() => {
-    const rows: (string | React.ReactNode)[][] = displayLedger.map(tx => {
+    const rows: (string | React.ReactNode)[][] = displayLedger.map((tx, idx) => {
       const isInvoice = tx.type === "invoice";
       const dateStr = tx.date ? String(tx.date).split('T')[0] : 'N/A';
 
       return [
-        <span key="date" className="font-mono text-gray-700 font-semibold">{dateStr}</span>,
-        <div key="ref" className="flex items-center gap-1">
-          <span className="font-mono text-brand-forest font-bold text-xs">{tx.ref || tx.orderNumber || "—"}</span>
-          {tx.fdn && <span className="text-[9px] text-gray-400 font-mono">({tx.fdn})</span>}
+        <span key={`dt-${idx}`} className="font-mono text-gray-700 font-semibold">{dateStr}</span>,
+        <span key={`rf-${idx}`} className="font-mono text-brand-forest font-bold text-xs">{tx.ref || tx.orderNumber || "—"}</span>,
+        <span key={`fdn-${idx}`} className="font-mono text-gray-700 font-bold text-xs">{tx.fdn || "—"}</span>,
+        <span key={`br-${idx}`} className="text-gray-600 font-semibold text-[9.5px]">{tx.branchName || customer?.name}</span>,
+        <div key={`desc-${idx}`} className="space-y-1 py-0.5">
+          <div className="font-extrabold text-gray-900 text-xs">{tx.description || (isInvoice ? "Sales Order Invoice" : "Payment Remittance")}</div>
+          {tx.items && tx.items.length > 0 && (
+            <div className="mt-1 space-y-0.5 text-[9.5px] text-gray-600 font-normal pl-2 border-l-2 border-brand-sage/60">
+              {tx.items.map((item: any, iIdx: number) => (
+                <div key={iIdx} className="leading-snug">
+                  <span className="font-bold text-brand-forest">{item.productName}</span>
+                  <span className="text-gray-400 mx-1">•</span>
+                  <span className="font-semibold text-gray-700">{item.quantity} {item.unit}</span>
+                  <span className="text-gray-400 mx-1">@</span>
+                  <span className="font-mono text-gray-600">UGX {(item.unitPrice || 0).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>,
-        <span key="branch" className="text-gray-600 font-semibold text-[9.5px]">{tx.branchName || customer?.name}</span>,
-        <Badge key="type" className={isInvoice ? "bg-blue-50 text-blue-800 border border-blue-200 text-[8px] font-extrabold uppercase" : "bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8px] font-extrabold uppercase"}>
+        <Badge key={`tp-${idx}`} className={isInvoice ? "bg-blue-50 text-blue-800 border border-blue-200 text-[8px] font-extrabold uppercase" : "bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8px] font-extrabold uppercase"}>
           {isInvoice ? "INVOICE RAISED" : "PAYMENT REMITTANCE"}
         </Badge>,
-        <span key="debit" className={tx.debit > 0 ? "font-mono font-bold text-blue-900" : "text-gray-400 font-mono"}>{tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "—"}</span>,
-        <span key="credit" className={tx.credit > 0 ? "font-mono font-bold text-emerald-800" : "text-gray-400 font-mono"}>{tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "—"}</span>,
-        <span key="bal" className="font-mono font-black text-brand-forest text-xs">UGX {tx.balance.toLocaleString()}</span>,
-        <Badge key="status" className={tx.balance > 0 ? "bg-red-100 text-red-800 text-[8px] font-bold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
+        <span key={`deb-${idx}`} className={tx.debit > 0 ? "font-mono font-bold text-blue-900" : "text-gray-400 font-mono"}>{tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "—"}</span>,
+        <span key={`cred-${idx}`} className={tx.credit > 0 ? "font-mono font-bold text-emerald-800" : "text-gray-400 font-mono"}>{tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "—"}</span>,
+        <span key={`bal-${idx}`} className="font-mono font-black text-brand-forest text-xs">UGX {tx.balance.toLocaleString()}</span>,
+        <Badge key={`sts-${idx}`} className={tx.balance > 0 ? "bg-red-100 text-red-800 text-[8px] font-bold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
           {tx.balance > 0 ? "ACTIVE BALANCE" : "CLEARED"}
         </Badge>
       ];
@@ -700,6 +714,8 @@ export default function CustomerDetailPage() {
 
     rows.push([
       <span key="sum-lbl" className="font-black text-brand-forest text-xs uppercase tracking-wider">STATEMENT TOTAL</span>,
+      "—",
+      "—",
       "—",
       "—",
       <Badge key="sum-bdg" className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
@@ -2076,7 +2092,9 @@ export default function CustomerDetailPage() {
         tableHeaders={[
           "Date",
           "Ref / Order No",
+          "FDN",
           "Branch / Outlet",
+          "Description & Items Taken",
           "Transaction Type",
           "Debit (Invoiced)",
           "Credit (Paid)",
