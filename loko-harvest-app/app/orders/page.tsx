@@ -30,6 +30,7 @@ import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
 import { useToast } from "@/store/useToast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useAuth } from "@/store/useAuth";
 import ReportGeneratorModal from "@/components/ReportGeneratorModal";
 import { FileText } from "lucide-react";
