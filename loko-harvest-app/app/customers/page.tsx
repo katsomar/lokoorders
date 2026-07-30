@@ -8,6 +8,7 @@ const MapPicker = dynamic(() => import("@/components/MapPicker"), {
   ssr: false,
   loading: () => <div className="h-64 bg-gray-50 flex items-center justify-center border border-brand-sage rounded-xl animate-pulse text-xs text-gray-400">Loading Map Component...</div>
 });
+import ReportGeneratorModal from "@/components/ReportGeneratorModal";
 import { 
   Plus, 
   Search, 
@@ -22,7 +23,8 @@ import {
   Phone,
   Loader2,
   Edit,
-  Trash2
+  Trash2,
+  FileText
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -88,6 +90,7 @@ export default function CustomersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Add Customer modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -499,15 +502,25 @@ export default function CustomersPage() {
               Manage unified corporate customer structures, branches, balances and credit limits • {isLoading ? "—" : `${dbCustomers.length} Active Accounts`}
             </p>
           </div>
-          <UITooltip content="Register a standalone store, file-opener HQ corporation, or branch outlet" side="bottom">
-            <Button 
-              onClick={() => setShowAddModal(true)}
-              className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer w-full sm:w-auto justify-center"
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={() => setShowReportModal(true)}
+              className="gap-1.5 border-brand-sage/60 text-brand-forest hover:bg-brand-sage/10 font-extrabold h-9.5 px-4 rounded-xl text-xs shadow-sm cursor-pointer w-full sm:w-auto justify-center"
             >
-              <Plus size={15} />
-              <span>Register Customer / Branch</span>
+              <FileText size={15} />
+              <span>Generate Directory Report</span>
             </Button>
-          </UITooltip>
+            <UITooltip content="Register a standalone store, file-opener HQ corporation, or branch outlet" side="bottom">
+              <Button 
+                onClick={() => setShowAddModal(true)}
+                className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs cursor-pointer w-full sm:w-auto justify-center"
+              >
+                <Plus size={15} />
+                <span>Register Customer / Branch</span>
+              </Button>
+            </UITooltip>
+          </div>
         </div>
 
 
@@ -1351,6 +1364,167 @@ export default function CustomersPage() {
         )}
 
       </div>
+
+      {/* Customer Directory & Receivables Audit Report Modal */}
+      <ReportGeneratorModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Customers Directory & Receivables Audit Report"
+        reportType="customers"
+        storeName="All Customer Outlets & Corporate HQ Accounts"
+        storeLocation="LOKO Central Distribution Network"
+        kpiCards={[
+          {
+            label: "Total Receivables Demanded",
+            value: `UGX ${totalUnpaid.toLocaleString()}`,
+            subtitle: "Outstanding demanded balance",
+            color: "red"
+          },
+          {
+            label: "Total Revenue Collected",
+            value: `UGX ${totalPaid.toLocaleString()}`,
+            subtitle: "Total lifetime payments remitted",
+            color: "green"
+          },
+          {
+            label: "Receivable Clearance Rate",
+            value: `${paymentPercentage}%`,
+            subtitle: "Clearance vs invoiced total",
+            color: "blue"
+          },
+          {
+            label: "Active Client Accounts",
+            value: `${customers.length} Accounts`,
+            subtitle: "Corporate HQs & Outlets",
+            color: "yellow"
+          }
+        ]}
+        tableHeaders={[
+          "Customer / Outlet",
+          "Account Type",
+          "Location & Contact",
+          "Credit Limit (UGX)",
+          "Total Invoiced (UGX)",
+          "Total Paid (UGX)",
+          "Outstanding Demanded (UGX)",
+          "Status"
+        ]}
+        tableRows={React.useMemo(() => {
+          const rows: (string | React.ReactNode)[][] = [];
+
+          filteredCustomers.forEach(c => {
+            if (c.isParent) {
+              const hqInvoiced = getConsolidatedInvoiced(c);
+              const hqPaid = getConsolidatedPaid(c);
+              const hqBalance = getConsolidatedBalance(c);
+
+              const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
+                                 c.name.toLowerCase().includes("mega") ? "M" :
+                                 c.name.toLowerCase().includes("kfc") ? "K" :
+                                 c.name.toLowerCase().includes("javas") ? "CJ" :
+                                 c.name.toLowerCase().includes("carrefour") ? "C" :
+                                 c.name.charAt(0).toUpperCase();
+
+              // Corporate HQ Main Row
+              rows.push([
+                <div className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
+                  {c.logo_url ? (
+                    <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
+                  ) : (
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
+                      {logoLetter}
+                    </div>
+                  )}
+                  <span>{c.name}</span>
+                </div>,
+                <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">
+                  CORPORATE HQ ({c.branches.length} BRANCHES)
+                </Badge>,
+                <span className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
+                <span className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
+                <span className="font-mono text-blue-900 font-bold text-xs">UGX {hqInvoiced.toLocaleString()}</span>,
+                <span className="font-mono text-emerald-800 font-bold text-xs">UGX {hqPaid.toLocaleString()}</span>,
+                <span className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {hqBalance.toLocaleString()}</span>,
+                <Badge className={hqBalance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
+                  {hqBalance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
+                </Badge>
+              ]);
+
+              // Child Branches Indented Rows
+              c.branches.forEach(br => {
+                rows.push([
+                  <div className="pl-6 text-gray-700 font-semibold text-xs flex items-center gap-1.5">
+                    <span className="text-gray-400 font-mono">↳</span>
+                    <span>{br.name}</span>
+                  </div>,
+                  <Badge className="bg-gray-100 text-gray-700 border border-gray-300 text-[8px] font-bold uppercase">
+                    BRANCH OUTLET
+                  </Badge>,
+                  <span className="text-gray-500 font-medium text-[9px]">{br.zone} | {br.contact_person} ({br.phone})</span>,
+                  <span className="font-mono text-gray-600 text-xs">UGX {br.credit_limit.toLocaleString()}</span>,
+                  <span className="font-mono text-blue-800 text-xs">UGX {br.total_invoiced.toLocaleString()}</span>,
+                  <span className="font-mono text-emerald-700 text-xs">UGX {br.total_paid.toLocaleString()}</span>,
+                  <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">UGX {br.balance.toLocaleString()}</span>,
+                  <Badge className={br.balance > 0 ? "bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-extrabold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
+                    {br.balance > 0 ? "BRANCH DEMAND" : "SETTLED"}
+                  </Badge>
+                ]);
+              });
+
+            } else {
+              // Standalone Row
+              const balance = c.balance || 0;
+              const invoiced = c.total_invoiced || 0;
+              const paid = c.total_paid || 0;
+
+              const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
+                                 c.name.toLowerCase().includes("mega") ? "M" :
+                                 c.name.toLowerCase().includes("kfc") ? "K" :
+                                 c.name.toLowerCase().includes("javas") ? "CJ" :
+                                 c.name.toLowerCase().includes("carrefour") ? "C" :
+                                 c.name.charAt(0).toUpperCase();
+
+              rows.push([
+                <div className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
+                  {c.logo_url ? (
+                    <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
+                  ) : (
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
+                      {logoLetter}
+                    </div>
+                  )}
+                  <span>{c.name}</span>
+                </div>,
+                <Badge className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-extrabold uppercase">
+                  STANDALONE
+                </Badge>,
+                <span className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
+                <span className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
+                <span className="font-mono text-blue-900 font-bold text-xs">UGX {invoiced.toLocaleString()}</span>,
+                <span className="font-mono text-emerald-800 font-bold text-xs">UGX {paid.toLocaleString()}</span>,
+                <span className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {balance.toLocaleString()}</span>,
+                <Badge className={balance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
+                  {balance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
+                </Badge>
+              ]);
+            }
+          });
+
+          // Summary TOTAL Row
+          rows.push([
+            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
+            "—",
+            "—",
+            <span className="font-bold font-mono text-gray-700 text-xs">UGX {customers.reduce((s, c) => s + c.credit_limit, 0).toLocaleString()}</span>,
+            <span className="font-bold font-mono text-blue-900 text-xs">UGX {totalInvoiced.toLocaleString()}</span>,
+            <span className="font-bold font-mono text-emerald-800 text-xs">UGX {totalPaid.toLocaleString()}</span>,
+            <span className="font-black font-mono text-red-700 bg-red-100 px-2 py-0.5 rounded text-xs">UGX {totalUnpaid.toLocaleString()}</span>,
+            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>
+          ]);
+
+          return rows;
+        }, [filteredCustomers, customers, totalInvoiced, totalPaid, totalUnpaid])}
+      />
     </DashboardLayout>
   );
 }

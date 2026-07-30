@@ -31,7 +31,7 @@ export interface ReportGeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  reportType: "production_store" | "sales_store" | "orders";
+  reportType: "production_store" | "sales_store" | "orders" | "customers" | "customer_ledger";
   storeName?: string;
   storeLocation?: string;
   generatedBy?: string;
