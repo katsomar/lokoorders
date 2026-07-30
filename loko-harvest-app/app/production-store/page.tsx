@@ -1085,6 +1085,65 @@ export default function ProductionStorePage() {
     return Array.from(productsMap.values());
   };
 
+  const reportTableRows = React.useMemo(() => {
+    const rows: (string | React.ReactNode)[][] = [];
+
+    groupedStock.forEach((group: any) => {
+      const types: { key: "good" | "d1" | "d2" | "d3" | "shell"; label: string; badge: string }[] = group.isEgg ? [
+        { key: "good", label: "GOOD", badge: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
+        { key: "d1", label: "D1", badge: "bg-amber-100 text-amber-800 border border-amber-300" },
+        { key: "d2", label: "D2", badge: "bg-amber-100 text-amber-800 border border-amber-300" },
+        { key: "d3", label: "D3", badge: "bg-gray-100 text-gray-700 border border-gray-300" },
+        { key: "shell", label: "SHELL", badge: "bg-sky-100 text-sky-800 border border-sky-300" },
+      ] : [
+        { key: "good", label: "STANDARD", badge: "bg-emerald-100 text-emerald-800 border border-emerald-300" }
+      ];
+
+      types.forEach((t, idx) => {
+        const subData = group[t.key];
+        const isFirst = idx === 0;
+        const currentStock = subData.opening + subData.incoming;
+        const worthTaken = subData.item ? getStockItemValuationTaken(subData.item) : 0;
+        const worthClosing = subData.item ? getStockItemValuation(subData.item) : 0;
+
+        rows.push([
+          isFirst ? <span className="font-extrabold text-brand-forest text-xs">{group.production_store_name}</span> : "",
+          isFirst ? <Badge className="border border-brand-sage/50 bg-gray-50 text-gray-700 font-mono text-[9px] px-1.5 py-0.2">{group.batch_reference || "N/A"}</Badge> : "",
+          isFirst ? <span className="font-extrabold text-gray-900 text-xs">{group.product}</span> : "",
+          <Badge className={`${t.badge} text-[8px] font-black px-1.5 py-0.2 uppercase`}>{t.label}</Badge>,
+          <span className={subData.opening > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.opening, group.unit, group.isEgg)}</span>,
+          <span className={subData.incoming > 0 ? "text-emerald-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.incoming, group.unit, group.isEgg)}</span>,
+          <span className={currentStock > 0 ? "font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono" : "text-gray-400 font-mono"}>{formatQuantityGlobal(currentStock, group.unit, group.isEgg)}</span>,
+          <span className={subData.taken > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.taken, group.unit, group.isEgg)}</span>,
+          <span className={subData.damages > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.damages, group.unit, group.isEgg)}</span>,
+          <span className={subData.closing > 0 ? "text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.closing, group.unit, group.isEgg)}</span>,
+          <span className="font-mono text-gray-600 font-semibold">{subData.price > 0 ? `UGX ${subData.price.toLocaleString()}` : '—'}</span>,
+          <span className={worthTaken > 0 ? "font-mono font-black text-amber-900" : "text-gray-400 font-mono"}>{worthTaken > 0 ? `UGX ${worthTaken.toLocaleString()}` : '0'}</span>,
+          <span className={worthClosing > 0 ? "font-mono font-black text-brand-forest" : "text-gray-400 font-mono"}>{worthClosing > 0 ? `UGX ${worthClosing.toLocaleString()}` : '0'}</span>
+        ]);
+      });
+    });
+
+    // Summary TOTAL Row (Matching Screenshot)
+    rows.push([
+      <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
+      "",
+      "",
+      <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
+      <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock, 0))}</span>,
+      <span className="font-bold font-mono text-emerald-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.incoming, 0))}</span>,
+      <span className="font-bold font-mono text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock + i.incoming, 0))}</span>,
+      <span className="font-bold font-mono text-amber-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.stock_taken, 0))}</span>,
+      <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.damages, 0))}</span>,
+      <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.closing_stock, 0))}</span>,
+      "—",
+      <span className="font-black font-mono text-amber-900 text-xs">UGX {filteredStock.reduce((s, i) => s + getStockItemValuationTaken(i), 0).toLocaleString()}</span>,
+      <span className="font-black font-mono text-brand-forest text-xs">UGX {calculateTotalValuation().toLocaleString()}</span>
+    ]);
+
+    return rows;
+  }, [groupedStock, filteredStock]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-[1550px] mx-auto px-4 sm:px-6">
@@ -2539,64 +2598,7 @@ export default function ProductionStorePage() {
           "Value Outflow",
           "Value Closing"
         ]}
-        tableRows={React.useMemo(() => {
-          const rows: (string | React.ReactNode)[][] = [];
-
-          groupedStock.forEach((group: any) => {
-            const types: { key: "good" | "d1" | "d2" | "d3" | "shell"; label: string; badge: string }[] = group.isEgg ? [
-              { key: "good", label: "GOOD", badge: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
-              { key: "d1", label: "D1", badge: "bg-amber-100 text-amber-800 border border-amber-300" },
-              { key: "d2", label: "D2", badge: "bg-amber-100 text-amber-800 border border-amber-300" },
-              { key: "d3", label: "D3", badge: "bg-gray-100 text-gray-700 border border-gray-300" },
-              { key: "shell", label: "SHELL", badge: "bg-sky-100 text-sky-800 border border-sky-300" },
-            ] : [
-              { key: "good", label: "STANDARD", badge: "bg-emerald-100 text-emerald-800 border border-emerald-300" }
-            ];
-
-            types.forEach((t, idx) => {
-              const subData = group[t.key];
-              const isFirst = idx === 0;
-              const currentStock = subData.opening + subData.incoming;
-              const worthTaken = subData.item ? getStockItemValuationTaken(subData.item) : 0;
-              const worthClosing = subData.item ? getStockItemValuation(subData.item) : 0;
-
-              rows.push([
-                isFirst ? <span className="font-extrabold text-brand-forest text-xs">{group.production_store_name}</span> : "",
-                isFirst ? <Badge className="border border-brand-sage/50 bg-gray-50 text-gray-700 font-mono text-[9px] px-1.5 py-0.2">{group.batch_reference || "N/A"}</Badge> : "",
-                isFirst ? <span className="font-extrabold text-gray-900 text-xs">{group.product}</span> : "",
-                <Badge className={`${t.badge} text-[8px] font-black px-1.5 py-0.2 uppercase`}>{t.label}</Badge>,
-                <span className={subData.opening > 0 ? "font-semibold text-gray-700" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.opening, group.unit, group.isEgg)}</span>,
-                <span className={subData.incoming > 0 ? "text-emerald-700 font-bold" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.incoming, group.unit, group.isEgg)}</span>,
-                <span className={currentStock > 0 ? "font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono" : "text-gray-400 font-mono"}>{formatQuantityGlobal(currentStock, group.unit, group.isEgg)}</span>,
-                <span className={subData.taken > 0 ? "text-amber-800 font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.taken, group.unit, group.isEgg)}</span>,
-                <span className={subData.damages > 0 ? "text-red-700 font-black bg-red-50 px-1.5 py-0.5 rounded border border-red-200" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.damages, group.unit, group.isEgg)}</span>,
-                <span className={subData.closing > 0 ? "text-green-800 font-black bg-green-100/90 px-2 py-0.5 rounded-md border border-green-300/60 shadow-2xs" : "text-gray-400 font-mono"}>{formatQuantityGlobal(subData.closing, group.unit, group.isEgg)}</span>,
-                <span className="font-mono text-gray-600 font-semibold">{subData.price > 0 ? `UGX ${subData.price.toLocaleString()}` : '—'}</span>,
-                <span className={worthTaken > 0 ? "font-mono font-black text-amber-900" : "text-gray-400 font-mono"}>{worthTaken > 0 ? `UGX ${worthTaken.toLocaleString()}` : '0'}</span>,
-                <span className={worthClosing > 0 ? "font-mono font-black text-brand-forest" : "text-gray-400 font-mono"}>{worthClosing > 0 ? `UGX ${worthClosing.toLocaleString()}` : '0'}</span>
-              ]);
-            });
-          });
-
-          // Summary TOTAL Row (Matching Screenshot)
-          rows.push([
-            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
-            "",
-            "",
-            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
-            <span className="font-bold font-mono text-brand-forest text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock, 0))}</span>,
-            <span className="font-bold font-mono text-emerald-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.incoming, 0))}</span>,
-            <span className="font-bold font-mono text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.opening_stock + i.incoming, 0))}</span>,
-            <span className="font-bold font-mono text-amber-700 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.stock_taken, 0))}</span>,
-            <span className="font-bold font-mono text-red-600 text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.damages, 0))}</span>,
-            <span className="font-black font-mono text-green-800 bg-green-100 px-2 py-0.5 rounded text-xs">{formatTotalQuantity(filteredStock.reduce((s, i) => s + i.closing_stock, 0))}</span>,
-            "—",
-            <span className="font-black font-mono text-amber-900 text-xs">UGX {filteredStock.reduce((s, i) => s + getStockItemValuationTaken(i), 0).toLocaleString()}</span>,
-            <span className="font-black font-mono text-brand-forest text-xs">UGX {calculateTotalValuation().toLocaleString()}</span>
-          ]);
-
-          return rows;
-        }, [groupedStock, filteredStock])}
+        tableRows={reportTableRows}
       />
 
     </DashboardLayout>

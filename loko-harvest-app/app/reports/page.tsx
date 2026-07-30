@@ -289,6 +289,40 @@ export default function ReportsPage() {
     });
   }, [analytics.product_mix]);
 
+  const reportKpiCards = React.useMemo(() => {
+    const maxBal = analytics.outstanding_aging.reduce((max, c) => Math.max(max, c.current_balance || 0), 0);
+    const topCustomer = analytics.best_performers[0]?.name || "Shoprite Stores";
+    const topProduct = analytics.product_mix[0]?.product_name || "White Eggs (Standard Tray)";
+    const topProductQty = analytics.product_mix[0]?.total_quantity || 0;
+
+    return [
+      {
+        label: "Top Outstanding Demanded Balance",
+        value: `UGX ${maxBal.toLocaleString()}`,
+        subtitle: "Highest individual customer balance",
+        color: "red"
+      },
+      {
+        label: "#1 Top Volume Supermarket Outlet",
+        value: topCustomer,
+        subtitle: "Highest total volume purchaser",
+        color: "green"
+      },
+      {
+        label: "#1 Best Selling Product",
+        value: `${topProduct} (${topProductQty})`,
+        subtitle: "Highest sales outflow volume",
+        color: "blue"
+      },
+      {
+        label: "Average Reorder Velocity",
+        value: "Every 3.5 Days",
+        subtitle: "Average repeat ordering frequency",
+        color: "yellow"
+      }
+    ];
+  }, [analytics]);
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -1067,39 +1101,7 @@ export default function ReportsPage() {
         reportType="customers"
         storeName="All Supermarket Outlets & Retail Enterprise Accounts"
         storeLocation="LOKO Central Supply & Distribution Network"
-        kpiCards={React.useMemo(() => {
-          const maxBal = analytics.outstanding_aging.reduce((max, c) => Math.max(max, c.current_balance || 0), 0);
-          const topCustomer = analytics.best_performers[0]?.name || "Shoprite Stores";
-          const topProduct = analytics.product_mix[0]?.product_name || "White Eggs (Standard Tray)";
-          const topProductQty = analytics.product_mix[0]?.total_quantity || 0;
-
-          return [
-            {
-              label: "Top Outstanding Demanded Balance",
-              value: `UGX ${maxBal.toLocaleString()}`,
-              subtitle: "Highest individual customer balance",
-              color: "red"
-            },
-            {
-              label: "#1 Top Volume Supermarket Outlet",
-              value: topCustomer,
-              subtitle: "Highest total volume purchaser",
-              color: "green"
-            },
-            {
-              label: "#1 Best Selling Product",
-              value: `${topProduct} (${topProductQty})`,
-              subtitle: "Highest sales outflow volume",
-              color: "blue"
-            },
-            {
-              label: "Average Reorder Velocity",
-              value: "Every 3.5 Days",
-              subtitle: "Average repeat ordering frequency",
-              color: "yellow"
-            }
-          ];
-        }, [analytics])}
+        kpiCards={reportKpiCards}
         primaryTableTitle="Section 1: Supermarket Outlets & Client Competitive Performance (Ranked by Volume)"
         tableHeaders={[
           "Rank",

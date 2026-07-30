@@ -245,6 +245,99 @@ export default function OrdersPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  const reportTableRows = React.useMemo(() => {
+    // Include orders within date range OR any missed/undone/carried-over orders regardless of date
+    const reportOrders = orders.filter(o => {
+      const withinDateRange = !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate);
+      const isActionRequired = isCarriedOverUncompleted(o) || ['missed', 'undone'].includes((o.status || '').toLowerCase());
+      return withinDateRange || isActionRequired;
+    });
+
+    // Sort: Missed / Undone / Carried-Over orders are ALWAYS PINNED AT THE VERY TOP
+    reportOrders.sort((a, b) => {
+      const aAction = isCarriedOverUncompleted(a) || ['missed', 'undone'].includes((a.status || '').toLowerCase());
+      const bAction = isCarriedOverUncompleted(b) || ['missed', 'undone'].includes((b.status || '').toLowerCase());
+      if (aAction && !bAction) return -1;
+      if (!aAction && bAction) return 1;
+      return 0;
+    });
+
+    const rows: (string | React.ReactNode)[][] = reportOrders.map(o => {
+      // Extract batch references from order or items array
+      const batchRefs = Array.from(
+        new Set([
+          o.batch_reference,
+          o.batch_no,
+          ...(o.items || o.order_items || []).map((i: any) => i.batch_reference || i.batch_no)
+        ].filter(Boolean))
+      ) as string[];
+      const batchDisplay = batchRefs.length > 0 
+        ? batchRefs.join(", ") 
+        : "N/A";
+
+      // Extract Completion / Fulfillment Timestamp (ONLY for Delivered orders)
+      const isDelivered = (o.status || '').toLowerCase() === 'delivered';
+      const rawCompletedDate = o.delivered_at || (isDelivered ? o.completed_at || o.updated_at : null);
+      const completedDisplay = rawCompletedDate 
+        ? String(rawCompletedDate).replace('T', ' ').slice(0, 16) 
+        : null;
+
+      const customerLogo = o.customer?.logo_url || o.customer?.logo;
+
+      return [
+        <div key={`ord-${o.id}`} className="flex items-center gap-1.5">
+          <span className="font-extrabold font-mono text-brand-forest text-xs">{o.order_number}</span>
+          {isCarriedOverUncompleted(o) && <span className="h-2.5 w-2.5 rounded-full bg-red-600 inline-block animate-pulse border border-red-400" title="Carried Over (Action Required)" />}
+        </div>,
+        <span key={`fdn-${o.id}`} className="font-mono text-gray-500 text-[9px]">{o.fdn || o.fiscal_document_number || "—"}</span>,
+        <div key={`cust-${o.id}`} className="flex items-center gap-2">
+          {customerLogo ? (
+            <img 
+              src={customerLogo} 
+              alt={o.customer?.name || "Customer"} 
+              className="h-6 w-6 rounded-full object-cover border border-brand-sage/40 bg-white shrink-0 shadow-2xs"
+            />
+          ) : (
+            <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${getLogoColor(o.customer?.name)}`}>
+              {(o.customer?.name || "C")[0].toUpperCase()}
+            </div>
+          )}
+          <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>
+        </div>,
+        <span key={`store-${o.id}`} className="text-gray-600 font-semibold text-[9.5px]">{o.sales_store?.name || "Main Hub"}</span>,
+        <Badge key={`batch-${o.id}`} className="border border-brand-sage/50 bg-gray-50 text-brand-forest font-mono text-[8.5px] font-bold px-1.5 py-0.2">{batchDisplay}</Badge>,
+        <span key={`odate-${o.id}`} className="font-mono text-gray-600 font-semibold">{o.order_date ? o.order_date.split(' ')[0] : 'N/A'}</span>,
+        <span key={`rdate-${o.id}`} className="font-mono text-gray-600 font-semibold">{o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A'}</span>,
+        completedDisplay ? (
+          <span key={`comp-${o.id}`} className="font-mono text-emerald-800 font-bold text-[9px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">{completedDisplay}</span>
+        ) : (
+          <span key={`comp-${o.id}`} className="font-mono text-gray-400 text-[9px]">Pending</span>
+        ),
+        getUrgencyBadge(o.urgency),
+        getStatusBadge(o.status, o.required_delivery_date),
+        <span key={`tot-${o.id}`} className="font-mono font-black text-brand-forest text-xs">UGX {parseFloat(o.total_amount || 0).toLocaleString()}</span>
+      ];
+    });
+
+    // Summary TOTAL Row (Matching Screenshot)
+    rows.push([
+      <span key="sum-lbl" className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
+      "—",
+      "—",
+      "—",
+      "—",
+      "—",
+      "—",
+      "—",
+      <Badge key="sum-bdg" className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
+      <span key="sum-cnt" className="font-bold text-gray-700 text-xs font-mono">{reportOrders.length} Orders</span>,
+      <span key="sum-val" className="font-black font-mono text-brand-forest text-xs">UGX {reportOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0).toLocaleString()}</span>
+    ]);
+
+    return rows;
+  }, [orders, reportStartDate, reportEndDate]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -704,97 +797,7 @@ export default function OrdersPage() {
           "STATUS",
           "TOTAL VALUE"
         ]}
-        tableRows={React.useMemo(() => {
-          // Include orders within date range OR any missed/undone/carried-over orders regardless of date
-          const reportOrders = orders.filter(o => {
-            const withinDateRange = !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate);
-            const isActionRequired = isCarriedOverUncompleted(o) || ['missed', 'undone'].includes((o.status || '').toLowerCase());
-            return withinDateRange || isActionRequired;
-          });
-
-          // Sort: Missed / Undone / Carried-Over orders are ALWAYS PINNED AT THE VERY TOP
-          reportOrders.sort((a, b) => {
-            const aAction = isCarriedOverUncompleted(a) || ['missed', 'undone'].includes((a.status || '').toLowerCase());
-            const bAction = isCarriedOverUncompleted(b) || ['missed', 'undone'].includes((b.status || '').toLowerCase());
-            if (aAction && !bAction) return -1;
-            if (!aAction && bAction) return 1;
-            return 0;
-          });
-
-          const rows: (string | React.ReactNode)[][] = reportOrders.map(o => {
-            // Extract batch references from order or items array
-            const batchRefs = Array.from(
-              new Set([
-                o.batch_reference,
-                o.batch_no,
-                ...(o.items || o.order_items || []).map((i: any) => i.batch_reference || i.batch_no)
-              ].filter(Boolean))
-            ) as string[];
-            const batchDisplay = batchRefs.length > 0 
-              ? batchRefs.join(", ") 
-              : "N/A";
-
-            // Extract Completion / Fulfillment Timestamp (ONLY for Delivered orders)
-            const isDelivered = (o.status || '').toLowerCase() === 'delivered';
-            const rawCompletedDate = o.delivered_at || (isDelivered ? o.completed_at || o.updated_at : null);
-            const completedDisplay = rawCompletedDate 
-              ? String(rawCompletedDate).replace('T', ' ').slice(0, 16) 
-              : null;
-
-            const customerLogo = o.customer?.logo_url || o.customer?.logo;
-
-            return [
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold font-mono text-brand-forest text-xs">{o.order_number}</span>
-                {isCarriedOverUncompleted(o) && <span className="h-2.5 w-2.5 rounded-full bg-red-600 inline-block animate-pulse border border-red-400" title="Carried Over (Action Required)" />}
-              </div>,
-              <span className="font-mono text-gray-500 text-[9px]">{o.fdn || o.fiscal_document_number || "—"}</span>,
-              <div className="flex items-center gap-2">
-                {customerLogo ? (
-                  <img 
-                    src={customerLogo} 
-                    alt={o.customer?.name || "Customer"} 
-                    className="h-6 w-6 rounded-full object-cover border border-brand-sage/40 bg-white shrink-0 shadow-2xs"
-                  />
-                ) : (
-                  <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${getLogoColor(o.customer?.name)}`}>
-                    {(o.customer?.name || "C")[0].toUpperCase()}
-                  </div>
-                )}
-                <span className="font-extrabold text-gray-900 text-xs">{o.customer?.name || "N/A"}</span>
-              </div>,
-              <span className="text-gray-600 font-semibold text-[9.5px]">{o.sales_store?.name || "Main Hub"}</span>,
-              <Badge className="border border-brand-sage/50 bg-gray-50 text-brand-forest font-mono text-[8.5px] font-bold px-1.5 py-0.2">{batchDisplay}</Badge>,
-              <span className="font-mono text-gray-600 font-semibold">{o.order_date ? o.order_date.split(' ')[0] : 'N/A'}</span>,
-              <span className="font-mono text-gray-600 font-semibold">{o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A'}</span>,
-              completedDisplay ? (
-                <span className="font-mono text-emerald-800 font-bold text-[9px] bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">{completedDisplay}</span>
-              ) : (
-                <span className="font-mono text-gray-400 text-[9px]">Pending</span>
-              ),
-              getUrgencyBadge(o.urgency),
-              getStatusBadge(o.status, o.required_delivery_date),
-              <span className="font-mono font-black text-brand-forest text-xs">UGX {parseFloat(o.total_amount || 0).toLocaleString()}</span>
-            ];
-          });
-
-          // Summary TOTAL Row (Matching Screenshot)
-          rows.push([
-            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
-            "—",
-            "—",
-            "—",
-            "—",
-            "—",
-            "—",
-            "—",
-            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
-            <span className="font-bold font-mono text-brand-forest text-xs">{reportOrders.length} Orders</span>,
-            <span className="font-black font-mono text-brand-forest text-xs">UGX {reportOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0).toLocaleString()}</span>
-          ]);
-
-          return rows;
-        }, [orders, reportStartDate, reportEndDate])}
+        tableRows={reportTableRows}
       />
     </DashboardLayout>
   );
