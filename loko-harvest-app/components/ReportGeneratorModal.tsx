@@ -395,7 +395,7 @@ export default function ReportGeneratorModal({
               <Sparkles size={14} className="text-brand-yellow" />
               Executive Key Performance Summary
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-2 ${kpiCards.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-4'} gap-3`}>
               {kpiCards.map((card, idx) => (
                 <div 
                   key={idx}

@@ -487,6 +487,122 @@ export default function CustomersPage() {
   const totalPaid = customers.reduce((acc, c) => acc + getConsolidatedPaid(c), 0);
   const paymentPercentage = totalInvoiced > 0 ? Math.round((totalPaid / totalInvoiced) * 100) : 0;
 
+  const reportTableRows = React.useMemo(() => {
+    const rows: (string | React.ReactNode)[][] = [];
+
+    filteredCustomers.forEach(c => {
+      if (c.isParent) {
+        const hqInvoiced = getConsolidatedInvoiced(c);
+        const hqPaid = getConsolidatedPaid(c);
+        const hqBalance = getConsolidatedBalance(c);
+
+        const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
+                           c.name.toLowerCase().includes("mega") ? "M" :
+                           c.name.toLowerCase().includes("kfc") ? "K" :
+                           c.name.toLowerCase().includes("javas") ? "CJ" :
+                           c.name.toLowerCase().includes("carrefour") ? "C" :
+                           c.name.charAt(0).toUpperCase();
+
+        // Corporate HQ Main Row
+        rows.push([
+          <div key={`hq-${c.id}`} className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
+            {c.logo_url ? (
+              <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
+            ) : (
+              <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
+                {logoLetter}
+              </div>
+            )}
+            <span>{c.name}</span>
+          </div>,
+          <Badge key={`hq-bdg-${c.id}`} className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">
+            CORPORATE HQ ({c.branches.length} BRANCHES)
+          </Badge>,
+          <span key={`hq-loc-${c.id}`} className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
+          <span key={`hq-lim-${c.id}`} className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
+          <span key={`hq-inv-${c.id}`} className="font-mono text-blue-900 font-bold text-xs">UGX {hqInvoiced.toLocaleString()}</span>,
+          <span key={`hq-pd-${c.id}`} className="font-mono text-emerald-800 font-bold text-xs">UGX {hqPaid.toLocaleString()}</span>,
+          <span key={`hq-bal-${c.id}`} className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {hqBalance.toLocaleString()}</span>,
+          <Badge key={`hq-sts-${c.id}`} className={hqBalance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
+            {hqBalance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
+          </Badge>
+        ]);
+
+        // Child Branches Indented Rows
+        c.branches.forEach(br => {
+          rows.push([
+            <div key={`br-${br.id}`} className="pl-6 text-gray-700 font-semibold text-xs flex items-center gap-1.5">
+              <span className="text-gray-400 font-mono">↳</span>
+              <span>{br.name}</span>
+            </div>,
+            <Badge key={`br-bdg-${br.id}`} className="bg-gray-100 text-gray-700 border border-gray-300 text-[8px] font-bold uppercase">
+              BRANCH OUTLET
+            </Badge>,
+            <span key={`br-loc-${br.id}`} className="text-gray-500 font-medium text-[9px]">{br.zone} | {br.contact_person} ({br.phone})</span>,
+            <span key={`br-lim-${br.id}`} className="font-mono text-gray-600 text-xs">UGX {br.credit_limit.toLocaleString()}</span>,
+            <span key={`br-inv-${br.id}`} className="font-mono text-blue-800 text-xs">UGX {br.total_invoiced.toLocaleString()}</span>,
+            <span key={`br-pd-${br.id}`} className="font-mono text-emerald-700 text-xs">UGX {br.total_paid.toLocaleString()}</span>,
+            <span key={`br-bal-${br.id}`} className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">UGX {br.balance.toLocaleString()}</span>,
+            <Badge key={`br-sts-${br.id}`} className={br.balance > 0 ? "bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-extrabold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
+              {br.balance > 0 ? "BRANCH DEMAND" : "SETTLED"}
+            </Badge>
+          ]);
+        });
+
+      } else {
+        // Standalone Row
+        const balance = c.balance || 0;
+        const invoiced = c.total_invoiced || 0;
+        const paid = c.total_paid || 0;
+
+        const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
+                           c.name.toLowerCase().includes("mega") ? "M" :
+                           c.name.toLowerCase().includes("kfc") ? "K" :
+                           c.name.toLowerCase().includes("javas") ? "CJ" :
+                           c.name.toLowerCase().includes("carrefour") ? "C" :
+                           c.name.charAt(0).toUpperCase();
+
+        rows.push([
+          <div key={`st-${c.id}`} className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
+            {c.logo_url ? (
+              <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
+            ) : (
+              <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
+                {logoLetter}
+              </div>
+            )}
+            <span>{c.name}</span>
+          </div>,
+          <Badge key={`st-bdg-${c.id}`} className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-extrabold uppercase">
+            STANDALONE
+          </Badge>,
+          <span key={`st-loc-${c.id}`} className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
+          <span key={`st-lim-${c.id}`} className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
+          <span key={`st-inv-${c.id}`} className="font-mono text-blue-900 font-bold text-xs">UGX {invoiced.toLocaleString()}</span>,
+          <span key={`st-pd-${c.id}`} className="font-mono text-emerald-800 font-bold text-xs">UGX {paid.toLocaleString()}</span>,
+          <span key={`st-bal-${c.id}`} className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {balance.toLocaleString()}</span>,
+          <Badge key={`st-sts-${c.id}`} className={balance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
+            {balance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
+          </Badge>
+        ]);
+      }
+    });
+
+    // Summary TOTAL Row
+    rows.push([
+      <span key="sum-lbl" className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
+      "—",
+      "—",
+      <span key="sum-lim" className="font-bold font-mono text-gray-700 text-xs">UGX {customers.reduce((s, c) => s + c.credit_limit, 0).toLocaleString()}</span>,
+      <span key="sum-inv" className="font-bold font-mono text-blue-900 text-xs">UGX {totalInvoiced.toLocaleString()}</span>,
+      <span key="sum-pd" className="font-bold font-mono text-emerald-800 text-xs">UGX {totalPaid.toLocaleString()}</span>,
+      <span key="sum-bal" className="font-black font-mono text-red-700 bg-red-100 px-2 py-0.5 rounded text-xs">UGX {totalUnpaid.toLocaleString()}</span>,
+      <Badge key="sum-bdg" className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>
+    ]);
+
+    return rows;
+  }, [filteredCustomers, customers, totalInvoiced, totalPaid, totalUnpaid]);
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-6xl mx-auto pb-12">
@@ -1409,121 +1525,7 @@ export default function CustomersPage() {
           "Outstanding Demanded (UGX)",
           "Status"
         ]}
-        tableRows={React.useMemo(() => {
-          const rows: (string | React.ReactNode)[][] = [];
-
-          filteredCustomers.forEach(c => {
-            if (c.isParent) {
-              const hqInvoiced = getConsolidatedInvoiced(c);
-              const hqPaid = getConsolidatedPaid(c);
-              const hqBalance = getConsolidatedBalance(c);
-
-              const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
-                                 c.name.toLowerCase().includes("mega") ? "M" :
-                                 c.name.toLowerCase().includes("kfc") ? "K" :
-                                 c.name.toLowerCase().includes("javas") ? "CJ" :
-                                 c.name.toLowerCase().includes("carrefour") ? "C" :
-                                 c.name.charAt(0).toUpperCase();
-
-              // Corporate HQ Main Row
-              rows.push([
-                <div className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
-                  {c.logo_url ? (
-                    <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
-                  ) : (
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
-                      {logoLetter}
-                    </div>
-                  )}
-                  <span>{c.name}</span>
-                </div>,
-                <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">
-                  CORPORATE HQ ({c.branches.length} BRANCHES)
-                </Badge>,
-                <span className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
-                <span className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
-                <span className="font-mono text-blue-900 font-bold text-xs">UGX {hqInvoiced.toLocaleString()}</span>,
-                <span className="font-mono text-emerald-800 font-bold text-xs">UGX {hqPaid.toLocaleString()}</span>,
-                <span className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {hqBalance.toLocaleString()}</span>,
-                <Badge className={hqBalance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
-                  {hqBalance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
-                </Badge>
-              ]);
-
-              // Child Branches Indented Rows
-              c.branches.forEach(br => {
-                rows.push([
-                  <div className="pl-6 text-gray-700 font-semibold text-xs flex items-center gap-1.5">
-                    <span className="text-gray-400 font-mono">↳</span>
-                    <span>{br.name}</span>
-                  </div>,
-                  <Badge className="bg-gray-100 text-gray-700 border border-gray-300 text-[8px] font-bold uppercase">
-                    BRANCH OUTLET
-                  </Badge>,
-                  <span className="text-gray-500 font-medium text-[9px]">{br.zone} | {br.contact_person} ({br.phone})</span>,
-                  <span className="font-mono text-gray-600 text-xs">UGX {br.credit_limit.toLocaleString()}</span>,
-                  <span className="font-mono text-blue-800 text-xs">UGX {br.total_invoiced.toLocaleString()}</span>,
-                  <span className="font-mono text-emerald-700 text-xs">UGX {br.total_paid.toLocaleString()}</span>,
-                  <span className="font-mono font-bold text-amber-900 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-xs">UGX {br.balance.toLocaleString()}</span>,
-                  <Badge className={br.balance > 0 ? "bg-amber-100 text-amber-900 border border-amber-300 text-[8px] font-extrabold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
-                    {br.balance > 0 ? "BRANCH DEMAND" : "SETTLED"}
-                  </Badge>
-                ]);
-              });
-
-            } else {
-              // Standalone Row
-              const balance = c.balance || 0;
-              const invoiced = c.total_invoiced || 0;
-              const paid = c.total_paid || 0;
-
-              const logoLetter = c.name.toLowerCase().includes("shoprite") ? "S" :
-                                 c.name.toLowerCase().includes("mega") ? "M" :
-                                 c.name.toLowerCase().includes("kfc") ? "K" :
-                                 c.name.toLowerCase().includes("javas") ? "CJ" :
-                                 c.name.toLowerCase().includes("carrefour") ? "C" :
-                                 c.name.charAt(0).toUpperCase();
-
-              rows.push([
-                <div className="flex items-center gap-2 font-extrabold text-brand-forest text-xs">
-                  {c.logo_url ? (
-                    <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-full border border-brand-sage/40 bg-white shrink-0 object-cover" />
-                  ) : (
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${c.logoColor || 'bg-brand-forest text-brand-yellow'}`}>
-                      {logoLetter}
-                    </div>
-                  )}
-                  <span>{c.name}</span>
-                </div>,
-                <Badge className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-extrabold uppercase">
-                  STANDALONE
-                </Badge>,
-                <span className="text-gray-600 font-semibold text-[9.5px]">{c.zone} | {c.contact_person} ({c.phone})</span>,
-                <span className="font-mono text-gray-700 font-bold text-xs">UGX {c.credit_limit.toLocaleString()}</span>,
-                <span className="font-mono text-blue-900 font-bold text-xs">UGX {invoiced.toLocaleString()}</span>,
-                <span className="font-mono text-emerald-800 font-bold text-xs">UGX {paid.toLocaleString()}</span>,
-                <span className="font-mono font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 text-xs">UGX {balance.toLocaleString()}</span>,
-                <Badge className={balance > 0 ? "bg-red-100 text-red-800 border border-red-300 text-[8px] font-black uppercase" : "bg-emerald-100 text-emerald-800 border border-emerald-300 text-[8px] font-black uppercase"}>
-                  {balance > 0 ? "OVERDUE DEMAND" : "SETTLED"}
-                </Badge>
-              ]);
-            }
-          });
-
-          // Summary TOTAL Row
-          rows.push([
-            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">TOTAL</span>,
-            "—",
-            "—",
-            <span className="font-bold font-mono text-gray-700 text-xs">UGX {customers.reduce((s, c) => s + c.credit_limit, 0).toLocaleString()}</span>,
-            <span className="font-bold font-mono text-blue-900 text-xs">UGX {totalInvoiced.toLocaleString()}</span>,
-            <span className="font-bold font-mono text-emerald-800 text-xs">UGX {totalPaid.toLocaleString()}</span>,
-            <span className="font-black font-mono text-red-700 bg-red-100 px-2 py-0.5 rounded text-xs">UGX {totalUnpaid.toLocaleString()}</span>,
-            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>
-          ]);
-
-          return rows;
-        }, [filteredCustomers, customers, totalInvoiced, totalPaid, totalUnpaid])}
+        tableRows={reportTableRows}
       />
     </DashboardLayout>
   );

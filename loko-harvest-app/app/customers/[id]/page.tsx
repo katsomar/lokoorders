@@ -670,6 +670,48 @@ export default function CustomerDetailPage() {
     });
   }, [datesList, filteredOrderHistory, productNames]);
 
+  const reportTableRows = useMemo(() => {
+    const rows: (string | React.ReactNode)[][] = displayLedger.map(tx => {
+      const isInvoice = tx.type === "invoice";
+      const dateStr = tx.date ? String(tx.date).split('T')[0] : 'N/A';
+
+      return [
+        <span key="date" className="font-mono text-gray-700 font-semibold">{dateStr}</span>,
+        <div key="ref" className="flex items-center gap-1">
+          <span className="font-mono text-brand-forest font-bold text-xs">{tx.ref || tx.orderNumber || "—"}</span>
+          {tx.fdn && <span className="text-[9px] text-gray-400 font-mono">({tx.fdn})</span>}
+        </div>,
+        <span key="branch" className="text-gray-600 font-semibold text-[9.5px]">{tx.branchName || customer?.name}</span>,
+        <Badge key="type" className={isInvoice ? "bg-blue-50 text-blue-800 border border-blue-200 text-[8px] font-extrabold uppercase" : "bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8px] font-extrabold uppercase"}>
+          {isInvoice ? "INVOICE RAISED" : "PAYMENT REMITTANCE"}
+        </Badge>,
+        <span key="debit" className={tx.debit > 0 ? "font-mono font-bold text-blue-900" : "text-gray-400 font-mono"}>{tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "—"}</span>,
+        <span key="credit" className={tx.credit > 0 ? "font-mono font-bold text-emerald-800" : "text-gray-400 font-mono"}>{tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "—"}</span>,
+        <span key="bal" className="font-mono font-black text-brand-forest text-xs">UGX {tx.balance.toLocaleString()}</span>,
+        <Badge key="status" className={tx.balance > 0 ? "bg-red-100 text-red-800 text-[8px] font-bold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
+          {tx.balance > 0 ? "ACTIVE BALANCE" : "CLEARED"}
+        </Badge>
+      ];
+    });
+
+    // Summary TOTAL Row
+    const totalDebit = displayLedger.reduce((s, tx) => s + tx.debit, 0);
+    const totalCredit = displayLedger.reduce((s, tx) => s + tx.credit, 0);
+
+    rows.push([
+      <span key="sum-lbl" className="font-black text-brand-forest text-xs uppercase tracking-wider">STATEMENT TOTAL</span>,
+      "—",
+      "—",
+      <Badge key="sum-bdg" className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
+      <span key="sum-deb" className="font-bold font-mono text-blue-900 text-xs">UGX {totalDebit.toLocaleString()}</span>,
+      <span key="sum-cred" className="font-bold font-mono text-emerald-800 text-xs">UGX {totalCredit.toLocaleString()}</span>,
+      <span key="sum-bal" className="font-black font-mono text-brand-forest text-xs">UGX {currentDues.toLocaleString()}</span>,
+      "—"
+    ]);
+
+    return rows;
+  }, [displayLedger, currentDues, customer]);
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -2035,47 +2077,7 @@ export default function CustomerDetailPage() {
           "Running Balance",
           "Status"
         ]}
-        tableRows={React.useMemo(() => {
-          const rows: (string | React.ReactNode)[][] = displayLedger.map(tx => {
-            const isInvoice = tx.type === "invoice";
-            const dateStr = tx.date ? String(tx.date).split('T')[0] : 'N/A';
-
-            return [
-              <span className="font-mono text-gray-700 font-semibold">{dateStr}</span>,
-              <div className="flex items-center gap-1">
-                <span className="font-mono text-brand-forest font-bold text-xs">{tx.ref || tx.orderNumber || "—"}</span>
-                {tx.fdn && <span className="text-[9px] text-gray-400 font-mono">({tx.fdn})</span>}
-              </div>,
-              <span className="text-gray-600 font-semibold text-[9.5px]">{tx.branchName || customer.name}</span>,
-              <Badge className={isInvoice ? "bg-blue-50 text-blue-800 border border-blue-200 text-[8px] font-extrabold uppercase" : "bg-emerald-50 text-emerald-800 border border-emerald-200 text-[8px] font-extrabold uppercase"}>
-                {isInvoice ? "INVOICE RAISED" : "PAYMENT REMITTANCE"}
-              </Badge>,
-              <span className={tx.debit > 0 ? "font-mono font-bold text-blue-900" : "text-gray-400 font-mono"}>{tx.debit > 0 ? `UGX ${tx.debit.toLocaleString()}` : "—"}</span>,
-              <span className={tx.credit > 0 ? "font-mono font-bold text-emerald-800" : "text-gray-400 font-mono"}>{tx.credit > 0 ? `UGX ${tx.credit.toLocaleString()}` : "—"}</span>,
-              <span className="font-mono font-black text-brand-forest text-xs">UGX {tx.balance.toLocaleString()}</span>,
-              <Badge className={tx.balance > 0 ? "bg-red-100 text-red-800 text-[8px] font-bold uppercase" : "bg-emerald-100 text-emerald-800 text-[8px] font-bold uppercase"}>
-                {tx.balance > 0 ? "ACTIVE BALANCE" : "CLEARED"}
-              </Badge>
-            ];
-          });
-
-          // Summary TOTAL Row
-          const totalDebit = displayLedger.reduce((s, tx) => s + tx.debit, 0);
-          const totalCredit = displayLedger.reduce((s, tx) => s + tx.credit, 0);
-
-          rows.push([
-            <span className="font-black text-brand-forest text-xs uppercase tracking-wider">STATEMENT TOTAL</span>,
-            "—",
-            "—",
-            <Badge className="bg-brand-forest text-brand-yellow text-[8px] font-black uppercase border-none">SUMMARY</Badge>,
-            <span className="font-bold font-mono text-blue-900 text-xs">UGX {totalDebit.toLocaleString()}</span>,
-            <span className="font-bold font-mono text-emerald-800 text-xs">UGX {totalCredit.toLocaleString()}</span>,
-            <span className="font-black font-mono text-brand-forest text-xs">UGX {currentDues.toLocaleString()}</span>,
-            "—"
-          ]);
-
-          return rows;
-        }, [displayLedger, currentDues])}
+        tableRows={reportTableRows}
       />
     </DashboardLayout>
   );
