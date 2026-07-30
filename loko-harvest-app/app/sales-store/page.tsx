@@ -45,6 +45,8 @@ import { CameraCapture } from "@/components/ui/camera-capture";
 import { useAuth } from "@/store/useAuth";
 import { useLookups } from "@/store/useLookups";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+import ReportGeneratorModal from "@/components/ReportGeneratorModal";
+import { FileText } from "lucide-react";
 
 
 interface SalesStockItem {
@@ -90,6 +92,8 @@ export default function SalesStorePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<"all" | "cream" | "white" | "brown" | "other">("all");
   
+  const { user } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
   // Store Filters
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all");
   const [selectedBatchFilter, setSelectedBatchFilter] = useState("all");
@@ -957,6 +961,15 @@ export default function SalesStorePage() {
           </div>
           
           <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 items-center w-full sm:w-auto">
+            <UITooltip content="Generate official supply chain report for sales store packaged inventory" side="bottom">
+              <Button 
+                onClick={() => setShowReportModal(true)}
+                className="flex-1 sm:flex-initial gap-1.5 bg-brand-forest hover:bg-emerald-900 text-white font-extrabold border-none shadow-sm h-9.5 px-3 sm:px-4 rounded-xl text-xs cursor-pointer justify-center"
+              >
+                <FileText size={15} />
+                <span>Generate Report</span>
+              </Button>
+            </UITooltip>
             <Link href="/sales-store/activity" className="flex-1 sm:flex-initial">
               <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
                 <History size={15} />
@@ -2578,7 +2591,57 @@ export default function SalesStorePage() {
         />
       )}
 
-      </div>
+      {/* Sales Store Report Generator Modal */}
+      <ReportGeneratorModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Sales Store Packaged Inventory & Outflow Report"
+        reportType="sales_store"
+        storeName="Sales Central Hub"
+        storeLocation="Kampala Distribution Center"
+        generatedBy={user?.name || "System Administrator"}
+        kpiCards={[
+          {
+            label: "Total Closing Stock",
+            value: formatTotalQuantity(getFilteredStock().reduce((acc, item) => acc + item.closing_stock, 0)),
+            subtitle: "Packaged inventory ready for sale",
+            color: "emerald"
+          },
+          {
+            label: "Total Value of Items Taken / Outflow",
+            value: `UGX ${getFilteredStock().reduce((acc, item) => acc + getStockItemValuationTaken(item), 0).toLocaleString()}`,
+            subtitle: "Monetary value of sold & transferred items",
+            color: "yellow"
+          },
+          {
+            label: "Total Items / SKUs in Sales Store",
+            value: `${getFilteredStock().length} Product Items`,
+            subtitle: "Active retail catalog items",
+            color: "blue"
+          }
+        ]}
+        tableHeaders={[
+          "Product Name",
+          "Product Code",
+          "Store Facility",
+          "Batch Ref",
+          "Category",
+          "Closing Stock",
+          "Stock Sold / Outflow",
+          "Retail Unit Price"
+        ]}
+        tableRows={getFilteredStock().map(item => [
+          item.product,
+          item.code,
+          item.sales_store_name,
+          item.batch_reference || 'N/A',
+          item.category.toUpperCase(),
+          formatQuantity(item.closing_stock, item.unit),
+          formatQuantity(item.sold_quantity + item.transferred_out, item.unit),
+          `UGX ${item.unit_price.toLocaleString()}`
+        ])}
+      />
+
     </DashboardLayout>
   );
 }

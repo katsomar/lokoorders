@@ -44,6 +44,8 @@ import { useLookups } from "@/store/useLookups";
 import { compressImage } from "@/lib/imageCompressor";
 import { CameraCapture } from "@/components/ui/camera-capture";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
+import ReportGeneratorModal from "@/components/ReportGeneratorModal";
+import { useAuth } from "@/store/useAuth";
 
 
 interface ProductionStockItem {
@@ -235,6 +237,8 @@ export default function ProductionStorePage() {
   const [editingPrices, setEditingPrices] = useState<{ [id: string]: string }>({});
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
+  const { user } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadingIntakes, setLoadingIntakes] = useState(true);
@@ -1115,6 +1119,15 @@ export default function ProductionStorePage() {
                 <span>Transfer Activity</span>
               </Button>
             </Link>
+            <UITooltip content="Generate official supply chain report for production inventory" side="bottom">
+              <Button 
+                onClick={() => setShowReportModal(true)}
+                className="flex-1 sm:flex-initial gap-1.5 bg-brand-forest hover:bg-emerald-900 text-white font-extrabold border-none shadow-sm h-9.5 px-3 sm:px-4 rounded-xl text-xs cursor-pointer justify-center"
+              >
+                <FileText size={15} />
+                <span>Generate Report</span>
+              </Button>
+            </UITooltip>
             <UITooltip content="Record fresh daily egg collection harvest into production inventory" side="bottom">
               <Link href="/production-store/intake" className="flex-1 sm:flex-initial">
                 <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
@@ -2465,7 +2478,54 @@ export default function ProductionStorePage() {
           onCapture={handleAdjustCameraCapture}
           onClose={() => setShowCamera(false)}
         />
-      )}
+      {/* Production Store Report Generator Modal */}
+      <ReportGeneratorModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Production Store Inventory & Outflow Report"
+        reportType="production_store"
+        storeName="Production Main Hub"
+        storeLocation="Kampala Industrial Area, Farm Hub 1"
+        generatedBy={user?.name || "System Administrator"}
+        kpiCards={[
+          {
+            label: "Total Closing Stock",
+            value: formatTotalQuantity(filteredStock.reduce((acc, item) => acc + item.closing_stock, 0)),
+            subtitle: "Current available harvest stock",
+            color: "emerald"
+          },
+          {
+            label: "Total Value of Items Taken",
+            value: `UGX ${filteredStock.reduce((acc, item) => acc + getStockItemValuationTaken(item), 0).toLocaleString()}`,
+            subtitle: "Monetary value of stock outflow",
+            color: "yellow"
+          },
+          {
+            label: "Total Items / SKUs in Store",
+            value: `${filteredStock.length} Product Batches`,
+            subtitle: "Active catalog items",
+            color: "blue"
+          }
+        ]}
+        tableHeaders={[
+          "Product Name",
+          "Product Code",
+          "Store Facility",
+          "Batch Ref",
+          "Closing Stock",
+          "Stock Taken (Outflow)",
+          "Valuation Unit Price"
+        ]}
+        tableRows={filteredStock.map(item => [
+          item.product,
+          item.code,
+          item.production_store_name,
+          item.batch_reference || 'N/A',
+          formatQuantityGlobal(item.closing_stock, item.unit),
+          formatQuantityGlobal(item.stock_taken, item.unit),
+          `UGX ${item.unit_price.toLocaleString()}`
+        ])}
+      />
 
     </DashboardLayout>
   );

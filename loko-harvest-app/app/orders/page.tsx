@@ -29,8 +29,10 @@ import { format } from "date-fns";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/store/useToast";
+import { useAuth } from "@/store/useAuth";
+import ReportGeneratorModal from "@/components/ReportGeneratorModal";
+import { FileText } from "lucide-react";
 
 
 
@@ -53,6 +55,10 @@ const isCarriedOverUncompleted = (order: any) => {
 };
 
 export default function OrdersPage() {
+  const { user } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [orders, setOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -251,14 +257,25 @@ export default function OrdersPage() {
             </div>
             <p className="text-gray-500 font-body text-xs mt-0.5">Track, schedule, and dispatch bulk deliveries to client outlets</p>
           </div>
-          <UITooltip content="Create a new sales order with custom delivery dates and customer credit terms" side="bottom">
-            <Link href="/orders/new">
-              <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs w-full sm:w-auto justify-center">
-                <Plus size={15} />
-                <span>New Order</span>
+          <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center w-full sm:w-auto">
+            <UITooltip content="Generate official audit report for sales orders with date range filtering" side="bottom">
+              <Button 
+                onClick={() => setShowReportModal(true)}
+                className="gap-1.5 bg-brand-forest hover:bg-emerald-900 text-white font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs w-full sm:w-auto justify-center cursor-pointer"
+              >
+                <FileText size={15} />
+                <span>Generate Report</span>
               </Button>
-            </Link>
-          </UITooltip>
+            </UITooltip>
+            <UITooltip content="Create a new sales order with custom delivery dates and customer credit terms" side="bottom">
+              <Link href="/orders/new">
+                <Button className="gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-4 rounded-xl text-xs w-full sm:w-auto justify-center">
+                  <Plus size={15} />
+                  <span>New Order</span>
+                </Button>
+              </Link>
+            </UITooltip>
+          </div>
         </div>
 
 
@@ -636,6 +653,66 @@ export default function OrdersPage() {
         confirmText="Delete Order"
         variant="danger"
         isLoading={isDeletingOrder}
+      />
+
+      {/* Orders Report Generator Modal */}
+      <ReportGeneratorModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Sales Order Pipeline & Audit Report"
+        reportType="orders"
+        storeName="Kampala Dispatch Hub"
+        storeLocation="LOKO Central Distribution Network"
+        generatedBy={user?.name || "System Administrator"}
+        startDate={reportStartDate}
+        endDate={reportEndDate}
+        onDateChange={(start, end) => {
+          setReportStartDate(start);
+          setReportEndDate(end);
+        }}
+        kpiCards={[
+          {
+            label: "Total Filtered Orders",
+            value: `${orders.filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate)).length} Orders`,
+            subtitle: `Period: ${reportStartDate} to ${reportEndDate}`,
+            color: "emerald"
+          },
+          {
+            label: "Total Order Value",
+            value: `UGX ${orders.filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate)).reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0).toLocaleString()}`,
+            subtitle: "Gross order revenue",
+            color: "yellow"
+          },
+          {
+            label: "Fulfilled / Delivered",
+            value: `${orders.filter(o => (!o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate)) && ['delivered', 'dispatched'].includes((o.status || '').toLowerCase())).length} Fulfilled`,
+            subtitle: "Clearance rate",
+            color: "blue"
+          }
+        ]}
+        tableHeaders={[
+          "Order Number",
+          "Customer Name",
+          "Store Source",
+          "Urgency",
+          "Order Status",
+          "Order Date",
+          "Required Delivery",
+          "Total Amount (UGX)"
+        ]}
+        tableRows={orders
+          .filter(o => !o.order_date || (o.order_date.split(' ')[0] >= reportStartDate && o.order_date.split(' ')[0] <= reportEndDate))
+          .map(o => [
+            o.order_number,
+            o.customer?.name || "N/A",
+            o.sales_store?.name || "Main Hub",
+            (o.urgency || "normal").toUpperCase(),
+            (o.status || "pending").toUpperCase().replace(/_/g, " "),
+            o.order_date ? o.order_date.split(' ')[0] : 'N/A',
+            o.required_delivery_date ? o.required_delivery_date.split(' ')[0] : 'N/A',
+            `UGX ${parseFloat(o.total_amount || 0).toLocaleString()}`
+          ])
+        }
       />
     </DashboardLayout>
   );
