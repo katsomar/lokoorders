@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { 
   Printer, 
   Download, 
@@ -88,8 +89,13 @@ export default function ReportGeneratorModal({
 }: ReportGeneratorModalProps) {
   const [filterStartDate, setFilterStartDate] = useState(startDate || new Date().toISOString().split('T')[0]);
   const [filterEndDate, setFilterEndDate] = useState(endDate || new Date().toISOString().split('T')[0]);
+  const [mounted, setMounted] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !mounted) return null;
 
   const currentTimestamp = new Date().toLocaleString("en-US", {
     month: "short",
@@ -133,45 +139,70 @@ export default function ReportGeneratorModal({
     document.body.removeChild(link);
   };
 
-  return (
-    <div className="fixed inset-0 z-[999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn print:static print:inset-auto print:block print:bg-white print:p-0 print:m-0 print:overflow-visible">
-      {/* Global CSS for Print Optimization */}
+  const modalContent = (
+    <div id="printable-report-modal-root" className="printable-report-modal-root fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
+      {/* Global Print Isolation Styling */}
       <style jsx global>{`
         @media print {
           @page {
             size: A4 landscape;
             margin: 8mm;
           }
-          body {
-            background-color: #ffffff !important;
+          
+          /* Hide all main background body children except the portal report modal */
+          body > *:not(#printable-report-modal-root) {
+            display: none !important;
+          }
+          
+          html, body {
+            background: #ffffff !important;
             color: #000000 !important;
             margin: 0 !important;
             padding: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .print-full-page {
+
+          #printable-report-modal-root,
+          .printable-report-modal-root {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            min-height: 100% !important;
+            background: #ffffff !important;
+            display: block !important;
+            z-index: 9999999 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+          }
+
+          .printable-report-card {
             box-shadow: none !important;
             border: none !important;
             border-radius: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
             max-height: none !important;
+            height: auto !important;
             overflow: visible !important;
             padding: 0 !important;
             margin: 0 !important;
             background: #ffffff !important;
           }
-          .print-no-card {
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
+
+          .print\\:hidden {
+            display: none !important;
           }
         }
       `}</style>
 
       {/* Container Node */}
-      <div className="bg-white w-full max-w-[95vw] sm:max-w-7xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden print-full-page">
+      <div className="bg-white w-full max-w-[95vw] sm:max-w-7xl rounded-3xl shadow-2xl border border-brand-sage/40 flex flex-col max-h-[92vh] overflow-hidden printable-report-card">
         
         {/* Top Control Bar (Hidden on Print) */}
         <div className="print:hidden bg-gradient-to-r from-brand-forest via-emerald-900 to-brand-forest text-white px-6 py-4 flex items-center justify-between border-b border-brand-sage/20 shrink-0">
@@ -501,4 +532,6 @@ export default function ReportGeneratorModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
