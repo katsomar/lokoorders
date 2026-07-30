@@ -2492,22 +2492,28 @@ export default function ProductionStorePage() {
         generatedBy={user?.name || "System Administrator"}
         kpiCards={[
           {
-            label: "Total Closing Stock",
+            label: "Total Closing Stock Count",
             value: formatTotalQuantity(filteredStock.reduce((acc, item) => acc + item.closing_stock, 0)),
             subtitle: "Current available harvest stock",
             color: "emerald"
           },
           {
-            label: "Total Value of Items Taken",
+            label: "Total Value of Stock Outflow",
             value: `UGX ${filteredStock.reduce((acc, item) => acc + getStockItemValuationTaken(item), 0).toLocaleString()}`,
             subtitle: "Monetary value of stock outflow",
             color: "yellow"
           },
           {
-            label: "Total Items / SKUs in Store",
-            value: `${filteredStock.length} Product Batches`,
-            subtitle: "Active catalog items",
+            label: "Total Closing Stock Valuation",
+            value: `UGX ${filteredStock.reduce((acc, item) => acc + getStockItemValuation(item), 0).toLocaleString()}`,
+            subtitle: "Total monetary value of remaining stock",
             color: "blue"
+          },
+          {
+            label: "Active Store Product Batches",
+            value: `${filteredStock.length} Active Batches`,
+            subtitle: "Active catalog items",
+            color: "green"
           }
         ]}
         selectedStoreFilter={selectedStoreFilter}

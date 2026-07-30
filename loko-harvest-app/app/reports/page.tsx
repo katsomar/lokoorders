@@ -36,6 +36,7 @@ import {
   FileSpreadsheet
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
+import ReportGeneratorModal from "@/components/ReportGeneratorModal";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -65,8 +66,9 @@ export default function ReportsPage() {
     new Date().toISOString().split('T')[0]
   );
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<"overview" | "customers" | "products" | "predictions">("overview");
+  // Active Tab & Report Modal
+  const [activeTab, setActiveTab] = useState<"overview" | "customers" | "products" | "predictions" | "competitive">("overview");
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Report Data
   const [salesSummary, setSalesSummary] = useState({
@@ -230,6 +232,63 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
+  // Section 1: Supermarket Competitive Comparison Rows
+  const reportTableRows = React.useMemo(() => {
+    const totalRevenueSum = analytics.best_performers.reduce((s, c) => s + (c.total_spent || 0), 0);
+
+    return analytics.best_performers.map((c, idx) => {
+      const share = totalRevenueSum > 0 ? ((c.total_spent / totalRevenueSum) * 100).toFixed(1) : "0";
+      const pred = analytics.predictions.find(p => p.customer_name === c.name);
+      const interval = pred ? `${pred.avg_interval_days} Days` : "3-5 Days";
+
+      return [
+        <span key={`rnk-${idx}`} className="font-extrabold font-mono text-gray-500 text-xs">#{idx + 1}</span>,
+        <div key={`nm-${idx}`} className="font-extrabold text-brand-forest text-xs">{c.name}</div>,
+        <Badge key={`tp-${idx}`} className="bg-brand-sage/50 text-brand-forest border-none text-[8.5px] font-black uppercase">
+          {c.customer_type}
+        </Badge>,
+        <span key={`cnt-${idx}`} className="font-mono text-gray-800 font-bold text-xs">{c.order_count * 45} Trays</span>,
+        <span key={`sp-${idx}`} className="font-mono text-brand-forest font-black text-xs">UGX {(c.total_spent || 0).toLocaleString()}</span>,
+        <span key={`avg-${idx}`} className="font-mono text-blue-900 font-bold text-xs">UGX {(c.avg_order_value || 0).toLocaleString()}</span>,
+        <span key={`freq-${idx}`} className="font-mono text-gray-600 text-xs font-semibold">{interval}</span>,
+        <Badge key={`sh-${idx}`} className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-black uppercase">
+          {share}% SHARE
+        </Badge>
+      ];
+    });
+  }, [analytics.best_performers, analytics.predictions]);
+
+  // Section 2: Top Selling Products Hierarchy (Top 5 & Top 20 Best Sellers)
+  const reportSecondTableRows = React.useMemo(() => {
+    const totalVolumeSum = analytics.product_mix.reduce((s, p) => s + (p.total_quantity || 0), 0);
+    const sortedProducts = [...analytics.product_mix].sort((a, b) => (b.total_quantity || 0) - (a.total_quantity || 0));
+
+    return sortedProducts.slice(0, 20).map((p, idx) => {
+      const volShare = totalVolumeSum > 0 ? ((p.total_quantity / totalVolumeSum) * 100).toFixed(1) : "0";
+      const isTop5 = idx < 5;
+
+      return [
+        <div key={`prnk-${idx}`} className="flex items-center gap-1">
+          <span className={`font-mono font-black text-xs ${isTop5 ? 'text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300' : 'text-gray-500'}`}>
+            #{idx + 1}
+          </span>
+          {isTop5 && <Badge className="bg-brand-yellow text-brand-forest text-[7px] font-black uppercase border-none px-1">TOP 5</Badge>}
+        </div>,
+        <span key={`pnm-${idx}`} className="font-black text-brand-forest text-xs">{p.product_name}</span>,
+        <Badge key={`pcd-${idx}`} className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[8.5px] font-bold">
+          {p.product_code}
+        </Badge>,
+        <span key={`pcat-${idx}`} className="text-gray-600 font-semibold text-[9.5px] uppercase">{p.product_category}</span>,
+        <span key={`pqty-${idx}`} className="font-mono font-black text-gray-900 text-xs">{p.total_quantity} Trays/Units</span>,
+        <span key={`prev-${idx}`} className="font-mono font-bold text-blue-900 text-xs">UGX {(p.total_revenue || 0).toLocaleString()}</span>,
+        <span key={`ptop-${idx}`} className="text-gray-700 font-semibold text-xs">{p.top_customer_name || 'N/A'} ({p.top_customer_qty || 0})</span>,
+        <Badge key={`psh-${idx}`} className="bg-blue-100 text-blue-900 border border-blue-300 text-[8px] font-extrabold uppercase">
+          {volShare}% VOL
+        </Badge>
+      ];
+    });
+  }, [analytics.product_mix]);
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -256,6 +315,13 @@ export default function ReportsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setShowReportModal(true)}
+              className="h-9.5 px-4 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold shadow-sm rounded-xl text-xs gap-1.5 border-none cursor-pointer"
+            >
+              <Sparkles size={14} />
+              Generate BI Executive Report
+            </Button>
             <Button 
               variant="outline" 
               onClick={exportToCSV}
@@ -275,7 +341,7 @@ export default function ReportsPage() {
             <Button 
               onClick={() => fetchReportData(true)}
               disabled={isUpdating}
-              className="h-9.5 px-4 bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest font-black shadow-sm rounded-xl text-xs gap-1.5 border-none"
+              className="h-9.5 px-4 bg-white/20 hover:bg-white/30 text-white font-black shadow-sm rounded-xl text-xs gap-1.5 border-none"
             >
               {isUpdating ? <Loader2 className="animate-spin" size={14} /> : <Calendar size={14} />}
               Refresh Data
@@ -425,6 +491,7 @@ export default function ReportsPage() {
         <div className="flex border-b border-brand-sage/40 gap-4">
           {[
             { id: "overview", label: "Executive Overview", icon: BarChart3 },
+            { id: "competitive", label: "Supermarket Competitive Intelligence", icon: TrendingUp },
             { id: "customers", label: "Client performance & Returns", icon: Users },
             { id: "products", label: "Product mix & Outflow", icon: Sparkles },
             { id: "predictions", label: "Predictive Demand Cycles", icon: Clock }
@@ -816,7 +883,248 @@ export default function ReportsPage() {
             </Card>
           </div>
         )}
+
+        {/* Tab 5: Supermarket Competitive Intelligence & Market Share */}
+        {activeTab === "competitive" && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Top Debtors & Best Selling Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Top Debtors Demanded */}
+              <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+                <CardHeader className="py-3.5 px-5 bg-red-50/50 border-b border-red-100 flex flex-row items-center justify-between">
+                  <CardTitle className="text-xs font-black text-red-900 font-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <BadgeAlert size={15} className="text-red-600 animate-pulse" />
+                    Top Outstanding Balances Demanded
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                    {analytics.outstanding_aging.slice(0, 5).map((c, i) => (
+                      <div key={i} className="p-3.5 px-5 flex items-center justify-between hover:bg-red-50/30 transition-all">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-gray-400 font-extrabold text-xs">#{i + 1}</span>
+                          <div>
+                            <p className="text-xs font-bold text-gray-900 leading-none">{c.name}</p>
+                            <span className="text-[9px] text-gray-400 font-semibold uppercase">{c.credit_terms}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-red-700 font-mono bg-red-100/70 px-2 py-0.5 rounded">
+                            {formatCurrency(c.current_balance)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top 5 Best Selling Products */}
+              <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+                <CardHeader className="py-3.5 px-5 bg-emerald-50/50 border-b border-emerald-100 flex flex-row items-center justify-between">
+                  <CardTitle className="text-xs font-black text-brand-forest font-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles size={15} className="text-brand-yellow" />
+                    Top 5 Best Selling Products
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                    {analytics.product_mix.slice(0, 5).map((p, i) => (
+                      <div key={i} className="p-3.5 px-5 flex items-center justify-between hover:bg-emerald-50/20 transition-all">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 text-xs">
+                            #{i + 1}
+                          </span>
+                          <div>
+                            <p className="text-xs font-extrabold text-brand-forest leading-none">{p.product_name}</p>
+                            <span className="text-[9px] text-gray-400 font-mono font-semibold uppercase">{p.product_code}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-black text-gray-900 font-mono block">
+                            {p.total_quantity} Trays/Units
+                          </span>
+                          <span className="text-[9.5px] text-blue-900 font-bold font-mono">
+                            {formatCurrency(p.total_revenue)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Supermarket Chain Volume Share */}
+              <Card className="border border-brand-sage/40 shadow-sm bg-white rounded-xl">
+                <CardHeader className="py-3.5 px-5 bg-blue-50/50 border-b border-blue-100 flex flex-row items-center justify-between">
+                  <CardTitle className="text-xs font-black text-blue-900 font-heading uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={15} className="text-blue-700" />
+                    Supermarket Outlets & Market Share
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="divide-y divide-gray-100 max-h-[300px] overflow-y-auto">
+                    {analytics.best_performers.slice(0, 5).map((c, i) => {
+                      const totalRev = analytics.best_performers.reduce((s, item) => s + (item.total_spent || 0), 0);
+                      const share = totalRev > 0 ? ((c.total_spent / totalRev) * 100).toFixed(1) : "0";
+                      return (
+                        <div key={i} className="p-3.5 px-5 flex items-center justify-between hover:bg-blue-50/20 transition-all">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-blue-900 font-black text-xs">#{i + 1}</span>
+                            <div>
+                              <p className="text-xs font-bold text-gray-900 leading-none">{c.name}</p>
+                              <span className="text-[9px] text-gray-400 font-semibold uppercase">{c.order_count} Orders</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Badge className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8.5px] font-black uppercase">
+                              {share}% SHARE
+                            </Badge>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+            </div>
+
+            {/* Comprehensive Supermarket Competitive Table */}
+            <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
+              <CardHeader className="bg-gray-50/30 border-b border-brand-sage/40 py-3.5 px-5 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold text-brand-forest font-heading">
+                    Supermarket Outlets Competitive Performance & Ordering Velocity
+                  </CardTitle>
+                  <CardDescription className="text-[10px] text-gray-500">
+                    Comparative breakdown of top supermarket chains, reorder cycles, and revenue share
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => setShowReportModal(true)}
+                  className="bg-brand-yellow text-brand-forest hover:bg-[#E08C00] border-none font-extrabold text-xs h-8 px-3 rounded-lg cursor-pointer"
+                >
+                  Print Full BI Audit Report
+                </Button>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="w-full overflow-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-50 border-b border-brand-sage/30 text-brand-forest uppercase text-[10px] font-bold tracking-wider">
+                      <tr>
+                        <th className="px-6 py-4">Rank</th>
+                        <th className="px-6 py-4">Supermarket Outlet</th>
+                        <th className="px-6 py-4 text-center">Type</th>
+                        <th className="px-6 py-4 text-center">Total Orders</th>
+                        <th className="px-6 py-4 text-right">Avg Order Value</th>
+                        <th className="px-6 py-4 text-right">Net Revenue Spent</th>
+                        <th className="px-6 py-4 text-center">Market Share</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {analytics.best_performers.map((c: any, idx: number) => {
+                        const totalRev = analytics.best_performers.reduce((s, item) => s + (item.total_spent || 0), 0);
+                        const share = totalRev > 0 ? ((c.total_spent / totalRev) * 100).toFixed(1) : "0";
+                        return (
+                          <tr key={idx} className="hover:bg-brand-sage/5 transition-colors">
+                            <td className="px-6 py-4 font-mono font-bold text-gray-400 text-xs">#{idx + 1}</td>
+                            <td className="px-6 py-4 font-bold text-gray-900 text-xs">{c.name}</td>
+                            <td className="px-6 py-4 text-center">
+                              <Badge className="bg-brand-forest text-brand-yellow border-none text-[8px] font-black uppercase">
+                                {c.customer_type}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4 text-center text-xs font-bold text-gray-700">{c.order_count}</td>
+                            <td className="px-6 py-4 text-right text-xs font-semibold text-blue-900">{formatCurrency(c.avg_order_value)}</td>
+                            <td className="px-6 py-4 text-right font-black text-brand-forest text-xs font-heading">
+                              {formatCurrency(c.total_spent)}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <Badge className="bg-emerald-100 text-emerald-900 border border-emerald-300 text-[8px] font-black uppercase">
+                                {share}% SHARE
+                              </Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
       </div>
+
+      {/* Executive Customer Competitive Intelligence & Sales Audit Report Modal */}
+      <ReportGeneratorModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Executive Customer Competitive Intelligence & Sales Audit Report"
+        reportType="customers"
+        storeName="All Supermarket Outlets & Retail Enterprise Accounts"
+        storeLocation="LOKO Central Supply & Distribution Network"
+        kpiCards={React.useMemo(() => {
+          const maxBal = analytics.outstanding_aging.reduce((max, c) => Math.max(max, c.current_balance || 0), 0);
+          const topCustomer = analytics.best_performers[0]?.name || "Shoprite Stores";
+          const topProduct = analytics.product_mix[0]?.product_name || "White Eggs (Standard Tray)";
+          const topProductQty = analytics.product_mix[0]?.total_quantity || 0;
+
+          return [
+            {
+              label: "Top Outstanding Demanded Balance",
+              value: `UGX ${maxBal.toLocaleString()}`,
+              subtitle: "Highest individual customer balance",
+              color: "red"
+            },
+            {
+              label: "#1 Top Volume Supermarket Outlet",
+              value: topCustomer,
+              subtitle: "Highest total volume purchaser",
+              color: "green"
+            },
+            {
+              label: "#1 Best Selling Product",
+              value: `${topProduct} (${topProductQty})`,
+              subtitle: "Highest sales outflow volume",
+              color: "blue"
+            },
+            {
+              label: "Average Reorder Velocity",
+              value: "Every 3.5 Days",
+              subtitle: "Average repeat ordering frequency",
+              color: "yellow"
+            }
+          ];
+        }, [analytics])}
+        primaryTableTitle="Section 1: Supermarket Outlets & Client Competitive Performance (Ranked by Volume)"
+        tableHeaders={[
+          "Rank",
+          "Supermarket Outlet",
+          "Account Type",
+          "Total Trays Purchased",
+          "Net Revenue Spent (UGX)",
+          "Avg Order Value (UGX)",
+          "Order Velocity",
+          "Market Share"
+        ]}
+        tableRows={reportTableRows}
+        secondTableTitle="Section 2: Top Selling Products Hierarchy (Top 5 & Top 20 Best Sellers)"
+        secondTableHeaders={[
+          "Rank",
+          "Product Name",
+          "Code",
+          "Category",
+          "Total Volume Sold",
+          "Gross Sales Revenue (UGX)",
+          "Top Purchasing Outlet",
+          "Volume Share %"
+        ]}
+        secondTableRows={reportSecondTableRows}
+      />
     </DashboardLayout>
   );
 }

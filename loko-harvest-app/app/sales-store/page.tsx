@@ -2607,16 +2607,22 @@ export default function SalesStorePage() {
             color: "emerald"
           },
           {
-            label: "Total Value of Items Taken / Outflow",
+            label: "Total Value of Stock Outflow",
             value: `UGX ${getFilteredStock().reduce((acc, item) => acc + getStockItemValuationTaken(item), 0).toLocaleString()}`,
             subtitle: "Monetary value of sold & transferred items",
             color: "yellow"
           },
           {
-            label: "Total Items / SKUs in Sales Store",
-            value: `${getFilteredStock().length} Product Items`,
-            subtitle: "Active retail catalog items",
+            label: "Total Closing Stock Valuation",
+            value: `UGX ${getFilteredStock().reduce((acc, item) => acc + getStockItemValuation(item), 0).toLocaleString()}`,
+            subtitle: "Total monetary value of remaining inventory",
             color: "blue"
+          },
+          {
+            label: "Total SKUs & Product Items",
+            value: `${getFilteredStock().length} Catalog SKUs`,
+            subtitle: "Active retail catalog items",
+            color: "green"
           }
         ]}
         primaryTableTitle="Section 1: Production Bulk Inflow & Store Inventory Ledger"
