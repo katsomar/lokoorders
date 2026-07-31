@@ -41,7 +41,7 @@ export function EmergencyQRGeneratorModal({
   orders,
   onPassGenerated
 }: EmergencyQRGeneratorModalProps) {
-  const { addToast } = useToast();
+  const toast = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -60,7 +60,7 @@ export function EmergencyQRGeneratorModal({
 
   const handleGeneratePass = async () => {
     if (orders.length === 0) {
-      addToast({ title: "No Orders Selected", description: "Select at least 1 order to generate an emergency QR pass.", type: "error" });
+      toast.error("Select at least 1 order to generate an emergency QR pass.");
       return;
     }
 
@@ -85,15 +85,11 @@ export function EmergencyQRGeneratorModal({
           status: pass.status
         });
 
-        addToast({ title: "Emergency Pass Generated", description: `Pass ${pass.pass_number} is ready for rider scanning.`, type: "success" });
+        toast.success(`Emergency Pass Generated: ${pass.pass_number} is ready for rider scanning.`);
         if (onPassGenerated) onPassGenerated();
       }
     } catch (err: any) {
-      addToast({
-        title: "Generation Failed",
-        description: err?.response?.data?.message || "Could not generate emergency QR pass.",
-        type: "error"
-      });
+      toast.error(err?.response?.data?.message || "Could not generate emergency QR pass.");
     } finally {
       setIsGenerating(false);
     }
@@ -103,7 +99,7 @@ export function EmergencyQRGeneratorModal({
     if (!passData) return;
     navigator.clipboard.writeText(passData.qr_link);
     setCopied(true);
-    addToast({ title: "Link Copied!", description: "Emergency dispatch link copied to clipboard.", type: "success" });
+    toast.success("Link Copied! Emergency dispatch link copied to clipboard.");
     setTimeout(() => setCopied(false), 3000);
   };
 
@@ -114,11 +110,11 @@ export function EmergencyQRGeneratorModal({
     setIsRevoking(true);
     try {
       await api.post(`/emergency-passes/${passData.id}/revoke`, { reason: "Revoked by Dispatch Manager" });
-      addToast({ title: "Pass Revoked", description: `Pass ${passData.pass_number} has been deactivated.`, type: "info" });
+      toast.info(`Pass Revoked: ${passData.pass_number} has been deactivated.`);
       setPassData(null);
       if (onPassGenerated) onPassGenerated();
     } catch (err: any) {
-      addToast({ title: "Revocation Failed", description: err?.response?.data?.message || "Could not revoke pass.", type: "error" });
+      toast.error(err?.response?.data?.message || "Could not revoke pass.");
     } finally {
       setIsRevoking(false);
     }
