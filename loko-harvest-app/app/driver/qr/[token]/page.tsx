@@ -92,6 +92,8 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
 
   // Signature Canvas Ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
   const getApiBase = () => {
     if (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith("http")) {
       return process.env.NEXT_PUBLIC_API_URL;
