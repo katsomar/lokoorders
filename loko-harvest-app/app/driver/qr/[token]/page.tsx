@@ -262,11 +262,19 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
     setSignatureData(null);
   };
 
+  const [proofImageData, setProofImageData] = useState<string | null>(null);
+
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setProofFile(file);
       setProofPreview(URL.createObjectURL(file));
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProofImageData(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -277,7 +285,7 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       alert("Please enter the Recipient Name.");
       return;
     }
-    if (!proofFile) {
+    if (!proofFile && !proofImageData) {
       alert("Please capture or upload a photo of the signed delivery document.");
       return;
     }
@@ -313,6 +321,9 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       }
       if (proofFile) {
         formData.append("proof_image_file", proofFile);
+      }
+      if (proofImageData) {
+        formData.append("proof_image_data", proofImageData);
       }
       if (signatureData) {
         formData.append("signature_data", signatureData);
