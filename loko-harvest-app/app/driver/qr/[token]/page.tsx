@@ -194,12 +194,16 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
 
     setIsSubmittingClaim(true);
     try {
-      // 1. Claim Pass
-      await axios.post(`${API_BASE}/public/emergency-passes/${token}/claim`, {
-        driver_name: driverName,
-        driver_phone: driverPhone,
-        vehicle_info: vehicleInfo || "Emergency Boda"
-      });
+      // 1. Claim Pass (catch inner error if already claimed by same rider)
+      try {
+        await axios.post(`${API_BASE}/public/emergency-passes/${token}/claim`, {
+          driver_name: driverName,
+          driver_phone: driverPhone,
+          vehicle_info: vehicleInfo || "Emergency Boda"
+        });
+      } catch (claimErr: any) {
+        console.warn("Claim pass note:", claimErr?.response?.data?.message || claimErr.message);
+      }
 
       // 2. Start Route if not quick load
       if (!isQuickLoadMode) {
@@ -210,7 +214,13 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       }
       await fetchPassInfo();
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Claiming pass failed. It may have already been claimed.");
+      console.error("Start route error:", err);
+      // Fallback: If route is already active, transition view step
+      if (err?.response?.data?.message?.includes("already in transit")) {
+        setViewStep("transit");
+      } else {
+        alert(err?.response?.data?.message || "Failed to start delivery route. Please try again.");
+      }
     } finally {
       setIsSubmittingClaim(false);
     }

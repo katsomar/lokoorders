@@ -187,7 +187,7 @@ class EmergencyDeliveryController extends Controller
             return $this->error('This Delivery Pass has expired.', 410);
         }
 
-        if (!is_null($pass->claimed_at) && $pass->driver_phone !== $validated['driver_phone']) {
+        if (!is_null($pass->claimed_at) && $pass->driver_phone !== $validated['driver_phone'] && !in_array($pass->status, ['claimed', 'in_transit'])) {
             return $this->error('This Delivery Pass has already been claimed by rider: ' . $pass->driver_name . ' (' . $pass->driver_phone . ').', 409);
         }
 
@@ -195,15 +195,15 @@ class EmergencyDeliveryController extends Controller
         return DB::transaction(function () use ($pass, $validated, $request) {
             $adminUser = \App\Models\User::where('role', 'admin')->first();
             $userId = auth()->id() ?? ($adminUser?->id ?? (string)Str::uuid());
-            $driver = \App\Models\Driver::first();
-            $driverId = $driver?->id ?? (string)Str::uuid();
+
+            $newStatus = in_array($pass->status, ['in_transit', 'arrived']) ? $pass->status : 'claimed';
 
             $pass->update([
                 'driver_name' => $validated['driver_name'],
                 'driver_phone' => $validated['driver_phone'],
                 'vehicle_info' => $validated['vehicle_info'] ?? 'Boda Boda',
-                'claimed_at' => now(),
-                'status' => 'claimed',
+                'claimed_at' => $pass->claimed_at ?? now(),
+                'status' => $newStatus,
             ]);
 
             $pass->refresh();
@@ -215,7 +215,7 @@ class EmergencyDeliveryController extends Controller
                 $delData = [
                     'driver_id' => null,
                     'assigned_by' => $userId,
-                    'status' => 'assigned',
+                    'status' => $newStatus === 'in_transit' ? 'in_transit' : 'assigned',
                     'dispatched_at' => now(),
                     'delivery_notes' => json_encode([
                         'emergency_driver' => $validated['driver_name'],
@@ -266,6 +266,10 @@ class EmergencyDeliveryController extends Controller
 
         if (!$pass) {
             return $this->error('Invalid delivery pass token.', 404);
+        }
+
+        if ($pass->status === 'in_transit') {
+            return $this->success($pass, 'Delivery route is already in transit.');
         }
 
         if (!in_array($pass->status, ['claimed', 'shared', 'generated'])) {
