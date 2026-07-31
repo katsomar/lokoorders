@@ -2051,21 +2051,35 @@ export default function OrderManagerDashboard() {
 
                       {/* Driver Display Line */}
                       {(() => {
-                        const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit");
-                        const assignedDriverName = activeDelivery?.driver?.full_name || activeDelivery?.driver?.name;
+                        const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit" || d.status === "on_route");
+                        const activePass = order.emergency_pass || order.active_emergency_pass;
+                        let assignedDriverName = activeDelivery?.driver?.full_name || activeDelivery?.driver?.name;
                         
-                        if (activeDelivery) {
+                        if (!assignedDriverName && activeDelivery?.delivery_notes) {
+                          try {
+                            const notes = typeof activeDelivery.delivery_notes === "string" ? JSON.parse(activeDelivery.delivery_notes) : activeDelivery.delivery_notes;
+                            if (notes?.emergency_driver) {
+                              assignedDriverName = `${notes.emergency_driver} (${notes.emergency_phone || "Emergency Boda"})`;
+                            }
+                          } catch (e) {}
+                        }
+
+                        if (!assignedDriverName && activePass) {
+                          assignedDriverName = activePass.driver_name ? `${activePass.driver_name} (${activePass.driver_phone || "Emergency Rider"})` : "Emergency QR Pass";
+                        }
+
+                        if (activeDelivery || activePass || ["on_route", "dispatched"].includes(order.status)) {
                           return (
                             <div className="flex justify-between items-center bg-brand-sage/5 p-2.5 rounded-xl border border-brand-sage/20 text-xs">
                               <div className="flex items-center gap-1.5">
                                 <Truck size={14} className="text-brand-forest" />
                                 <div>
                                   <span className="font-bold text-gray-700">Driver: </span>
-                                  <span className="font-extrabold text-brand-forest">{assignedDriverName}</span>
-                                  {activeDelivery.status === "assigned" && (
+                                  <span className="font-extrabold text-brand-forest">{assignedDriverName || "Emergency Boda Rider"}</span>
+                                  {(activeDelivery?.status === "assigned" || order.status === "ready_for_dispatch") && (
                                     <span className="text-[10px] text-brand-amber font-bold ml-1.5 uppercase">(Assigned)</span>
                                   )}
-                                  {activeDelivery.status === "in_transit" && (
+                                  {(activeDelivery?.status === "in_transit" || order.status === "on_route" || order.status === "dispatched") && (
                                     <span className="text-[10px] text-green-600 font-bold ml-1.5 uppercase tracking-wide animate-pulse">(En Route)</span>
                                   )}
                                 </div>

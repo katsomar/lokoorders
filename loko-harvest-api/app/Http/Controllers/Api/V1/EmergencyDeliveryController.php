@@ -249,7 +249,7 @@ class EmergencyDeliveryController extends Controller
                 'started_at' => now(),
             ]);
 
-            // Update associated orders to on_route
+            // Update associated orders to on_route and sync system Deliveries table for Admin Registry Log
             foreach ($pass->passOrders as $pOrder) {
                 $pOrder->update(['status' => 'in_transit']);
                 $order = Order::find($pOrder->order_id);
@@ -258,8 +258,27 @@ class EmergencyDeliveryController extends Controller
                     $order->statusHistory()->create([
                         'status' => 'on_route',
                         'changed_by' => $userId,
-                        'notes' => 'Guest Emergency Rider (' . ($pass->driver_name ?? 'Emergency Rider') . ') started delivery route.',
+                        'notes' => 'Guest Emergency Rider (' . ($pass->driver_name ?? 'Emergency Rider') . ' - ' . ($pass->driver_phone ?? '') . ') started delivery route.',
                     ]);
+
+                    $driver = \App\Models\Driver::first();
+                    $driverId = $driver?->id ?? (string)Str::uuid();
+
+                    Delivery::updateOrCreate(
+                        ['order_id' => $order->id],
+                        [
+                            'driver_id' => $driverId,
+                            'assigned_by' => $userId,
+                            'status' => 'in_transit',
+                            'dispatched_at' => now(),
+                            'delivery_notes' => json_encode([
+                                'emergency_driver' => $pass->driver_name,
+                                'emergency_phone' => $pass->driver_phone,
+                                'vehicle_info' => $pass->vehicle_info ?? 'Emergency Boda',
+                                'pass_number' => $pass->pass_number,
+                            ]),
+                        ]
+                    );
                 }
             }
 
@@ -329,12 +348,12 @@ class EmergencyDeliveryController extends Controller
     {
         $validated = $request->validate([
             'recipient_name' => 'required|string|min:2|max:100',
-            'recipient_phone' => 'nullable|string|regex:/^[0-9+\-\s()]{9,20}$/',
+            'recipient_phone' => 'nullable|string',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'notes' => 'nullable|string|max:500',
-            'proof_image_file' => 'required|file|image|max:6144',
-            'signature_data' => 'required|string',
+            'proof_image_file' => 'nullable|file|max:10240',
+            'signature_data' => 'nullable|string',
             'order_id' => 'nullable|string|exists:orders,id',
         ]);
 

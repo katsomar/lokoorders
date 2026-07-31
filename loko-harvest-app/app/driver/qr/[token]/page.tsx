@@ -303,12 +303,20 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
     try {
       const formData = new FormData();
       formData.append("recipient_name", recipientName);
-      formData.append("recipient_phone", recipientPhone);
+      if (recipientPhone && recipientPhone.trim()) {
+        formData.append("recipient_phone", recipientPhone.trim());
+      }
       formData.append("latitude", String(lat));
       formData.append("longitude", String(lng));
-      formData.append("notes", notes);
-      formData.append("proof_image_file", proofFile as Blob);
-      formData.append("signature_data", signatureData as string);
+      if (notes && notes.trim()) {
+        formData.append("notes", notes.trim());
+      }
+      if (proofFile) {
+        formData.append("proof_image_file", proofFile);
+      }
+      if (signatureData) {
+        formData.append("signature_data", signatureData);
+      }
 
       await axios.post(`${API_BASE}/public/emergency-passes/${token}/complete`, formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -317,7 +325,8 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       setViewStep("completed");
       await fetchPassInfo();
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Delivery confirmation failed.");
+      const serverErr = err?.response?.data?.message || err?.response?.data?.error || "Delivery confirmation failed.";
+      alert(serverErr);
     } finally {
       setIsSubmittingFulfill(false);
     }
