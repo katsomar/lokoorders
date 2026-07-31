@@ -29,7 +29,8 @@ import {
   Loader2,
   Truck,
   ArrowDownToLine,
-  ArrowRightLeft
+  ArrowRightLeft,
+  QrCode
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/store/useAuth";
@@ -40,6 +41,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
 import { useRealtime } from "@/hooks/useRealtime";
+import { EmergencyQRGeneratorModal } from "@/components/EmergencyQRGeneratorModal";
 
 const isCarriedOverUncompleted = (order: any) => {
   if (!order || !order.order_date) return false;
@@ -231,6 +233,10 @@ export default function OrderManagerDashboard() {
   const [selectedDriverIdForAssign, setSelectedDriverIdForAssign] = useState("");
   const [isAssigningDriver, setIsAssigningDriver] = useState(false);
   const [isDriverModalForDispatch, setIsDriverModalForDispatch] = useState(false);
+
+  // Emergency QR Pass Modal state
+  const [showEmergencyQRModal, setShowEmergencyQRModal] = useState(false);
+  const [selectedQRModalOrders, setSelectedQRModalOrders] = useState<any[]>([]);
 
   // Edit Order modal state
   const [editingOrder, setEditingOrder] = useState<any | null>(null);
@@ -1955,6 +1961,17 @@ export default function OrderManagerDashboard() {
                     >
                       Assign Driver
                     </button>
+                    <button
+                      onClick={() => {
+                        const chosenOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+                        setSelectedQRModalOrders(chosenOrders);
+                        setShowEmergencyQRModal(true);
+                      }}
+                      className="flex-1 py-1.5 rounded-lg font-black text-[10px] uppercase bg-brand-yellow text-brand-forest hover:bg-[#E08C00] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <QrCode size={13} />
+                      <span>Generate QR Dispatch</span>
+                    </button>
                   </div>
                 </div>
               )}
@@ -2072,19 +2089,30 @@ export default function OrderManagerDashboard() {
                         } else if (["pending", "processing", "ready_for_dispatch", "undone"].includes(order.status)) {
                           return (
                             <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-xs">
-                              <span className="text-gray-400 font-semibold italic">No driver assigned</span>
-                              <button
-                                onClick={() => {
-                                  setDriverModalOrder(order);
-                                  setDriverModalOrders([]);
-                                  setSelectedDriverIdForAssign("");
-                                  setIsDriverModalForDispatch(false);
-                                  setShowDriverModal(true);
-                                }}
-                                className="text-[10px] font-black text-brand-forest uppercase hover:underline"
-                              >
-                                Assign Driver
-                              </button>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() => {
+                                    setDriverModalOrder(order);
+                                    setDriverModalOrders([]);
+                                    setSelectedDriverIdForAssign("");
+                                    setIsDriverModalForDispatch(false);
+                                    setShowDriverModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-brand-forest uppercase hover:underline"
+                                >
+                                  Assign Driver
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedQRModalOrders([order]);
+                                    setShowEmergencyQRModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1 uppercase transition-colors"
+                                >
+                                  <QrCode size={11} />
+                                  <span>QR Pass</span>
+                                </button>
+                              </div>
                             </div>
                           );
                         }
@@ -4274,6 +4302,19 @@ export default function OrderManagerDashboard() {
           </div>
         </div>
       )}
+      {/* Emergency QR Code Generator Modal */}
+      <EmergencyQRGeneratorModal
+        isOpen={showEmergencyQRModal}
+        onClose={() => {
+          setShowEmergencyQRModal(false);
+          setSelectedQRModalOrders([]);
+        }}
+        orders={selectedQRModalOrders}
+        onPassGenerated={() => {
+          fetchOrders();
+          setSelectedOrderIds([]);
+        }}
+      />
     </div>
   );
 }

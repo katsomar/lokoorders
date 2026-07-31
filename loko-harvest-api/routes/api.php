@@ -8,7 +8,14 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
     Route::post('/auth/login', [App\Http\Controllers\Api\V1\AuthController::class, 'login'])->name('login');
     Route::post('/auth/register', [App\Http\Controllers\Api\V1\AuthController::class, 'register']);
     Route::get('/stream', [App\Http\Controllers\Api\V1\RealtimeEventController::class, 'stream']);
-    
+
+    // Public Guest Emergency QR Delivery Pass Endpoints (No Auth Needed)
+    Route::get('/public/emergency-passes/{token}', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'showPass']);
+    Route::post('/public/emergency-passes/{token}/claim', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'claimPass']);
+    Route::post('/public/emergency-passes/{token}/start-route', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'startRoute']);
+    Route::post('/public/emergency-passes/{token}/track', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'trackLocation']);
+    Route::post('/public/emergency-passes/{token}/complete', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'completeDelivery']);
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [App\Http\Controllers\Api\V1\AuthController::class, 'logout']);
         Route::get('/auth/me', [App\Http\Controllers\Api\V1\AuthController::class, 'me']);
@@ -59,7 +66,7 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('/store-transfers/{id}/approve', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'approve']);
         Route::post('/store-transfers/{id}/reject', [App\Http\Controllers\Api\V1\StoreTransferController::class, 'reject']);
         
-        // Deliveries
+        // Deliveries & Emergency QR Passes
         Route::get('/deliveries', [App\Http\Controllers\Api\V1\DeliveryController::class, 'index']);
         Route::get('/deliveries/{id}', [App\Http\Controllers\Api\V1\DeliveryController::class, 'show']);
         Route::post('/deliveries/assign', [App\Http\Controllers\Api\V1\DeliveryController::class, 'assign']);
@@ -68,6 +75,9 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::post('/deliveries/{id}/undone', [App\Http\Controllers\Api\V1\DeliveryController::class, 'undone']);
         Route::post('/deliveries/{id}/cancel', [App\Http\Controllers\Api\V1\DeliveryController::class, 'cancel']);
         Route::post('/deliveries/{id}/track', [App\Http\Controllers\Api\V1\DeliveryController::class, 'track']);
+        
+        Route::post('/emergency-passes/generate', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'generatePass']);
+        Route::post('/emergency-passes/{id}/revoke', [App\Http\Controllers\Api\V1\EmergencyDeliveryController::class, 'revokePass']);
         
         // Payments
         Route::get('/payments/metrics', [App\Http\Controllers\Api\V1\PaymentController::class, 'metrics']);
