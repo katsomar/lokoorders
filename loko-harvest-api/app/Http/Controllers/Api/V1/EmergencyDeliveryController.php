@@ -33,7 +33,7 @@ class EmergencyDeliveryController extends Controller
         ]);
 
         $orderIds = $validated['order_ids'];
-        $expiresInHours = $validated['expires_in_hours'] ?? 12;
+        $expiresInHours = isset($validated['expires_in_hours']) ? (int)$validated['expires_in_hours'] : 12;
 
         try {
             return DB::transaction(function () use ($orderIds, $expiresInHours, $request) {
@@ -61,12 +61,12 @@ class EmergencyDeliveryController extends Controller
                         'status' => 'assigned',
                     ]);
 
-                    // Update order status if pending or ready
+                    // Keep order status as ready_for_dispatch so it remains visible in Order Manager until rider starts route
                     $order = Order::find($orderId);
                     if ($order && in_array($order->status, ['pending', 'processing', 'undone'])) {
-                        $order->update(['status' => 'dispatched']);
+                        $order->update(['status' => 'ready_for_dispatch']);
                         $order->statusHistory()->create([
-                            'status' => 'dispatched',
+                            'status' => 'ready_for_dispatch',
                             'changed_by' => $userId,
                             'notes' => 'Emergency QR Delivery Pass generated: ' . $passNumber,
                         ]);
@@ -493,6 +493,19 @@ class EmergencyDeliveryController extends Controller
             'revoked_by' => $userId,
             'revocation_reason' => $validated['reason'] ?? 'Revoked by Manager',
         ]);
+
+        // Revert associated orders back to ready_for_dispatch
+        foreach ($pass->passOrders as $pOrder) {
+            $order = Order::find($pOrder->order_id);
+            if ($order && $order->status !== 'delivered') {
+                $order->update(['status' => 'ready_for_dispatch']);
+                $order->statusHistory()->create([
+                    'status' => 'ready_for_dispatch',
+                    'changed_by' => $userId,
+                    'notes' => 'Emergency QR Pass (' . $pass->pass_number . ') was revoked. Reverted order status.',
+                ]);
+            }
+        }
 
         DeliveryPassEvent::create([
             'delivery_pass_id' => $pass->id,

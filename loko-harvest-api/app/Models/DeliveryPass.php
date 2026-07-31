@@ -100,7 +100,17 @@ class DeliveryPass extends Model
 
     public function isExpired()
     {
-        return $this->expires_at && now()->greaterThan($this->expires_at);
+        if (in_array($this->status, ['completed', 'revoked'])) {
+            return false;
+        }
+        if (!$this->expires_at) {
+            return false;
+        }
+        // Protect fresh passes created within the last 30 minutes from timezone/clock-skew misalignments
+        if ($this->created_at && now()->diffInMinutes($this->created_at) < 30) {
+            return false;
+        }
+        return now()->greaterThan($this->expires_at);
     }
 
     public function isClaimable()
