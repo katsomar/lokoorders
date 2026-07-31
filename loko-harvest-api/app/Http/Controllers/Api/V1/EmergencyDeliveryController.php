@@ -213,7 +213,7 @@ class EmergencyDeliveryController extends Controller
                 Delivery::updateOrCreate(
                     ['order_id' => $pOrder->order_id],
                     [
-                        'driver_id' => $driverId,
+                        'driver_id' => null,
                         'assigned_by' => $userId,
                         'status' => 'assigned',
                         'dispatched_at' => now(),
@@ -285,13 +285,10 @@ class EmergencyDeliveryController extends Controller
                         'notes' => 'Guest Emergency Rider (' . ($pass->driver_name ?? 'Emergency Rider') . ' - ' . ($pass->driver_phone ?? '') . ') started delivery route.',
                     ]);
 
-                    $driver = \App\Models\Driver::first();
-                    $driverId = $driver?->id ?? (string)Str::uuid();
-
                     Delivery::updateOrCreate(
                         ['order_id' => $order->id],
                         [
-                            'driver_id' => $driverId,
+                            'driver_id' => null,
                             'assigned_by' => $userId,
                             'status' => 'in_transit',
                             'dispatched_at' => now(),
@@ -512,25 +509,24 @@ class EmergencyDeliveryController extends Controller
                         ]);
 
                         // Also save entry into system deliveries & delivery_proofs for system backward compatibility
-                        $driver = \App\Models\Driver::first();
-                        $driverId = $driver?->id ?? (string)Str::uuid();
-
-                        $delivery = Delivery::create([
-                            'order_id' => $order->id,
-                            'driver_id' => $driverId,
-                            'assigned_by' => $userId,
-                            'status' => 'delivered',
-                            'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
-                            'delivered_at' => now(),
-                            'delivery_notes' => json_encode([
-                                'recipient_name' => $validated['recipient_name'],
-                                'recipient_phone' => $validated['recipient_phone'] ?? null,
-                                'emergency_driver' => $pass->driver_name,
-                                'emergency_phone' => $pass->driver_phone,
-                                'pass_number' => $pass->pass_number,
-                                'notes' => $validated['notes'] ?? null,
-                            ]),
-                        ]);
+                        $delivery = Delivery::updateOrCreate(
+                            ['order_id' => $order->id],
+                            [
+                                'driver_id' => null,
+                                'assigned_by' => $userId,
+                                'status' => 'delivered',
+                                'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
+                                'delivered_at' => now(),
+                                'delivery_notes' => json_encode([
+                                    'recipient_name' => $validated['recipient_name'],
+                                    'recipient_phone' => $validated['recipient_phone'] ?? null,
+                                    'emergency_driver' => $pass->driver_name,
+                                    'emergency_phone' => $pass->driver_phone,
+                                    'pass_number' => $pass->pass_number,
+                                    'notes' => $validated['notes'] ?? null,
+                                ]),
+                            ]
+                        );
 
                         DeliveryProof::create([
                             'delivery_id' => $delivery->id,
