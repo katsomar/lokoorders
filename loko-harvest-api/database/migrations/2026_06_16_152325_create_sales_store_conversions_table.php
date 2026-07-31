@@ -47,6 +47,17 @@ return new class extends Migration
                 'updated_at' => now()
             ],
 
+            [
+                'id' => (string) Str::uuid(),
+                'name' => 'Cream Eggs - Plain Trays',
+                'code' => 'EGG-CRM-TRYS',
+                'category' => 'eggs',
+                'unit_of_measure' => 'trays',
+                'default_unit_price' => 14000.00,
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
+
             // White Packaged
             [
                 'id' => (string) Str::uuid(),
@@ -75,6 +86,16 @@ return new class extends Migration
                 'category' => 'eggs',
                 'unit_of_measure' => 'units',
                 'default_unit_price' => 3800.00,
+                'created_at' => now(),
+                'updated_at' => now()
+            ],
+            [
+                'id' => (string) Str::uuid(),
+                'name' => 'White Eggs - Plain Trays',
+                'code' => 'EGG-WHT-TRYS',
+                'category' => 'eggs',
+                'unit_of_measure' => 'trays',
+                'default_unit_price' => 14000.00,
                 'created_at' => now(),
                 'updated_at' => now()
             ],
