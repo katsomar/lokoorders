@@ -97,7 +97,7 @@ class EmergencyDeliveryController extends Controller
         try {
             $token = trim($token);
             $pass = DeliveryPass::where('secure_token', $token)
-                ->with(['orders.customer.zone', 'orders.items.product', 'locations' => fn($q) => $q->latest()->limit(1)])
+                ->with(['orders.customer.zone', 'orders.items.product'])
                 ->first();
 
             if (!$pass) {
@@ -147,7 +147,7 @@ class EmergencyDeliveryController extends Controller
                 'completed_at' => $pass->completed_at,
                 'expires_at' => $pass->expires_at,
                 'is_claimed' => !is_null($pass->claimed_at),
-                'latest_location' => $pass->locations->first(),
+                'latest_location' => $pass->locations()->latest()->first(),
                 'orders' => $sanitizedOrders,
             ]);
         } catch (\Exception $e) {
