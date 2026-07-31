@@ -94,60 +94,66 @@ class EmergencyDeliveryController extends Controller
      */
     public function showPass($token)
     {
-        $pass = DeliveryPass::where('secure_token', $token)
-            ->with(['orders.customer.zone', 'orders.items.product', 'locations' => fn($q) => $q->latest()->limit(1)])
-            ->first();
+        try {
+            $token = trim($token);
+            $pass = DeliveryPass::where('secure_token', $token)
+                ->with(['orders.customer.zone', 'orders.items.product', 'locations' => fn($q) => $q->latest()->limit(1)])
+                ->first();
 
-        if (!$pass) {
-            return $this->error('Invalid or non-existent Emergency Delivery Pass URL.', 404);
+            if (!$pass) {
+                return $this->error('Invalid or non-existent Emergency Delivery Pass URL.', 404);
+            }
+
+            if ($pass->status === 'revoked') {
+                return $this->error('This Delivery Pass was revoked by the Dispatch Manager.', 410);
+            }
+
+            if ($pass->isExpired() && $pass->status !== 'completed') {
+                $pass->update(['status' => 'expired']);
+                return $this->error('This Emergency Delivery Pass has expired.', 410);
+            }
+
+            // Privacy Shield: Return operational rider info (Hide internal pricing margins, cost specs)
+            $sanitizedOrders = $pass->orders->map(function ($order) {
+                return [
+                    'order_id' => $order->id,
+                    'order_number' => $order->order_number,
+                    'customer_name' => $order->customer?->name ?? 'Customer Outlet',
+                    'customer_phone' => $order->customer?->phone ?? $order->customer?->contact_person ?? 'N/A',
+                    'delivery_address' => $order->customer?->address ?? $order->customer?->zone?->name ?? 'Kampala',
+                    'latitude' => $order->customer?->latitude ? (float)$order->customer->latitude : null,
+                    'longitude' => $order->customer?->longitude ? (float)$order->customer->longitude : null,
+                    'total_amount' => (float)$order->total_amount,
+                    'items' => $order->items->map(function ($item) {
+                        return [
+                            'product_name' => $item->product?->name ?? 'Egg Product',
+                            'quantity' => (float)$item->quantity,
+                            'unit' => $item->product?->unit_of_measure ?? 'trays',
+                            'unit_price' => (float)$item->unit_price,
+                            'subtotal' => (float)($item->quantity * $item->unit_price),
+                        ];
+                    }),
+                ];
+            });
+
+            return $this->success([
+                'pass_number' => $pass->pass_number,
+                'status' => $pass->status,
+                'driver_name' => $pass->driver_name,
+                'driver_phone' => $pass->driver_phone,
+                'vehicle_info' => $pass->vehicle_info,
+                'claimed_at' => $pass->claimed_at,
+                'started_at' => $pass->started_at,
+                'completed_at' => $pass->completed_at,
+                'expires_at' => $pass->expires_at,
+                'is_claimed' => !is_null($pass->claimed_at),
+                'latest_location' => $pass->locations->first(),
+                'orders' => $sanitizedOrders,
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('showPass error: ' . $e->getMessage());
+            return $this->error('Could not load delivery pass: ' . $e->getMessage(), 500);
         }
-
-        if ($pass->status === 'revoked') {
-            return $this->error('This Delivery Pass was revoked by the Dispatch Manager.', 410);
-        }
-
-        if ($pass->isExpired()) {
-            $pass->update(['status' => 'expired']);
-            return $this->error('This Emergency Delivery Pass has expired.', 410);
-        }
-
-        // Privacy Shield: Return only operational rider info (Hide internal pricing margins, cost specs, internal IDs)
-        $sanitizedOrders = $pass->orders->map(function ($order) {
-            return [
-                'order_id' => $order->id,
-                'order_number' => $order->order_number,
-                'customer_name' => $order->customer?->name ?? 'Customer Outlet',
-                'customer_phone' => $order->customer?->phone ?? $order->customer?->contact_person ?? 'N/A',
-                'delivery_address' => $order->customer?->address ?? $order->customer?->zone?->name ?? 'Kampala',
-                'latitude' => $order->customer?->latitude ? (float)$order->customer->latitude : null,
-                'longitude' => $order->customer?->longitude ? (float)$order->customer->longitude : null,
-                'total_amount' => (float)$order->total_amount,
-                'items' => $order->items->map(function ($item) {
-                    return [
-                        'product_name' => $item->product?->name ?? 'Egg Product',
-                        'quantity' => (float)$item->quantity,
-                        'unit' => $item->product?->unit_of_measure ?? 'trays',
-                        'unit_price' => (float)$item->unit_price,
-                        'subtotal' => (float)($item->quantity * $item.unit_price),
-                    ];
-                }),
-            ];
-        });
-
-        return $this->success([
-            'pass_number' => $pass->pass_number,
-            'status' => $pass->status,
-            'driver_name' => $pass->driver_name,
-            'driver_phone' => $pass->driver_phone,
-            'vehicle_info' => $pass->vehicle_info,
-            'claimed_at' => $pass->claimed_at,
-            'started_at' => $pass->started_at,
-            'completed_at' => $pass->completed_at,
-            'expires_at' => $pass->expires_at,
-            'is_claimed' => !is_null($pass->claimed_at),
-            'latest_location' => $pass->locations->first(),
-            'orders' => $sanitizedOrders,
-        ]);
     }
 
     /**
@@ -161,6 +167,7 @@ class EmergencyDeliveryController extends Controller
             'vehicle_info' => 'nullable|string|max:100',
         ]);
 
+        $token = trim($token);
         $pass = DeliveryPass::where('secure_token', $token)->first();
 
         if (!$pass) {
@@ -175,26 +182,19 @@ class EmergencyDeliveryController extends Controller
             return $this->error('This Delivery Pass has expired.', 410);
         }
 
-        if (!is_null($pass->claimed_at)) {
+        if (!is_null($pass->claimed_at) && $pass->driver_phone !== $validated['driver_phone']) {
             return $this->error('This Delivery Pass has already been claimed by rider: ' . $pass->driver_name . ' (' . $pass->driver_phone . ').', 409);
         }
 
         // Atomic Transaction with Concurrency Lock
         return DB::transaction(function () use ($pass, $validated, $request) {
-            $updatedRows = DeliveryPass::where('id', $pass->id)
-                ->whereNull('claimed_at')
-                ->whereIn('status', ['generated', 'shared'])
-                ->update([
-                    'driver_name' => $validated['driver_name'],
-                    'driver_phone' => $validated['driver_phone'],
-                    'vehicle_info' => $validated['vehicle_info'] ?? 'Boda Boda',
-                    'claimed_at' => now(),
-                    'status' => 'claimed',
-                ]);
-
-            if ($updatedRows === 0) {
-                return $this->error('This delivery pass was claimed by another rider a moment ago.', 409);
-            }
+            $pass->update([
+                'driver_name' => $validated['driver_name'],
+                'driver_phone' => $validated['driver_phone'],
+                'vehicle_info' => $validated['vehicle_info'] ?? 'Boda Boda',
+                'claimed_at' => now(),
+                'status' => 'claimed',
+            ]);
 
             $pass->refresh();
 
