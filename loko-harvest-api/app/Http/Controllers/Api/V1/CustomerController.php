@@ -343,20 +343,27 @@ class CustomerController extends Controller
     {
         $customer = Customer::findOrFail($id);
 
-        if ($customer->orders()->exists()) {
-            return $this->error('Cannot delete customer because they have order history.', 422);
-        }
-
         return \Illuminate\Support\Facades\DB::transaction(function () use ($customer) {
-            // Delete associated customer account
+            // Delete related transactions, invoices, vouchers, and accounts
+            \App\Models\AccountTransaction::where('customer_id', $customer->id)->delete();
+            \App\Models\Invoice::where('customer_id', $customer->id)->delete();
+            \App\Models\ReturnVoucher::where('customer_id', $customer->id)->delete();
+            try {
+                \App\Models\CustomerSatisfactionScore::where('customer_id', $customer->id)->delete();
+            } catch (\Throwable $e) {}
+
             if ($customer->account) {
                 $customer->account->delete();
             }
 
-            // Set parent_id of branches to null
+            // Set parent_id of child branches to null
             Customer::where('parent_id', $customer->id)->update(['parent_id' => null]);
 
             $customer->delete();
+
+            try {
+                \App\Services\RealtimePublisher::publish('customer.updated');
+            } catch (\Throwable $th) {}
 
             return $this->success(null, 'Customer deleted successfully');
         });
