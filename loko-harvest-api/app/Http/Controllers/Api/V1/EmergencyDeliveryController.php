@@ -380,6 +380,35 @@ class EmergencyDeliveryController extends Controller
                     $history[] = [$lat, $lng];
                     $delivery->location_history = $history;
                 }
+
+                // Compute Haversine distance along path points
+                $totalKm = 0.0;
+                $histCount = count($history);
+                for ($i = 0; $i < $histCount - 1; $i++) {
+                    $p1 = $history[$i];
+                    $p2 = $history[$i + 1];
+                    if (is_array($p1) && is_array($p2) && count($p1) >= 2 && count($p2) >= 2) {
+                        $lat1 = (float)$p1[0];
+                        $lon1 = (float)$p1[1];
+                        $lat2 = (float)$p2[0];
+                        $lon2 = (float)$p2[1];
+                        
+                        $dLat = deg2rad($lat2 - $lat1);
+                        $dLon = deg2rad($lon2 - $lon1);
+                        $a = sin($dLat / 2) * sin($dLat / 2) +
+                             cos(deg2rad($lat1)) * cos(deg2rad($lat2)) *
+                             sin($dLon / 2) * sin($dLon / 2);
+                        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+                        $totalKm += 6371 * $c;
+                    }
+                }
+
+                $startTime = $delivery->dispatched_at ?? $pass->started_at ?? $pass->claimed_at ?? now();
+                $elapsedSecs = max(1, now()->diffInSeconds(\Carbon\Carbon::parse($startTime)));
+
+                $delivery->distance_traveled = round($totalKm, 2);
+                $delivery->duration_seconds = $elapsedSecs;
+                $delivery->fuel_consumed = round($totalKm * 0.08, 2);
                 $delivery->save();
             }
         }

@@ -1358,34 +1358,84 @@ export default function DeliveriesPage() {
                   {/* Real-time Tracking telemetry cards and map */}
                   <div className="mb-6 space-y-4">
                     {/* Live Telemetry stats */}
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Distance Moved</p>
-                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
-                          {selectedDelivery.distance_traveled !== null && selectedDelivery.distance_traveled !== undefined 
-                            ? `${parseFloat(selectedDelivery.distance_traveled).toFixed(1)} km` 
-                            : "0.0 km"}
-                        </p>
-                      </div>
+                    {(() => {
+                      // Calculate Haversine path distance from location_history if distance_traveled is missing or 0
+                      const getCalculatedDistance = (del: any) => {
+                        if (del?.distance_traveled && parseFloat(del.distance_traveled) > 0) {
+                          return parseFloat(del.distance_traveled);
+                        }
+                        const history = del?.location_history;
+                        if (!Array.isArray(history) || history.length < 2) return 0;
+                        let total = 0;
+                        for (let i = 0; i < history.length - 1; i++) {
+                          const p1 = history[i];
+                          const p2 = history[i + 1];
+                          if (Array.isArray(p1) && Array.isArray(p2) && p1.length >= 2 && p2.length >= 2) {
+                            const lat1 = Number(p1[0]);
+                            const lon1 = Number(p1[1]);
+                            const lat2 = Number(p2[0]);
+                            const lon2 = Number(p2[1]);
+                            if (lat1 && lon1 && lat2 && lon2) {
+                              const R = 6371; // km
+                              const dLat = ((lat2 - lat1) * Math.PI) / 180;
+                              const dLon = ((lon2 - lon1) * Math.PI) / 180;
+                              const a =
+                                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                                Math.cos((lat1 * Math.PI) / 180) *
+                                  Math.cos((lat2 * Math.PI) / 180) *
+                                  Math.sin(dLon / 2) *
+                                  Math.sin(dLon / 2);
+                              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                              total += R * c;
+                            }
+                          }
+                        }
+                        return total;
+                      };
 
-                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Time Taken</p>
-                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
-                          {selectedDelivery.duration_seconds 
-                            ? formatDuration(selectedDelivery.duration_seconds) 
-                            : "00m 00s"}
-                        </p>
-                      </div>
+                      // Calculate live motion time elapsed since dispatch
+                      const getCalculatedDuration = (del: any) => {
+                        if (del?.duration_seconds && Number(del.duration_seconds) > 0) {
+                          return Number(del.duration_seconds);
+                        }
+                        const startTimeStr = del?.dispatched_at || del?.created_at;
+                        if (!startTimeStr) return 0;
+                        const start = new Date(startTimeStr).getTime();
+                        const end = del?.delivered_at ? new Date(del.delivered_at).getTime() : new Date().getTime();
+                        return Math.max(0, Math.floor((end - start) / 1000));
+                      };
 
-                      <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
-                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fuel Used</p>
-                        <p className="text-lg font-black text-brand-forest mt-1 font-mono">
-                          {selectedDelivery.fuel_consumed !== null && selectedDelivery.fuel_consumed !== undefined 
-                            ? `${parseFloat(selectedDelivery.fuel_consumed).toFixed(1)} L` 
-                            : "0.0 L"}
-                        </p>
-                      </div>
-                    </div>
+                      const distKm = getCalculatedDistance(selectedDelivery);
+                      const durationSecs = getCalculatedDuration(selectedDelivery);
+                      const fuelL = selectedDelivery.fuel_consumed && parseFloat(selectedDelivery.fuel_consumed) > 0
+                        ? parseFloat(selectedDelivery.fuel_consumed)
+                        : distKm * 0.08;
+
+                      return (
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Distance Moved</p>
+                            <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                              {distKm > 0 ? `${distKm.toFixed(1)} km` : "0.0 km"}
+                            </p>
+                          </div>
+
+                          <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Time Taken</p>
+                            <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                              {durationSecs > 0 ? formatDuration(durationSecs) : "00m 00s"}
+                            </p>
+                          </div>
+
+                          <div className="bg-[#132A1C]/5 border border-brand-sage/20 p-3 rounded-xl text-center shadow-sm">
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Fuel Used</p>
+                            <p className="text-lg font-black text-brand-forest mt-1 font-mono">
+                              {fuelL > 0 ? `${fuelL.toFixed(1)} L` : "0.0 L"}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Leaflet Map for Admin Tracking */}
                     <AdminTrackingMap
