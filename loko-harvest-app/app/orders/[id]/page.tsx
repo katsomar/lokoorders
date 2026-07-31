@@ -682,7 +682,18 @@ export default function OrderDetailPage() {
                             <div>
                               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Delivered By (Driver)</p>
                               <p className="text-xs font-bold text-gray-800 mt-0.5">
-                                {deliveryWithProof?.driver?.full_name || deliveryWithProof?.driver?.name || "N/A"}
+                                {(() => {
+                                  let driverName = deliveryWithProof?.driver?.full_name || deliveryWithProof?.driver?.name;
+                                  if (!driverName && deliveryWithProof?.delivery_notes) {
+                                    try {
+                                      const notes = typeof deliveryWithProof.delivery_notes === "string" ? JSON.parse(deliveryWithProof.delivery_notes) : deliveryWithProof.delivery_notes;
+                                      if (notes?.emergency_driver) {
+                                        driverName = `${notes.emergency_driver} (${notes.emergency_phone || "Emergency Boda"})`;
+                                      }
+                                    } catch (e) {}
+                                  }
+                                  return driverName || "Emergency Rider / Driver";
+                                })()}
                               </p>
                               {deliveryWithProof?.delivered_at && (
                                 <p className="text-[10px] text-gray-400 font-bold mt-0.5 uppercase tracking-wide">
@@ -845,7 +856,20 @@ export default function OrderDetailPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                             <div>
                               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Driver</p>
-                              <p className="font-bold text-gray-800 mt-0.5">{d.driver?.full_name || "N/A"}</p>
+                              <p className="font-bold text-gray-800 mt-0.5">
+                                {(() => {
+                                  let dName = d.driver?.full_name || d.driver?.name;
+                                  if (!dName && d.delivery_notes) {
+                                    try {
+                                      const notes = typeof d.delivery_notes === "string" ? JSON.parse(d.delivery_notes) : d.delivery_notes;
+                                      if (notes?.emergency_driver) {
+                                        dName = `${notes.emergency_driver} (${notes.emergency_phone || 'Emergency Boda'})`;
+                                      }
+                                    } catch (e) {}
+                                  }
+                                  return dName || "Emergency Rider / Driver";
+                                })()}
+                              </p>
                             </div>
                             <div>
                               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Dispatched Time</p>
