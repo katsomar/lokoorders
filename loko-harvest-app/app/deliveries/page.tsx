@@ -641,18 +641,42 @@ export default function DeliveriesPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <User size={12} className="text-brand-forest" />
-                                <span className="text-xs font-bold text-gray-700">{delivery.driver?.full_name || "Unassigned"}</span>
-                              </div>
-                              <div className="text-[10px] text-gray-400 font-semibold mt-0.5 flex items-center gap-1">
-                                <Truck size={11} />
-                                {delivery.driver?.vehicle
-                                  ? `${delivery.driver.vehicle.registration_number} (${delivery.driver.vehicle.make} ${delivery.driver.vehicle.model || ''})`
-                                  : "No vehicle allocated"}
-                              </div>
-                            </div>
+                            {(() => {
+                              let driverName = delivery.driver?.full_name || delivery.driver?.name;
+                              let vehicleText = delivery.driver?.vehicle
+                                ? `${delivery.driver.vehicle.registration_number} (${delivery.driver.vehicle.make} ${delivery.driver.vehicle.model || ''})`
+                                : null;
+                              let isEmergency = false;
+
+                              if (!driverName && delivery.delivery_notes) {
+                                try {
+                                  const notes = typeof delivery.delivery_notes === "string" ? JSON.parse(delivery.delivery_notes) : delivery.delivery_notes;
+                                  if (notes?.emergency_driver) {
+                                    driverName = notes.emergency_driver;
+                                    vehicleText = `${notes.vehicle_info || 'Emergency Boda'} (${notes.emergency_phone || ''})`;
+                                    isEmergency = true;
+                                  }
+                                } catch (e) {}
+                              }
+
+                              return (
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <User size={12} className="text-brand-forest" />
+                                    <span className="text-xs font-bold text-gray-700">{driverName || "Unassigned"}</span>
+                                    {isEmergency && (
+                                      <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.2 rounded uppercase">
+                                        Emergency Boda
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-semibold mt-0.5 flex items-center gap-1">
+                                    <Truck size={11} />
+                                    {vehicleText || "No vehicle allocated"}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell className="text-xs text-gray-500 font-semibold">
                             <div className="flex items-center gap-1.5">

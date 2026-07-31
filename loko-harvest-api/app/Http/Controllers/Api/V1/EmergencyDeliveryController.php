@@ -193,6 +193,11 @@ class EmergencyDeliveryController extends Controller
 
         // Atomic Transaction with Concurrency Lock
         return DB::transaction(function () use ($pass, $validated, $request) {
+            $adminUser = \App\Models\User::where('role', 'admin')->first();
+            $userId = auth()->id() ?? ($adminUser?->id ?? (string)Str::uuid());
+            $driver = \App\Models\Driver::first();
+            $driverId = $driver?->id ?? (string)Str::uuid();
+
             $pass->update([
                 'driver_name' => $validated['driver_name'],
                 'driver_phone' => $validated['driver_phone'],
@@ -202,6 +207,25 @@ class EmergencyDeliveryController extends Controller
             ]);
 
             $pass->refresh();
+
+            // Sync Delivery records for each attached order so Order Manager and Admin Registry display driver details
+            foreach ($pass->passOrders as $pOrder) {
+                Delivery::updateOrCreate(
+                    ['order_id' => $pOrder->order_id],
+                    [
+                        'driver_id' => $driverId,
+                        'assigned_by' => $userId,
+                        'status' => 'assigned',
+                        'dispatched_at' => now(),
+                        'delivery_notes' => json_encode([
+                            'emergency_driver' => $validated['driver_name'],
+                            'emergency_phone' => $validated['driver_phone'],
+                            'vehicle_info' => $validated['vehicle_info'] ?? 'Emergency Boda',
+                            'pass_number' => $pass->pass_number,
+                        ]),
+                    ]
+                );
+            }
 
             // Log event
             DeliveryPassEvent::create([
@@ -317,14 +341,32 @@ class EmergencyDeliveryController extends Controller
             return $this->error('Pass is not in an active tracking state.', 422);
         }
 
+        $lat = (float)$validated['latitude'];
+        $lng = (float)$validated['longitude'];
+
         $location = DeliveryPassLocation::create([
             'delivery_pass_id' => $pass->id,
-            'latitude' => $validated['latitude'],
-            'longitude' => $validated['longitude'],
+            'latitude' => $lat,
+            'longitude' => $lng,
             'accuracy' => $validated['accuracy'] ?? null,
             'speed' => $validated['speed'] ?? null,
             'heading' => $validated['heading'] ?? null,
         ]);
+
+        // Sync with Delivery records so Admin Deliveries Map tracks live coordinates & path
+        foreach ($pass->passOrders as $pOrder) {
+            $delivery = Delivery::where('order_id', $pOrder->order_id)->latest()->first();
+            if ($delivery) {
+                $delivery->current_latitude = $lat;
+                $delivery->current_longitude = $lng;
+                $history = $delivery->location_history ?? [];
+                if (empty($history) || abs(end($history)[0] - $lat) > 0.0001 || abs(end($history)[1] - $lng) > 0.0001) {
+                    $history[] = [$lat, $lng];
+                    $delivery->location_history = $history;
+                }
+                $delivery->save();
+            }
+        }
 
         // Publish WebSocket broadcast for Order Manager Admin Map
         try {
