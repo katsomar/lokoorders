@@ -749,7 +749,7 @@ export default function SalesStorePage() {
     if (selectedTargetProduct.code.endsWith('-FAM')) return qty / 5;
     if (selectedTargetProduct.code.endsWith('-DBL')) return qty / 2;
     if (selectedTargetProduct.code.endsWith('-TPL')) return qty / 3;
-    if (selectedTargetProduct.code === 'EGG-CRM-SGL') return qty / 2;
+    if (selectedTargetProduct.code.endsWith('-SGL') || selectedTargetProduct.code.endsWith('-TRYS')) return qty;
     return qty; // Single Pack / Plain Trays ratio is 1:1
   };
 
@@ -1837,7 +1837,7 @@ export default function SalesStorePage() {
                               selectedTargetProduct.code.endsWith('-FAM') ? '5 trays yield 1 x Family Pack' :
                               selectedTargetProduct.code.endsWith('-DBL') ? '2 trays yield 1 x Double Pack' :
                               selectedTargetProduct.code.endsWith('-TPL') ? '3 trays yield 1 x Triple Pack' :
-                              selectedTargetProduct.code === 'EGG-CRM-SGL' ? '2 trays yield 1 x Single Pack' :
+                              selectedTargetProduct.code.endsWith('-SGL') || selectedTargetProduct.code.endsWith('-TRYS') ? '1 tray yields 1 x Single Pack / Plain Tray' :
                               '1 tray yields 1 unit/pack/tray'
                             }
                           </div>

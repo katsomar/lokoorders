@@ -66,8 +66,8 @@ class SalesStoreConversionController extends Controller
             $ratio = 0.5; // 2 trays yield 1 double pack
         } elseif (str_ends_with($toProduct->code, '-TPL')) {
             $ratio = 1.0 / 3.0; // 3 trays yield 1 triple pack
-        } elseif ($toProduct->code === 'EGG-CRM-SGL') {
-            $ratio = 0.5; // 2 trays yield 1 single pack
+        } elseif (str_ends_with($toProduct->code, '-SGL') || str_ends_with($toProduct->code, '-TRYS')) {
+            $ratio = 1.0; // 1 bulk tray yields 1 x Single Pack / Plain Tray
         }
 
         $toQty = $fromQty * $ratio;

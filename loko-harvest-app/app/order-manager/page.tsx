@@ -1696,8 +1696,8 @@ export default function OrderManagerDashboard() {
       ratio = 0.5;
     } else if (targetProd.code.endsWith('-TPL')) {
       ratio = 1.0 / 3.0;
-    } else if (targetProd.code === 'EGG-CRM-SGL') {
-      ratio = 0.5;
+    } else if (targetProd.code.endsWith('-SGL') || targetProd.code.endsWith('-TRYS')) {
+      ratio = 1.0;
     }
 
     return Number((qty * ratio).toFixed(1));
@@ -3259,7 +3259,7 @@ export default function OrderManagerDashboard() {
                                 getSelectedTargetProduct()?.code.endsWith('-FAM') ? '5 trays yield 1 x Family Pack' :
                                 getSelectedTargetProduct()?.code.endsWith('-DBL') ? '2 trays yield 1 x Double Pack' :
                                 getSelectedTargetProduct()?.code.endsWith('-TPL') ? '3 trays yield 1 x Triple Pack' :
-                                getSelectedTargetProduct()?.code === 'EGG-CRM-SGL' ? '2 trays yield 1 x Single Pack' :
+                                getSelectedTargetProduct()?.code.endsWith('-SGL') || getSelectedTargetProduct()?.code.endsWith('-TRYS') ? '1 tray yields 1 x Single Pack / Plain Tray' :
                                 '1 tray yields 1 unit/pack/tray'
                               }
                             </div>
