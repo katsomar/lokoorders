@@ -266,15 +266,50 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setProofFile(file);
-      setProofPreview(URL.createObjectURL(file));
+      const originalFile = e.target.files[0];
+      setProofPreview(URL.createObjectURL(originalFile));
 
+      // Compress photo to max 1280px width/height to keep upload payload under 500KB
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofImageData(reader.result as string);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], originalFile.name || "voucher.jpg", { type: "image/jpeg" });
+                setProofFile(compressedFile);
+              } else {
+                setProofFile(originalFile);
+              }
+            },
+            "image/jpeg",
+            0.75
+          );
+        };
+        img.src = event.target?.result as string;
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(originalFile);
     }
   };
 
@@ -285,7 +320,7 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       alert("Please enter the Recipient Name.");
       return;
     }
-    if (!proofFile && !proofImageData) {
+    if (!proofFile) {
       alert("Please capture or upload a photo of the signed delivery document.");
       return;
     }
@@ -310,7 +345,7 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
   const submitProofApi = async (lat: number, lng: number) => {
     try {
       const formData = new FormData();
-      formData.append("recipient_name", recipientName);
+      formData.append("recipient_name", recipientName.trim());
       if (recipientPhone && recipientPhone.trim()) {
         formData.append("recipient_phone", recipientPhone.trim());
       }
@@ -321,9 +356,6 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
       }
       if (proofFile) {
         formData.append("proof_image_file", proofFile);
-      }
-      if (proofImageData) {
-        formData.append("proof_image_data", proofImageData);
       }
       if (signatureData) {
         formData.append("signature_data", signatureData);
