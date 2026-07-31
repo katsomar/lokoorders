@@ -324,6 +324,7 @@ class EmergencyDeliveryController extends Controller
             'order_id' => 'nullable|string|exists:orders,id',
         ]);
 
+        $token = trim($token);
         $pass = DeliveryPass::where('secure_token', $token)->first();
 
         if (!$pass) {
@@ -334,120 +335,140 @@ class EmergencyDeliveryController extends Controller
             return $this->error('This Delivery Pass has already been completed and deactivated.', 410);
         }
 
-        return DB::transaction(function () use ($pass, $validated, $request) {
-            // Save Document Photo to public disk
-            $documentPath = null;
-            if ($request->hasFile('proof_image_file')) {
-                $documentPath = $request->file('proof_image_file')->store('delivery_proofs/documents', 'public');
-            }
+        try {
+            return DB::transaction(function () use ($pass, $validated, $request) {
+                $adminUser = \App\Models\User::where('role', 'admin')->first();
+                $userId = auth()->id() ?? ($adminUser?->id ?? (string)Str::uuid());
 
-            // Decode base64 Signature to public disk
-            $signaturePath = null;
-            if ($request->filled('signature_data')) {
-                $base64Image = $request->input('signature_data');
-                if (str_contains($base64Image, ';base64,')) {
-                    $imageParts = explode(";base64,", $base64Image);
-                    $imageTypeAux = explode("image/", $imageParts[0]);
-                    $imageType = $imageTypeAux[1] ?? 'png';
-                    $imageBase64 = base64_decode($imageParts[1]);
-                } else {
-                    $imageType = 'png';
-                    $imageBase64 = base64_decode($base64Image);
+                // Save Document Photo to public disk
+                $documentPath = null;
+                if ($request->hasFile('proof_image_file')) {
+                    $documentPath = $request->file('proof_image_file')->store('delivery_proofs/documents', 'public');
                 }
-                $fileName = uniqid() . '.' . $imageType;
-                $signaturePath = 'delivery_proofs/signatures/' . $fileName;
-                Storage::disk('public')->put($signaturePath, $imageBase64);
-            }
 
-            // Record media proof entry
-            if ($documentPath) {
-                DeliveryPassMedia::create([
-                    'delivery_pass_id' => $pass->id,
-                    'order_id' => $validated['order_id'] ?? null,
-                    'media_type' => 'signed_document_photo',
-                    'file_path' => $documentPath,
-                    'mime_type' => $request->file('proof_image_file')->getClientMimeType(),
-                    'file_size' => $request->file('proof_image_file')->getSize(),
-                    'recipient_name' => $validated['recipient_name'],
-                    'recipient_phone' => $validated['recipient_phone'] ?? null,
-                    'latitude' => $validated['latitude'],
-                    'longitude' => $validated['longitude'],
-                ]);
-            }
+                // Decode base64 Signature to public disk
+                $signaturePath = null;
+                if ($request->filled('signature_data')) {
+                    $base64Image = $request->input('signature_data');
+                    if (str_contains($base64Image, ';base64,')) {
+                        $imageParts = explode(";base64,", $base64Image);
+                        $imageTypeAux = explode("image/", $imageParts[0]);
+                        $imageType = $imageTypeAux[1] ?? 'png';
+                        $imageBase64 = base64_decode($imageParts[1]);
+                    } else {
+                        $imageType = 'png';
+                        $imageBase64 = base64_decode($base64Image);
+                    }
+                    $fileName = uniqid() . '.' . $imageType;
+                    $signaturePath = 'delivery_proofs/signatures/' . $fileName;
+                    Storage::disk('public')->put($signaturePath, $imageBase64);
+                }
 
-            if ($signaturePath) {
-                DeliveryPassMedia::create([
-                    'delivery_pass_id' => $pass->id,
-                    'order_id' => $validated['order_id'] ?? null,
-                    'media_type' => 'recipient_signature',
-                    'file_path' => $signaturePath,
-                    'mime_type' => 'image/png',
-                    'file_size' => strlen($base64Image ?? ''),
-                    'recipient_name' => $validated['recipient_name'],
-                    'recipient_phone' => $validated['recipient_phone'] ?? null,
-                    'latitude' => $validated['latitude'],
-                    'longitude' => $validated['longitude'],
-                ]);
-            }
-
-            // Update attached orders to delivered
-            foreach ($pass->passOrders as $pOrder) {
-                $pOrder->update([
-                    'status' => 'delivered',
-                    'delivered_at' => now(),
-                ]);
-
-                $order = Order::find($pOrder->order_id);
-                if ($order) {
-                    $order->update(['status' => 'delivered']);
-                    $order->statusHistory()->create([
-                        'status' => 'delivered',
-                        'changed_by' => 1,
-                        'notes' => 'Emergency QR Delivery completed by ' . $pass->driver_name . '. Recipient: ' . $validated['recipient_name'],
+                // Record media proof entry
+                if ($documentPath) {
+                    DeliveryPassMedia::create([
+                        'delivery_pass_id' => $pass->id,
+                        'order_id' => $validated['order_id'] ?? null,
+                        'media_type' => 'signed_document_photo',
+                        'file_path' => $documentPath,
+                        'mime_type' => $request->file('proof_image_file')->getClientMimeType(),
+                        'file_size' => $request->file('proof_image_file')->getSize(),
+                        'recipient_name' => $validated['recipient_name'],
+                        'recipient_phone' => $validated['recipient_phone'] ?? null,
+                        'latitude' => $validated['latitude'],
+                        'longitude' => $validated['longitude'],
                     ]);
+                }
 
-                    // Also save entry into system deliveries & delivery_proofs for system backward compatibility
-                    $delivery = Delivery::create([
-                        'order_id' => $order->id,
-                        'driver_id' => \App\Models\Driver::first()?->id ?? 1,
-                        'assigned_by' => 1,
+                if ($signaturePath) {
+                    DeliveryPassMedia::create([
+                        'delivery_pass_id' => $pass->id,
+                        'order_id' => $validated['order_id'] ?? null,
+                        'media_type' => 'recipient_signature',
+                        'file_path' => $signaturePath,
+                        'mime_type' => 'image/png',
+                        'file_size' => strlen($base64Image ?? ''),
+                        'recipient_name' => $validated['recipient_name'],
+                        'recipient_phone' => $validated['recipient_phone'] ?? null,
+                        'latitude' => $validated['latitude'],
+                        'longitude' => $validated['longitude'],
+                    ]);
+                }
+
+                // Update attached orders to delivered
+                foreach ($pass->passOrders as $pOrder) {
+                    $pOrder->update([
                         'status' => 'delivered',
-                        'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
                         'delivered_at' => now(),
-                        'delivery_notes' => json_encode([
-                            'recipient_name' => $validated['recipient_name'],
-                            'recipient_phone' => $validated['recipient_phone'] ?? null,
-                            'emergency_driver' => $pass->driver_name,
-                            'emergency_phone' => $pass->driver_phone,
-                            'pass_number' => $pass->pass_number,
-                            'notes' => $validated['notes'] ?? null,
-                        ]),
                     ]);
 
-                    DeliveryProof::create([
-                        'delivery_id' => $delivery->id,
-                        'photo_url' => $documentPath ?? 'N/A',
-                        'signature_path' => $signaturePath,
-                        'gps_latitude' => $validated['latitude'],
-                        'gps_longitude' => $validated['longitude'],
-                        'confirmed_at' => now(),
-                        'confirmed_by' => 1,
-                    ]);
+                    $order = Order::find($pOrder->order_id);
+                    if ($order) {
+                        $order->update(['status' => 'delivered']);
+                        $order->statusHistory()->create([
+                            'status' => 'delivered',
+                            'changed_by' => $userId,
+                            'notes' => 'Emergency QR Delivery completed by ' . ($pass->driver_name ?? 'Emergency Rider') . '. Recipient: ' . $validated['recipient_name'],
+                        ]);
+
+                        // Also save entry into system deliveries & delivery_proofs for system backward compatibility
+                        $driver = \App\Models\Driver::first();
+                        $driverId = $driver?->id ?? (string)Str::uuid();
+
+                        $delivery = Delivery::create([
+                            'order_id' => $order->id,
+                            'driver_id' => $driverId,
+                            'assigned_by' => $userId,
+                            'status' => 'delivered',
+                            'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
+                            'delivered_at' => now(),
+                            'delivery_notes' => json_encode([
+                                'recipient_name' => $validated['recipient_name'],
+                                'recipient_phone' => $validated['recipient_phone'] ?? null,
+                                'emergency_driver' => $pass->driver_name,
+                                'emergency_phone' => $pass->driver_phone,
+                                'pass_number' => $pass->pass_number,
+                                'notes' => $validated['notes'] ?? null,
+                            ]),
+                        ]);
+
+                        DeliveryProof::create([
+                            'delivery_id' => $delivery->id,
+                            'photo_url' => $documentPath ?? 'N/A',
+                            'signature_path' => $signaturePath,
+                            'gps_latitude' => $validated['latitude'],
+                            'gps_longitude' => $validated['longitude'],
+                            'confirmed_at' => now(),
+                            'confirmed_by' => $userId,
+                        ]);
+                    }
                 }
-            }
 
-            // Deactivate Pass
-            $pass->update([
-                'status' => 'completed',
-                'completed_at' => now(),
-            ]);
+                // Deactivate Pass
+                $pass->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
 
-            DeliveryPassEvent::create([
-                'delivery_pass_id' => $pass->id,
-                'event_type' => 'completed',
-                'performed_by_type' => 'guest_driver',
-                'performed_by_id' => $pass->driver_phone,
-                'metadata' => [
+                DeliveryPassEvent::create([
+                    'delivery_pass_id' => $pass->id,
+                    'event_type' => 'completed',
+                    'performed_by_type' => 'guest_driver',
+                    'performed_by_id' => $pass->driver_phone ?? '0000000000',
+                    'metadata' => [
+                        'recipient_name' => $validated['recipient_name'],
+                        'ip' => $request->ip(),
+                    ],
+                ]);
+
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+
+                return $this->success($pass, 'Delivery successfully completed and QR pass deactivated');
+            });
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('completeDelivery error: ' . $e->getMessage());
+            return $this->error('Failed to complete delivery: ' . $e->getMessage(), 500);
+        }
                     'recipient_name' => $validated['recipient_name'],
                     'ip' => $request->ip(),
                 ],
