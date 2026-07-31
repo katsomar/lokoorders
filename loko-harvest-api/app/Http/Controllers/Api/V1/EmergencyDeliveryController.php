@@ -209,22 +209,30 @@ class EmergencyDeliveryController extends Controller
             $pass->refresh();
 
             // Sync Delivery records for each attached order so Order Manager and Admin Registry display driver details
+            $fallbackDriverId = \App\Models\Driver::first()?->id;
+
             foreach ($pass->passOrders as $pOrder) {
-                Delivery::updateOrCreate(
-                    ['order_id' => $pOrder->order_id],
-                    [
-                        'driver_id' => null,
-                        'assigned_by' => $userId,
-                        'status' => 'assigned',
-                        'dispatched_at' => now(),
-                        'delivery_notes' => json_encode([
-                            'emergency_driver' => $validated['driver_name'],
-                            'emergency_phone' => $validated['driver_phone'],
-                            'vehicle_info' => $validated['vehicle_info'] ?? 'Emergency Boda',
-                            'pass_number' => $pass->pass_number,
-                        ]),
-                    ]
-                );
+                $delData = [
+                    'driver_id' => null,
+                    'assigned_by' => $userId,
+                    'status' => 'assigned',
+                    'dispatched_at' => now(),
+                    'delivery_notes' => json_encode([
+                        'emergency_driver' => $validated['driver_name'],
+                        'emergency_phone' => $validated['driver_phone'],
+                        'vehicle_info' => $validated['vehicle_info'] ?? 'Emergency Boda',
+                        'pass_number' => $pass->pass_number,
+                    ]),
+                ];
+
+                try {
+                    Delivery::updateOrCreate(['order_id' => $pOrder->order_id], $delData);
+                } catch (\Throwable $th) {
+                    if ($fallbackDriverId) {
+                        $delData['driver_id'] = $fallbackDriverId;
+                        Delivery::updateOrCreate(['order_id' => $pOrder->order_id], $delData);
+                    }
+                }
             }
 
             // Log event
@@ -267,6 +275,7 @@ class EmergencyDeliveryController extends Controller
         return DB::transaction(function () use ($pass, $request) {
             $adminUser = \App\Models\User::where('role', 'admin')->first();
             $userId = auth()->id() ?? ($adminUser?->id ?? (string)Str::uuid());
+            $fallbackDriverId = \App\Models\Driver::first()?->id;
 
             $pass->update([
                 'status' => 'in_transit',
@@ -285,21 +294,27 @@ class EmergencyDeliveryController extends Controller
                         'notes' => 'Guest Emergency Rider (' . ($pass->driver_name ?? 'Emergency Rider') . ' - ' . ($pass->driver_phone ?? '') . ') started delivery route.',
                     ]);
 
-                    Delivery::updateOrCreate(
-                        ['order_id' => $order->id],
-                        [
-                            'driver_id' => null,
-                            'assigned_by' => $userId,
-                            'status' => 'in_transit',
-                            'dispatched_at' => now(),
-                            'delivery_notes' => json_encode([
-                                'emergency_driver' => $pass->driver_name,
-                                'emergency_phone' => $pass->driver_phone,
-                                'vehicle_info' => $pass->vehicle_info ?? 'Emergency Boda',
-                                'pass_number' => $pass->pass_number,
-                            ]),
-                        ]
-                    );
+                    $delData = [
+                        'driver_id' => null,
+                        'assigned_by' => $userId,
+                        'status' => 'in_transit',
+                        'dispatched_at' => now(),
+                        'delivery_notes' => json_encode([
+                            'emergency_driver' => $pass->driver_name,
+                            'emergency_phone' => $pass->driver_phone,
+                            'vehicle_info' => $pass->vehicle_info ?? 'Emergency Boda',
+                            'pass_number' => $pass->pass_number,
+                        ]),
+                    ];
+
+                    try {
+                        Delivery::updateOrCreate(['order_id' => $order->id], $delData);
+                    } catch (\Throwable $th) {
+                        if ($fallbackDriverId) {
+                            $delData['driver_id'] = $fallbackDriverId;
+                            Delivery::updateOrCreate(['order_id' => $order->id], $delData);
+                        }
+                    }
                 }
             }
 
@@ -509,24 +524,29 @@ class EmergencyDeliveryController extends Controller
                         ]);
 
                         // Also save entry into system deliveries & delivery_proofs for system backward compatibility
-                        $delivery = Delivery::updateOrCreate(
-                            ['order_id' => $order->id],
-                            [
-                                'driver_id' => null,
-                                'assigned_by' => $userId,
-                                'status' => 'delivered',
-                                'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
-                                'delivered_at' => now(),
-                                'delivery_notes' => json_encode([
-                                    'recipient_name' => $validated['recipient_name'],
-                                    'recipient_phone' => $validated['recipient_phone'] ?? null,
-                                    'emergency_driver' => $pass->driver_name,
-                                    'emergency_phone' => $pass->driver_phone,
-                                    'pass_number' => $pass->pass_number,
-                                    'notes' => $validated['notes'] ?? null,
-                                ]),
-                            ]
-                        );
+                        $fallbackDriverId = \App\Models\Driver::first()?->id;
+                        $delData = [
+                            'driver_id' => null,
+                            'assigned_by' => $userId,
+                            'status' => 'delivered',
+                            'dispatched_at' => $pass->started_at ?? $pass->claimed_at ?? now(),
+                            'delivered_at' => now(),
+                            'delivery_notes' => json_encode([
+                                'recipient_name' => $validated['recipient_name'],
+                                'recipient_phone' => $validated['recipient_phone'] ?? null,
+                                'emergency_driver' => $pass->driver_name,
+                                'emergency_phone' => $pass->driver_phone,
+                                'pass_number' => $pass->pass_number,
+                                'notes' => $validated['notes'] ?? null,
+                            ]),
+                        ];
+
+                        try {
+                            $delivery = Delivery::updateOrCreate(['order_id' => $order->id], $delData);
+                        } catch (\Throwable $th) {
+                            $delData['driver_id'] = $fallbackDriverId;
+                            $delivery = Delivery::updateOrCreate(['order_id' => $order->id], $delData);
+                        }
 
                         DeliveryProof::create([
                             'delivery_id' => $delivery->id,
