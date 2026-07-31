@@ -74,7 +74,8 @@ export function EmergencyQRGeneratorModal({
 
       if (res.data && res.data.data) {
         const pass = res.data.data.pass;
-        const qrLink = res.data.data.qr_link || `${window.location.origin}/driver/qr/${pass.secure_token}`;
+        // Always build full public link using current window origin to ensure smartphone cameras open the correct host
+        const qrLink = `${window.location.origin}/driver/qr/${pass.secure_token}`;
         
         setPassData({
           id: pass.id,

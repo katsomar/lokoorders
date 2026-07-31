@@ -92,9 +92,17 @@ export default function GuestEmergencyQRPassPage({ params }: { params: Promise<{
 
   // Signature Canvas Ref
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const getApiBase = () => {
+    if (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith("http")) {
+      return process.env.NEXT_PUBLIC_API_URL;
+    }
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}/api/v1`;
+    }
+    return "https://178-104-85-160.sslip.io/api/v1";
+  };
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://178-104-85-160.sslip.io/api/v1";
+  const API_BASE = getApiBase();
 
   // Fetch Pass Data
   const fetchPassInfo = async () => {

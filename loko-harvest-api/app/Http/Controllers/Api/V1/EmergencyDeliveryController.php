@@ -52,7 +52,7 @@ class EmergencyDeliveryController extends Controller
                     'created_by' => $userId,
                 ]);
 
-                // Attach orders
+                // Attach orders to pass without altering existing order status
                 foreach ($orderIds as $idx => $orderId) {
                     DeliveryPassOrder::create([
                         'delivery_pass_id' => $pass->id,
@@ -60,17 +60,6 @@ class EmergencyDeliveryController extends Controller
                         'sequence' => $idx + 1,
                         'status' => 'assigned',
                     ]);
-
-                    // Keep order status as ready_for_dispatch so it remains visible in Order Manager until rider starts route
-                    $order = Order::find($orderId);
-                    if ($order && in_array($order->status, ['pending', 'processing', 'undone'])) {
-                        $order->update(['status' => 'ready_for_dispatch']);
-                        $order->statusHistory()->create([
-                            'status' => 'ready_for_dispatch',
-                            'changed_by' => $userId,
-                            'notes' => 'Emergency QR Delivery Pass generated: ' . $passNumber,
-                        ]);
-                    }
                 }
 
                 // Log audit event
