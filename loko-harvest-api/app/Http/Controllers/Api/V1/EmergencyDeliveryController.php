@@ -75,7 +75,11 @@ class EmergencyDeliveryController extends Controller
                     ],
                 ]);
 
-                \App\Services\RealtimePublisher::publish('delivery.updated');
+                try {
+                    \App\Services\RealtimePublisher::publish('delivery.updated');
+                } catch (\Throwable $th) {
+                    \Illuminate\Support\Facades\Log::warning('RealtimePublisher publish skipped: ' . $th->getMessage());
+                }
 
                 $pass->load(['orders.customer', 'orders.items.product']);
 
@@ -84,8 +88,9 @@ class EmergencyDeliveryController extends Controller
                     'qr_link' => config('app.url', 'http://localhost:3000') . '/driver/qr/' . $secureToken,
                 ], 'Emergency Delivery Pass generated successfully');
             });
-        } catch (\Exception $e) {
-            return $this->error($e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('generatePass error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return $this->error('Failed to generate pass: ' . $e->getMessage(), 500);
         }
     }
 
@@ -212,7 +217,9 @@ class EmergencyDeliveryController extends Controller
                 ],
             ]);
 
-            \App\Services\RealtimePublisher::publish('delivery.updated');
+            try {
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+            } catch (\Throwable $th) {}
 
             return $this->success($pass, 'Delivery Pass claimed successfully');
         });
@@ -234,6 +241,9 @@ class EmergencyDeliveryController extends Controller
         }
 
         return DB::transaction(function () use ($pass, $request) {
+            $adminUser = \App\Models\User::where('role', 'admin')->first();
+            $userId = auth()->id() ?? ($adminUser?->id ?? (string)Str::uuid());
+
             $pass->update([
                 'status' => 'in_transit',
                 'started_at' => now(),
@@ -247,8 +257,8 @@ class EmergencyDeliveryController extends Controller
                     $order->update(['status' => 'on_route']);
                     $order->statusHistory()->create([
                         'status' => 'on_route',
-                        'changed_by' => 1,
-                        'notes' => 'Guest Emergency Rider (' . $pass->driver_name . ') started delivery route.',
+                        'changed_by' => $userId,
+                        'notes' => 'Guest Emergency Rider (' . ($pass->driver_name ?? 'Emergency Rider') . ') started delivery route.',
                     ]);
                 }
             }
@@ -257,11 +267,13 @@ class EmergencyDeliveryController extends Controller
                 'delivery_pass_id' => $pass->id,
                 'event_type' => 'transit_started',
                 'performed_by_type' => 'guest_driver',
-                'performed_by_id' => $pass->driver_phone,
+                'performed_by_id' => $pass->driver_phone ?? '0000000000',
                 'metadata' => ['ip' => $request->ip()],
             ]);
 
-            \App\Services\RealtimePublisher::publish('delivery.updated');
+            try {
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+            } catch (\Throwable $th) {}
 
             return $this->success($pass, 'Delivery route started successfully');
         });
@@ -296,14 +308,16 @@ class EmergencyDeliveryController extends Controller
         ]);
 
         // Publish WebSocket broadcast for Order Manager Admin Map
-        \App\Services\RealtimePublisher::publish('delivery.updated', [
-            'delivery_pass_id' => $pass->id,
-            'pass_number' => $pass->pass_number,
-            'driver_name' => $pass->driver_name,
-            'latitude' => (float)$validated['latitude'],
-            'longitude' => (float)$validated['longitude'],
-            'timestamp' => now()->toIso8601String(),
-        ]);
+        try {
+            \App\Services\RealtimePublisher::publish('delivery.updated', [
+                'delivery_pass_id' => $pass->id,
+                'pass_number' => $pass->pass_number,
+                'driver_name' => $pass->driver_name,
+                'latitude' => (float)$validated['latitude'],
+                'longitude' => (float)$validated['longitude'],
+                'timestamp' => now()->toIso8601String(),
+            ]);
+        } catch (\Throwable $th) {}
 
         return $this->success($location, 'Location logged');
     }
@@ -461,23 +475,16 @@ class EmergencyDeliveryController extends Controller
                     ],
                 ]);
 
-                \App\Services\RealtimePublisher::publish('delivery.updated');
+                try {
+                    \App\Services\RealtimePublisher::publish('delivery.updated');
+                } catch (\Throwable $th) {}
 
                 return $this->success($pass, 'Delivery successfully completed and QR pass deactivated');
             });
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('completeDelivery error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('completeDelivery error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             return $this->error('Failed to complete delivery: ' . $e->getMessage(), 500);
         }
-                    'recipient_name' => $validated['recipient_name'],
-                    'ip' => $request->ip(),
-                ],
-            ]);
-
-            \App\Services\RealtimePublisher::publish('delivery.updated');
-
-            return $this->success($pass, 'Delivery successfully completed and QR pass deactivated');
-        });
     }
 
     /**
