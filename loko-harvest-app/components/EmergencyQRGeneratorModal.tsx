@@ -237,7 +237,26 @@ export function EmergencyQRGeneratorModal({
                 </Badge>
                 <Badge className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2.5 py-1">
                   <Clock size={12} className="inline mr-1" />
-                  Expires: {new Date(passData.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  Expires: {(() => {
+                    if (!passData.expires_at) return "N/A";
+                    const expDate = new Date(passData.expires_at);
+                    const now = new Date();
+                    const diffMs = expDate.getTime() - now.getTime();
+                    const diffHours = Math.max(0, Math.round(diffMs / (1000 * 60 * 60)));
+                    const timeStr = expDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    const isToday = expDate.toDateString() === now.toDateString();
+                    const tomorrow = new Date();
+                    tomorrow.setDate(now.getDate() + 1);
+                    const isTomorrow = expDate.toDateString() === tomorrow.toDateString();
+
+                    let dayLabel = "";
+                    if (isToday) dayLabel = "Today";
+                    else if (isTomorrow) dayLabel = "Tomorrow";
+                    else dayLabel = expDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+                    return `${dayLabel} at ${timeStr} (${diffHours}h valid)`;
+                  })()}
                 </Badge>
               </div>
 
