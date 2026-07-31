@@ -494,7 +494,10 @@ class OrderFulfillmentService
                 }
             }
 
-            // 3. Delete status history, items, and order
+            // 3. Delete linked deliveries, proofs, pass orders, status history, items, and order
+            \App\Models\DeliveryProof::whereIn('delivery_id', $order->deliveries()->pluck('id'))->delete();
+            $order->deliveries()->delete();
+            \App\Models\DeliveryPassOrder::where('order_id', $order->id)->delete();
             $order->statusHistory()->delete();
             $order->items()->delete();
             $order->delete();
