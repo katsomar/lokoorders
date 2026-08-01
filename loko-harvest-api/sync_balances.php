@@ -47,7 +47,20 @@ foreach ($customers as $cust) {
         'current_balance' => $balance,
     ]);
 
-    echo "Customer: {$cust->name} => Invoiced: UGX " . number_format($totalInvoiced) . " | Paid: UGX " . number_format($totalPaid) . " | Balance: UGX " . number_format($balance) . PHP_EOL;
+    // Recalculate transaction running balances in chronological order
+    $txs = \App\Models\AccountTransaction::where('customer_id', $cust->id)
+        ->orderBy('transaction_date', 'asc')
+        ->orderBy('created_at', 'asc')
+        ->orderBy('id', 'asc')
+        ->get();
+
+    $running = 0.0;
+    foreach ($txs as $tx) {
+        $running += ((float)$tx->debit_amount - (float)$tx->credit_amount);
+        $tx->update(['running_balance' => $running]);
+    }
+
+    echo "Customer: {$cust->name} => Invoiced: UGX " . number_format($totalInvoiced) . " | Paid: UGX " . number_format($totalPaid) . " | Balance: UGX " . number_format($balance) . " | Recalculated " . $txs->count() . " txs." . PHP_EOL;
 }
 
 echo PHP_EOL . "SYNC COMPLETE!" . PHP_EOL;

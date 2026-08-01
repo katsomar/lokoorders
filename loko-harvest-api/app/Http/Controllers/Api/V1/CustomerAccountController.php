@@ -28,7 +28,7 @@ class CustomerAccountController extends Controller
             $customerIds = array_merge($customerIds, $branchIds);
         }
 
-        $transactions = AccountTransaction::with([
+        $query = AccountTransaction::with([
             'user', 
             'invoice.order.items.product', 
             'invoice.order.deliveries.proofs', 
@@ -46,12 +46,38 @@ class CustomerAccountController extends Controller
                                  ->orWhere('order_number', 'like', "%{$term}%");
                       });
             });
-        })
-        ->latest('transaction_date')
-        ->latest('id')
-        ->paginate($request->per_page ?? 20);
+        });
 
-        return $this->success($transactions);
+        // 1. Fetch transactions ordered ASCENDING (oldest to newest) to calculate cumulative running balance
+        $allTxs = $query->orderBy('transaction_date', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $running = 0.0;
+        foreach ($allTxs as $tx) {
+            $running += ((float)$tx->debit_amount - (float)$tx->credit_amount);
+            $tx->running_balance = $running;
+        }
+
+        // 2. Sort DESCENDING (newest first) for presentation
+        $sortedTxs = $allTxs->sort(function ($a, $b) {
+            $dateA = $a->transaction_date . ' ' . $a->created_at . ' ' . $a->id;
+            $dateB = $b->transaction_date . ' ' . $b->created_at . ' ' . $b->id;
+            return strcmp($dateB, $dateA);
+        })->values();
+
+        $perPage = (int) ($request->per_page ?? 20);
+        $page = (int) ($request->page ?? 1);
+        $paginated = new \Illuminate\Pagination\LengthAwarePaginator(
+            $sortedTxs->forPage($page, $perPage)->values(),
+            $sortedTxs->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return $this->success($paginated);
     }
 
     public function summary()
