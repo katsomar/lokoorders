@@ -24,7 +24,8 @@ import {
   X,
   Loader2,
   Camera,
-  FileText
+  FileText,
+  Building2
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
