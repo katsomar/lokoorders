@@ -84,11 +84,8 @@ class StoreTransferController extends Controller
             'notes' => 'nullable|string',
         ]);
 
+        // Allow all valid system products (including Good, D1, D2, D3, and Shell Eggs) to be transferred
         $product = \App\Models\Product::findOrFail($validated['product_id']);
-        $allowedCodes = ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-DRS', 'POU-LVE', 'BY-MNR'];
-        if (!in_array($product->code, $allowedCodes)) {
-            return $this->error('Only white plain trays, brown plain trays, cream plain trays, live chicken, dressed chicken, and manure can be transferred from production to sales stores.', 422);
-        }
 
         $supportsBatch = $this->productSupportsBatch($product);
         $batchRef = $supportsBatch ? ($validated['batch_reference'] ?? null) : null;
