@@ -230,7 +230,7 @@ const SearchBar = React.memo(({ onSearch }: { onSearch: (val: string) => void })
 });
 
 export default function ProductionStorePage() {
-  const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices">("inventory");
+  const [activeTab, setActiveTab] = useState<"inventory" | "stores" | "transfers" | "prices" | "damages">("inventory");
   const [stockItems, setStockItems] = useState<ProductionStockItem[]>([]);
   const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [interTransfers, setInterTransfers] = useState<any[]>([]);
@@ -1456,6 +1456,16 @@ export default function ProductionStorePage() {
             </span>
             {activeTab === "prices" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-brand-forest rounded-full" />}
           </button>
+          <button 
+            onClick={() => setActiveTab("damages")}
+            className={`pb-3 px-1 relative transition-colors cursor-pointer shrink-0 ${activeTab === "damages" ? "text-red-700 font-extrabold" : "text-gray-400 hover:text-red-700"}`}
+          >
+            <span className="flex items-center gap-1.5">
+              <AlertTriangle size={16} className={activeTab === "damages" ? "text-red-600" : "text-gray-400"} />
+              Damages & Stock Loss Audit ({damageAuditRows.length})
+            </span>
+            {activeTab === "damages" && <div className="absolute bottom-0 left-0 right-0 h-0.75 bg-red-600 rounded-full" />}
+          </button>
         </div>
 
         {/* TAB CONTENTS */}
@@ -1972,7 +1982,7 @@ export default function ProductionStorePage() {
             </Card>
 
           </div>
-        ) : (
+        ) : activeTab === "prices" ? (
           <div className="space-y-6">
             <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden bg-white">
               <CardHeader className="bg-gray-50/50 border-b border-brand-sage/40 px-6 py-4 flex flex-row items-center justify-between">
@@ -2122,7 +2132,140 @@ export default function ProductionStorePage() {
               </CardContent>
             </Card>
           </div>
-        )}
+        ) : activeTab === "damages" ? (
+          <Card className="border border-brand-sage/40 shadow-sm rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-red-950 via-red-900 to-red-950 text-white px-6 py-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <CardTitle className="text-lg font-black font-heading text-white flex items-center gap-2">
+                    <AlertTriangle size={20} className="text-brand-yellow" />
+                    Production Store Lifetime Damages & Stock Loss Audit Ledger
+                  </CardTitle>
+                  <CardDescription className="text-xs text-red-100/80 mt-1">
+                    Complete historical audit record of all egg damage declarations (Good, D1, D2, D3, Shell) from system initialization till date
+                  </CardDescription>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => setShowReportModal(true)}
+                    className="bg-brand-yellow hover:bg-brand-yellow/90 text-brand-forest font-black text-xs px-4 h-9 rounded-xl gap-1.5 cursor-pointer border-none shadow-sm"
+                  >
+                    <FileText size={15} />
+                    Export Audit Report
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-6 space-y-6 bg-white">
+              {/* Lifetime Summary KPI Banner */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-red-50/80 border border-red-200 p-4 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-red-700 tracking-wider block">Total Lifetime Damaged Stock</span>
+                  <div className="text-2xl font-black text-red-900 font-mono mt-1">
+                    {formatTotalQuantity(adjustmentsList.reduce((acc, item) => acc + Math.abs(parseFloat(item.quantity_change) || 0), 0))}
+                  </div>
+                  <span className="text-[10px] font-bold text-red-600 mt-1 block">Cumulative stock loss count</span>
+                </div>
+
+                <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider block">Total Lifetime Loss Valuation</span>
+                  <div className="text-2xl font-black text-amber-950 font-mono mt-1">
+                    UGX {adjustmentsList.reduce((acc, item) => {
+                      const qty = Math.abs(parseFloat(item.quantity_change) || 0);
+                      const price = parseFloat(item.product?.production_unit_price || item.product?.default_unit_price || 0);
+                      return acc + (qty * price);
+                    }, 0).toLocaleString()}
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-700 mt-1 block">Financial loss valuation</span>
+                </div>
+
+                <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl">
+                  <span className="text-[10px] font-black uppercase text-blue-800 tracking-wider block">Total Incident Submissions</span>
+                  <div className="text-2xl font-black text-blue-950 font-mono mt-1">
+                    {damageAuditRows.length} Submissions
+                  </div>
+                  <span className="text-[10px] font-bold text-blue-700 mt-1 block">Grouped incident declarations</span>
+                </div>
+              </div>
+
+              {/* Filter Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 p-3.5 rounded-2xl border border-gray-200">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                    <Building2 size={15} className="text-brand-forest" />
+                    <span>Filter Facility:</span>
+                  </div>
+                  <select
+                    value={selectedStoreFilter}
+                    onChange={(e) => setSelectedStoreFilter(e.target.value)}
+                    className="h-8.5 text-xs font-bold border border-gray-300 rounded-xl px-3 bg-white text-gray-800 cursor-pointer"
+                  >
+                    <option value="all">All Production Stores</option>
+                    {productionStores.map(store => (
+                      <option key={store.id} value={store.id}>{store.name}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={selectedBatchFilter}
+                    onChange={(e) => setSelectedBatchFilter(e.target.value)}
+                    className="h-8.5 text-xs font-bold border border-gray-300 rounded-xl px-3 bg-white text-gray-800 cursor-pointer"
+                  >
+                    <option value="all">All Batches</option>
+                    {getUniqueBatches().filter(b => b !== "all").map(batch => (
+                      <option key={batch} value={batch}>Batch: {batch}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="text-xs font-mono font-bold text-gray-500">
+                  Showing {damageAuditRows.length} Grouped Incident Submissions
+                </div>
+              </div>
+
+              {/* Grouped Single-Row Executive Table */}
+              <div className="border border-red-200 rounded-2xl overflow-hidden shadow-sm">
+                <Table>
+                  <TableHeader className="bg-red-900 text-white uppercase text-[9px] font-black tracking-wider">
+                    <TableRow className="border-b border-red-800 hover:bg-red-900">
+                      <TableHead className="text-white font-black py-3">Date & Time</TableHead>
+                      <TableHead className="text-white font-black py-3">Production Store</TableHead>
+                      <TableHead className="text-white font-black py-3">Base Product</TableHead>
+                      <TableHead className="text-white font-black py-3">Batch No</TableHead>
+                      <TableHead className="text-white font-black py-3">Damage Breakdown (Quality Classes)</TableHead>
+                      <TableHead className="text-white font-black py-3">Total Quantity</TableHead>
+                      <TableHead className="text-white font-black py-3">Total Loss Value</TableHead>
+                      <TableHead className="text-white font-black py-3">Declaration Details</TableHead>
+                      <TableHead className="text-white font-black py-3">Photo Proof</TableHead>
+                      <TableHead className="text-white font-black py-3">Signature</TableHead>
+                      <TableHead className="text-white font-black py-3">Recorded By</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-red-100 bg-white">
+                    {damageAuditRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={11} className="py-12 text-center text-gray-400 italic">
+                          No damage declarations recorded in the system.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      damageAuditRows.map((row, idx) => (
+                        <TableRow key={idx} className={idx % 2 === 0 ? "bg-white hover:bg-red-50/30" : "bg-red-50/15 hover:bg-red-50/30"}>
+                          {row.map((cell, cIdx) => (
+                            <TableCell key={cIdx} className="py-2.5 px-3 text-xs font-medium border-b border-red-50">
+                              {cell}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
       </div>
 
