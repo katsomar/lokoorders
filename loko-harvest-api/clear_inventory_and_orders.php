@@ -13,6 +13,7 @@ echo "Clearing Production Store, Sales Store, Orders, Deliveries, Invoices, Paym
 Schema::disableForeignKeyConstraints();
 
 $tables = [
+    'daily_store_snapshots',
     'payment_invoice_allocations',
     'account_transactions',
     'payments',
@@ -25,11 +26,13 @@ $tables = [
     'orders',
     'sales_store_movements',
     'sales_store_stocks',
+    'sales_store_stock',
     'packaging_conversions',
     'store_transfers',
     'store_adjustments',
     'production_store_movements',
     'production_store_stocks',
+    'production_store_stock',
     'farm_intakes',
 ];
 
