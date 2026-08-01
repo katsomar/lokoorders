@@ -105,7 +105,22 @@ export default function SalesStorePage() {
     return `${year}-${month}-${day}`;
   });
 
+  const isConvertedPackProduct = (code: string) => {
+    if (!code) return false;
+    return code.includes("-15P") || 
+           code.includes("-06P") || 
+           code.includes("-SGL") || 
+           code.includes("-FAM") || 
+           code.includes("-DBL") || 
+           code.includes("-TPL") || 
+           code.includes("-TRYS") ||
+           code.includes("-PACK") ||
+           code.includes("-RETAIL");
+  };
+
   const isBulkProduct = (code: string) => {
+    if (!code) return false;
+    if (isConvertedPackProduct(code)) return false;
     return code.startsWith('EGG-') || ['POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
   };
 
@@ -163,9 +178,7 @@ export default function SalesStorePage() {
     batchItems.forEach(item => {
       const code = item.code || "";
       const isEgg = code.startsWith("EGG-");
-      const isBulk = isBulkProduct(code) && (
-        !code.includes("-15P") && !code.includes("-06P") && !code.includes("-FAM") && !code.includes("-DBL") && !code.includes("-TPL")
-      );
+      const isBulk = isBulkProduct(code);
 
       let baseCategory = item.category || "cream";
       let type: "good" | "d1" | "d2" | "d3" | "shell" | "other" = "good";
@@ -209,7 +222,10 @@ export default function SalesStorePage() {
       if (isBulk) {
         groupsMap[key].bulkSubItems[type] = item;
       } else {
-        groupsMap[key].convertedItems.push(item);
+        // Prevent duplicate converted items in the same row group
+        if (!groupsMap[key].convertedItems.some(i => i.id === item.id)) {
+          groupsMap[key].convertedItems.push(item);
+        }
       }
     });
 
@@ -613,6 +629,23 @@ export default function SalesStorePage() {
       if (!groups[batch]) groups[batch] = [];
       groups[batch].push(item);
     });
+
+    // Associate converted pack items in "N/A" batch with active batch groups for the same store & category
+    const naItems = groups["N/A"] || [];
+    const convertedNaItems = naItems.filter(i => isConvertedPackProduct(i.code));
+
+    if (convertedNaItems.length > 0) {
+      Object.keys(groups).forEach(batchKey => {
+        if (batchKey !== "N/A") {
+          convertedNaItems.forEach(cItem => {
+            if (!groups[batchKey].some(i => i.id === cItem.id)) {
+              groups[batchKey].push(cItem);
+            }
+          });
+        }
+      });
+    }
+
     return groups;
   };
 
