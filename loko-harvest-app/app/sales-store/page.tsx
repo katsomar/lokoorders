@@ -251,7 +251,7 @@ export default function SalesStorePage() {
 
   useEffect(() => {
     fetchAdjustments();
-  }, [selectedDateFilter]);
+  }, [selectedDate]);
 
   const [showDamageDetailsModal, setShowDamageDetailsModal] = useState(false);
   const [damageDetailsLoading, setDamageDetailsLoading] = useState(false);
@@ -1097,7 +1097,7 @@ export default function SalesStorePage() {
     const filtered = adjustmentsList.filter(item => {
       const matchesStore = selectedStoreFilter === "all" || item.sales_store_id === selectedStoreFilter;
       const matchesBatch = selectedBatchFilter === "all" || (item.batch_reference || 'N/A') === selectedBatchFilter;
-      const matchesDate = !selectedDateFilter || (item.adjustment_date === selectedDateFilter || item.created_at?.startsWith(selectedDateFilter));
+      const matchesDate = !selectedDate || (item.adjustment_date === selectedDate || item.created_at?.startsWith(selectedDate));
       return matchesStore && matchesBatch && matchesDate;
     });
 
@@ -1149,7 +1149,7 @@ export default function SalesStorePage() {
         <span key={`sdrec-${item.id}`} className="font-semibold text-gray-700 text-[9px]">{item.creator?.name || 'HQ Admin'}</span>
       ];
     });
-  }, [adjustmentsList, selectedStoreFilter, selectedBatchFilter, selectedDateFilter]);
+  }, [adjustmentsList, selectedStoreFilter, selectedBatchFilter, selectedDate]);
 
   return (
     <DashboardLayout>
