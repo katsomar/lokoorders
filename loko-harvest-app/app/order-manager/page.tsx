@@ -1124,7 +1124,7 @@ export default function OrderManagerDashboard() {
           formData.append("batch_reference", adjustBatch);
           formData.append("product_id", targetProd.id);
           formData.append("quantity", itemToSub.qty.toString());
-          formData.append("reason", `${adjustReason} [Damage Class: ${itemToSub.catKey.toUpperCase()}]`);
+          formData.append("reason", adjustReason);
           formData.append("signature_data", signatureData);
           
           if (adjustImageFile) {

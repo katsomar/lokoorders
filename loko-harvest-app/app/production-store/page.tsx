@@ -1196,15 +1196,19 @@ export default function ProductionStorePage() {
         typeLabel = "Good Quality Loss";
       }
 
+      const rawName = item.product?.name || 'N/A';
+      const cleanProdName = rawName.replace(/\s*-\s*(Damage\s*\d*(st|nd|rd)?\s*Class|Shell\s*Eggs)/gi, '');
+      const cleanReasonStr = (item.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim() || 'N/A';
+
       return [
         <span key={`dtime-${item.id}`} className="font-mono text-[9px] text-gray-600 font-semibold">{new Date(item.created_at).toLocaleString()}</span>,
         <span key={`dstore-${item.id}`} className="font-bold text-gray-800">{item.production_store?.name || 'N/A'}</span>,
-        <span key={`dprod-${item.id}`} className="font-extrabold text-brand-forest">{item.product?.name} <span className="font-mono text-gray-400 font-bold text-[8.5px]">({item.product?.code})</span></span>,
+        <span key={`dprod-${item.id}`} className="font-extrabold text-brand-forest">{cleanProdName} <span className="font-mono text-gray-400 font-bold text-[8.5px]">({item.product?.code})</span></span>,
         <span key={`dbatch-${item.id}`} className="font-mono text-gray-500 font-bold">{item.batch_reference || 'N/A'}</span>,
         <Badge key={`dtype-${item.id}`} className={`${badgeClass} text-[8px] font-black uppercase px-2 py-0.5 border shadow-2xs`}>{typeLabel}</Badge>,
         <span key={`dqty-${item.id}`} className="font-mono font-black text-red-700">{formattedQty}</span>,
         <span key={`dval-${item.id}`} className="font-mono font-black text-red-800">UGX {lossVal.toLocaleString()}</span>,
-        <span key={`dreason-${item.id}`} className="text-gray-700 font-medium text-[9px] max-w-[200px] inline-block">{item.reason || 'N/A'}</span>,
+        <span key={`dreason-${item.id}`} className="text-gray-700 font-medium text-[9px] max-w-[200px] inline-block">{cleanReasonStr}</span>,
         item.image_url ? (
           <a key={`dimg-${item.id}`} href={item.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
             <img src={item.image_url} alt="Proof" className="h-10 w-10 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
