@@ -2233,6 +2233,7 @@ export default function OrderManagerDashboard() {
                       {/* Driver Display Line */}
                       {(() => {
                         const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit" || d.status === "on_route");
+                        const activePass = order.emergency_pass || order.active_emergency_pass;
                         let assignedDriverName = null;
                         
                         if (activeDelivery?.delivery_notes) {
