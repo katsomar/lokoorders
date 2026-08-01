@@ -239,20 +239,7 @@ export default function ProductionStorePage() {
   const [editingEggPrices, setEditingEggPrices] = useState<{ [id: string]: string }>({});
   
   const { user } = useAuth();
-  const [adjustmentsList, setAdjustmentsList] = useState<any[]>([]);
-
-  const fetchAdjustments = async () => {
-    try {
-      const res = await api.get('/store-adjustments', { params: { store_type: 'production', per_page: -1 } });
-      setAdjustmentsList(res.data?.data?.data || res.data?.data || []);
-    } catch (err) {
-      console.error("Failed to fetch production store adjustments", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchAdjustments();
-  }, [selectedDate]);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadingIntakes, setLoadingIntakes] = useState(true);
@@ -268,6 +255,21 @@ export default function ProductionStorePage() {
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   });
+
+  const [adjustmentsList, setAdjustmentsList] = useState<any[]>([]);
+
+  const fetchAdjustments = async () => {
+    try {
+      const res = await api.get('/store-adjustments', { params: { store_type: 'production', per_page: -1 } });
+      setAdjustmentsList(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch production store adjustments", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdjustments();
+  }, [selectedDate]);
 
   // Transfer to Sales state
   const [showTransferModal, setShowTransferModal] = useState(false);

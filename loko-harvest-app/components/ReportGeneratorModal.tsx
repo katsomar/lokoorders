@@ -42,6 +42,7 @@ export interface ReportGeneratorModalProps {
   // Optional Second Table (e.g. Sales Store Converted Packaged Stock)
   secondTableTitle?: string;
   secondTableHeaders?: string[];
+  secondTableRows?: (string | number | React.ReactNode)[][];
   // Optional Damage & Stock Loss Audit Table
   damageAuditTitle?: string;
   damageAuditHeaders?: string[];
