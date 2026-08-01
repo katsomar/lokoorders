@@ -1160,6 +1160,7 @@ export default function ProductionStorePage() {
   }, [groupedStock, filteredStock]);
 
   const damageAuditRows = React.useMemo(() => {
+    // 1. Filter raw adjustments by active store, batch, date filters
     const filtered = adjustmentsList.filter(item => {
       const matchesStore = selectedStoreFilter === "all" || item.production_store_id === selectedStoreFilter;
       const matchesBatch = selectedBatchFilter === "all" || (item.batch_reference || 'N/A') === selectedBatchFilter;
@@ -1167,56 +1168,100 @@ export default function ProductionStorePage() {
       return matchesStore && matchesBatch && matchesDate;
     });
 
-    return filtered.map((item) => {
-      const qty = Math.abs(parseFloat(item.quantity_change) || 0);
-      const unit = item.product?.unit_of_measure === 'trays' ? 'trays' : 'units';
-      const formattedQty = formatQuantityGlobal(qty, unit);
-      
-      const price = parseFloat(item.product?.production_unit_price || item.product?.default_unit_price || 0);
-      const lossVal = qty * price;
-
-      const code = item.product?.code || '';
-      let badgeClass = "bg-red-100 text-red-900 border-red-300";
-      let typeLabel = "Damaged / Stock Loss";
-
-      if (code.endsWith("-D1")) {
-        badgeClass = "bg-amber-100 text-amber-900 border-amber-300";
-        typeLabel = "D1 - Hairline Cracks";
-      } else if (code.endsWith("-D2")) {
-        badgeClass = "bg-orange-100 text-orange-900 border-orange-300";
-        typeLabel = "D2 - Medium Cracks";
-      } else if (code.endsWith("-D3")) {
-        badgeClass = "bg-gray-100 text-gray-800 border-gray-300";
-        typeLabel = "D3 - Heavy Cracks";
-      } else if (code.endsWith("-SHL")) {
-        badgeClass = "bg-blue-100 text-blue-900 border-blue-300";
-        typeLabel = "Shell Eggs / Soft";
-      } else if (code.startsWith("EGG-")) {
-        badgeClass = "bg-green-100 text-green-900 border-green-300";
-        typeLabel = "Good Quality Loss";
+    // 2. Group items belonging to the exact same damage report submission
+    const groupsMap = new Map<string, any[]>();
+    filtered.forEach(item => {
+      const timeKey = item.created_at ? new Date(item.created_at).toISOString().substring(0, 16) : item.adjustment_date;
+      const key = `${item.image_url || item.signature_url || timeKey}_${item.created_by}_${item.production_store_id}_${item.batch_reference}`;
+      if (!groupsMap.has(key)) {
+        groupsMap.set(key, []);
       }
+      groupsMap.get(key)!.push(item);
+    });
 
-      const rawName = item.product?.name || 'N/A';
-      const cleanProdName = rawName.replace(/\s*-\s*(Damage\s*\d*(st|nd|rd)?\s*Class|Shell\s*Eggs)/gi, '');
-      const cleanReasonStr = (item.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim() || 'N/A';
+    // 3. Map grouped submissions to 1 single table row each
+    return Array.from(groupsMap.values()).map((groupItems, groupIdx) => {
+      const firstItem = groupItems[0];
+      const rawName = firstItem.product?.name || 'N/A';
+      const baseProdName = rawName.replace(/\s*-\s*(Damage\s*\d*(st|nd|rd)?\s*Class|Shell\s*Eggs)/gi, '');
+      const cleanReasonStr = (firstItem.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim() || 'N/A';
+
+      let totalQty = 0;
+      let totalLossVal = 0;
+
+      const subCategoryRows = groupItems.map(item => {
+        const qty = Math.abs(parseFloat(item.quantity_change) || 0);
+        totalQty += qty;
+        
+        const unit = item.product?.unit_of_measure === 'trays' ? 'trays' : 'units';
+        const formattedQty = formatQuantityGlobal(qty, unit);
+        
+        const price = parseFloat(item.product?.production_unit_price || item.product?.default_unit_price || 0);
+        const lossVal = qty * price;
+        totalLossVal += lossVal;
+
+        const code = item.product?.code || '';
+        let badgeClass = "bg-red-100 text-red-900 border-red-300";
+        let typeLabel = "Damaged Loss";
+
+        if (code.endsWith("-D1")) {
+          badgeClass = "bg-amber-100 text-amber-900 border-amber-300";
+          typeLabel = "D1 Hairline";
+        } else if (code.endsWith("-D2")) {
+          badgeClass = "bg-orange-100 text-orange-900 border-orange-300";
+          typeLabel = "D2 Medium";
+        } else if (code.endsWith("-D3")) {
+          badgeClass = "bg-gray-100 text-gray-800 border-gray-300";
+          typeLabel = "D3 Heavy";
+        } else if (code.endsWith("-SHL")) {
+          badgeClass = "bg-blue-100 text-blue-900 border-blue-300";
+          typeLabel = "Shell Eggs";
+        } else if (code.startsWith("EGG-")) {
+          badgeClass = "bg-emerald-100 text-emerald-900 border-emerald-300";
+          typeLabel = "Good Trays";
+        }
+
+        return {
+          id: item.id,
+          typeLabel,
+          badgeClass,
+          formattedQty,
+          lossVal
+        };
+      });
 
       return [
-        <span key={`dtime-${item.id}`} className="font-mono text-[9px] text-gray-600 font-semibold">{new Date(item.created_at).toLocaleString()}</span>,
-        <span key={`dstore-${item.id}`} className="font-bold text-gray-800">{item.production_store?.name || 'N/A'}</span>,
-        <span key={`dprod-${item.id}`} className="font-extrabold text-brand-forest">{cleanProdName} <span className="font-mono text-gray-400 font-bold text-[8.5px]">({item.product?.code})</span></span>,
-        <span key={`dbatch-${item.id}`} className="font-mono text-gray-500 font-bold">{item.batch_reference || 'N/A'}</span>,
-        <Badge key={`dtype-${item.id}`} className={`${badgeClass} text-[8px] font-black uppercase px-2 py-0.5 border shadow-2xs`}>{typeLabel}</Badge>,
-        <span key={`dqty-${item.id}`} className="font-mono font-black text-red-700">{formattedQty}</span>,
-        <span key={`dval-${item.id}`} className="font-mono font-black text-red-800">UGX {lossVal.toLocaleString()}</span>,
-        <span key={`dreason-${item.id}`} className="text-gray-700 font-medium text-[9px] max-w-[200px] inline-block">{cleanReasonStr}</span>,
-        item.image_url ? (
-          <a key={`dimg-${item.id}`} href={item.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
-            <img src={item.image_url} alt="Proof" className="h-10 w-10 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
+        <span key={`gtime-${groupIdx}`} className="font-mono text-[9px] text-gray-600 font-semibold">{new Date(firstItem.created_at).toLocaleString()}</span>,
+        <span key={`gstore-${groupIdx}`} className="font-bold text-gray-800">{firstItem.production_store?.name || 'N/A'}</span>,
+        <span key={`gprod-${groupIdx}`} className="font-extrabold text-brand-forest">{baseProdName} <span className="font-mono text-gray-400 font-bold text-[8.5px]">({firstItem.product?.code?.split('-').slice(0, 2).join('-')})</span></span>,
+        <span key={`gbatch-${groupIdx}`} className="font-mono text-gray-500 font-bold">{firstItem.batch_reference || 'N/A'}</span>,
+        <div key={`gcat-${groupIdx}`} className="space-y-1 py-1 min-w-[170px]">
+          {subCategoryRows.map(sub => (
+            <div key={sub.id} className="flex items-center justify-between gap-2 text-[8px]">
+              <Badge className={`${sub.badgeClass} text-[7.5px] font-black px-1.5 py-0.2 uppercase`}>{sub.typeLabel}</Badge>
+              <span className="font-mono font-black text-gray-800">{sub.formattedQty}</span>
+              <span className="font-mono text-gray-500 text-[8px]">(UGX {sub.lossVal.toLocaleString()})</span>
+            </div>
+          ))}
+        </div>,
+        <span key={`gtotalqty-${groupIdx}`} className="font-mono font-black text-red-700 text-[10px]">{formatTotalQuantity(totalQty)}</span>,
+        <span key={`gtotalloss-${groupIdx}`} className="font-mono font-black text-red-800 text-[10px]">UGX {totalLossVal.toLocaleString()}</span>,
+        <span key={`greason-${groupIdx}`} className="text-gray-700 font-medium text-[9px] max-w-[150px] inline-block">{cleanReasonStr}</span>,
+        firstItem.image_url ? (
+          <a key={`gimg-${groupIdx}`} href={firstItem.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
+            <img src={firstItem.image_url} alt="Proof" className="h-11 w-11 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
           </a>
         ) : (
-          <span key={`dimg-${item.id}`} className="text-gray-400 text-[8.5px] italic">No Photo</span>
+          <span key={`gimg-${groupIdx}`} className="text-gray-400 text-[8.5px] italic">No Photo</span>
         ),
-        <span key={`drec-${item.id}`} className="font-semibold text-gray-700 text-[9px]">{item.creator?.name || 'HQ Admin'}</span>
+        firstItem.signature_url ? (
+          <a key={`gsig-${groupIdx}`} href={firstItem.signature_url} target="_blank" rel="noopener noreferrer" title="Click to view signature">
+            <img src={firstItem.signature_url} alt="Signature" className="h-9 w-14 object-contain rounded bg-gray-50 border border-gray-200 p-0.5" />
+          </a>
+        ) : (
+          <span key={`gsig-${groupIdx}`} className="text-gray-400 text-[8.5px] italic">No Signature</span>
+        ),
+        <span key={`grec-${groupIdx}`} className="font-semibold text-gray-700 text-[9px]">{firstItem.creator?.name || 'HQ Admin'}</span>
       ];
     });
   }, [adjustmentsList, selectedStoreFilter, selectedBatchFilter, selectedDate]);
@@ -2680,13 +2725,14 @@ export default function ProductionStorePage() {
         damageAuditHeaders={[
           "Date & Time",
           "Production Store",
-          "Bulk Product",
+          "Base Product",
           "Batch No",
-          "Damage Class / Type",
-          "Quantity Damaged",
-          "Monetary Loss Value",
-          "Reason / Declaration Details",
+          "Damage Breakdown (Quality Classes)",
+          "Total Quantity",
+          "Total Loss Value",
+          "Declaration Details",
           "Photo Proof",
+          "Signature",
           "Recorded By"
         ]}
         damageAuditRows={damageAuditRows}
