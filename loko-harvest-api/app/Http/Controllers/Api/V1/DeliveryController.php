@@ -545,21 +545,43 @@ class DeliveryController extends Controller
                 }
             }
 
-            $delivery->update([
-                'status' => 'delivered',
-                'delivered_at' => $validated['delivered_at'] ?? now(),
-            ]);
+            $existingNotes = [];
+            if ($delivery->delivery_notes) {
+                try {
+                    $existingNotes = is_array($delivery->delivery_notes) 
+                        ? $delivery->delivery_notes 
+                        : (json_decode($delivery->delivery_notes, true) ?? []);
+                } catch (\Throwable $e) {}
+            }
+            if (!is_array($existingNotes)) $existingNotes = [];
 
-            \App\Models\DeliveryProof::create([
-                'delivery_id' => $delivery->id,
+            $updatedNotes = array_merge($existingNotes, [
                 'recipient_name' => $validated['recipient_name'],
                 'recipient_phone' => $validated['recipient_phone'] ?? null,
-                'photo_path' => $proofPath ?? 'proofs/default.png',
-                'signature_path' => $sigPath ?? 'signatures/default.png',
-                'delivered_at' => $validated['delivered_at'] ?? now(),
-                'gps_latitude' => 0.3476,
-                'gps_longitude' => 32.5825,
+                'notes' => $validated['notes'] ?? null,
             ]);
+
+            $deliveredAt = $validated['delivered_at'] ?? now();
+
+            $delivery->update([
+                'status' => 'delivered',
+                'delivered_at' => $deliveredAt,
+                'delivery_notes' => json_encode($updatedNotes),
+            ]);
+
+            $userId = auth()->id() ?? (\App\Models\User::first()?->id ?? '4132bf95-06b4-4705-be84-c1973727e14e');
+
+            \App\Models\DeliveryProof::updateOrCreate(
+                ['delivery_id' => $delivery->id],
+                [
+                    'photo_url' => $proofPath ?? 'delivery_proofs/documents/default.jpg',
+                    'signature_path' => $sigPath,
+                    'gps_latitude' => 0.3476,
+                    'gps_longitude' => 32.5825,
+                    'confirmed_at' => $deliveredAt,
+                    'confirmed_by' => $userId,
+                ]
+            );
 
             $order = $delivery->order;
             if ($order) {
