@@ -1112,7 +1112,7 @@ export default function OrderManagerDashboard() {
           else if (itemToSub.catKey === "d3") targetCode = `${baseCode}-D3`;
           else if (itemToSub.catKey === "shell") targetCode = `${baseCode}-SHL`;
 
-          const targetProd = products.find(p => p.code === targetCode) || selectedProd;
+          const targetProd = adjustProducts.find((p: any) => p.code === targetCode) || selectedProd;
 
           const formData = new FormData();
           formData.append("store_type", adjustStoreType);
