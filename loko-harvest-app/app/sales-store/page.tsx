@@ -181,6 +181,10 @@ export default function SalesStorePage() {
       const isBulk = isBulkProduct(code);
 
       let baseCategory = item.category || "cream";
+      if (code.startsWith("EGG-WHT")) baseCategory = "white";
+      else if (code.startsWith("EGG-CRM")) baseCategory = "cream";
+      else if (code.startsWith("EGG-BRN")) baseCategory = "brown";
+
       let type: "good" | "d1" | "d2" | "d3" | "shell" | "other" = "good";
 
       if (isEgg && isBulk) {
@@ -221,8 +225,10 @@ export default function SalesStorePage() {
 
       if (isBulk) {
         groupsMap[key].bulkSubItems[type] = item;
-      } else {
-        // Prevent duplicate converted items in the same row group
+      }
+      
+      // Include any item that is a converted pack OR has received conversions_in into convertedItems
+      if (!isBulk || item.conversions_in > 0) {
         if (!groupsMap[key].convertedItems.some(i => i.id === item.id)) {
           groupsMap[key].convertedItems.push(item);
         }
@@ -239,11 +245,27 @@ export default function SalesStorePage() {
   };
 
   const formatQuantity = (qty: number, unit: string) => {
+    if (!qty || Math.abs(qty) < 0.0001) {
+      if (unit.toLowerCase() === "trays") return "0 Trays & 0 Eggs";
+      return `0 ${unit}`;
+    }
+
     if (unit.toLowerCase() === "trays") {
-      const trays = Math.floor(qty);
-      const decimal = qty - trays;
+      const isNegative = qty < 0;
+      const absQty = Math.abs(qty);
+      const trays = Math.floor(absQty);
+      const decimal = absQty - trays;
       const eggs = Math.round(decimal * 30);
-      return `${trays} Trays & ${eggs} Eggs`;
+      
+      let finalTrays = trays;
+      let finalEggs = eggs;
+      if (finalEggs === 30) {
+        finalTrays += 1;
+        finalEggs = 0;
+      }
+
+      const sign = isNegative ? "-" : "";
+      return `${sign}${finalTrays} Trays & ${finalEggs} Eggs`;
     }
     return `${qty.toLocaleString()} ${unit}`;
   };
@@ -632,7 +654,7 @@ export default function SalesStorePage() {
 
     // Associate converted pack items in "N/A" batch with active batch groups for the same store & category
     const naItems = groups["N/A"] || [];
-    const convertedNaItems = naItems.filter(i => isConvertedPackProduct(i.code));
+    const convertedNaItems = naItems.filter(i => isConvertedPackProduct(i.code) || i.conversions_in > 0);
 
     if (convertedNaItems.length > 0) {
       Object.keys(groups).forEach(batchKey => {
@@ -1674,7 +1696,7 @@ export default function SalesStorePage() {
                                   const isLow = primaryBulk.status === 'low' || primaryBulk.closing_stock < 50 || (convertedItem && (convertedItem.status === 'low' || convertedItem.closing_stock < 50));
 
                                   return (
-                                    <TableRow key={convertedItem ? convertedItem.id : (bulkItem ? bulkItem.id : `row-${group.storeId}-${i}`)} className={`${borderClass} hover:bg-brand-sage/5 transition-colors align-top`}>
+                                    <TableRow key={`subrow-${group.storeId}-${group.baseProductCode}-${group.batchReference || 'nobatch'}-${i}`} className={`${borderClass} hover:bg-brand-sage/5 transition-colors align-top`}>
                                       {/* Core Details */}
                                       {isFirstSubRow && (
                                         <>
