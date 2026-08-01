@@ -488,6 +488,12 @@ class DeliveryController extends Controller
                     $order->deductStockForRedispatch();
                 }
 
+                if (!$order->invoice()->exists()) {
+                    try {
+                        $order->commitOrder("Stock Out Auto-Commit");
+                    } catch (\Throwable $e) {}
+                }
+
                 $order->update(['status' => 'dispatched']);
                 $order->statusHistory()->create([
                     'status' => 'dispatched',
@@ -581,6 +587,11 @@ class DeliveryController extends Controller
 
             $order = $delivery->order;
             if ($order) {
+                if (!$order->invoice()->exists()) {
+                    try {
+                        $order->commitOrder("Stock Out Proof Fulfillment");
+                    } catch (\Throwable $e) {}
+                }
                 $order->update(['status' => 'delivered']);
                 $order->statusHistory()->create([
                     'status' => 'delivered',
