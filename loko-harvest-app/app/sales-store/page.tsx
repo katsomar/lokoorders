@@ -582,6 +582,8 @@ export default function SalesStorePage() {
       return (trays * trayPrice) + (eggs * eggPrice);
     }
     return exits * item.unit_price;
+  };
+
   const getStockItemValuationSold = (item: any) => {
     const sold = item.sold_quantity || 0;
     if (item.unit.toLowerCase() === "trays") {
@@ -1033,8 +1035,8 @@ export default function SalesStorePage() {
 
       catItems.forEach((item, idx) => {
         const isFirst = idx === 0;
-        const worthTaken = getStockItemValuationTaken(item);
-        const worthClosing = getStockItemValuation(item);
+        const worthTaken = Number(getStockItemValuationTaken(item) || 0);
+        const worthClosing = Number(getStockItemValuation(item) || 0);
 
         rows.push([
           isFirst ? <Badge key={`cgrp-${catGroup.key}`} className={`${catGroup.badge} text-[8px] font-black px-2 py-0.5 uppercase shadow-xs`}>{catGroup.label}</Badge> : "",
