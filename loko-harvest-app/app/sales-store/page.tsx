@@ -582,6 +582,17 @@ export default function SalesStorePage() {
       return (trays * trayPrice) + (eggs * eggPrice);
     }
     return exits * item.unit_price;
+  const getStockItemValuationSold = (item: any) => {
+    const sold = item.sold_quantity || 0;
+    if (item.unit.toLowerCase() === "trays") {
+      const trays = Math.floor(sold);
+      const decimal = sold - trays;
+      const eggs = Math.round(decimal * 30);
+      const trayPrice = item.unit_price;
+      const eggPrice = item.egg_unit_price || (trayPrice / 30);
+      return (trays * trayPrice) + (eggs * eggPrice);
+    }
+    return sold * item.unit_price;
   };
 
   const calculateTotalValuation = () => {
@@ -596,7 +607,7 @@ export default function SalesStorePage() {
 
   const calculateOutgoingValue = () => {
     return getFilteredStock().reduce((acc, item) => {
-      return acc + getStockItemValuationTaken(item);
+      return acc + getStockItemValuationSold(item);
     }, 0);
   };
 
