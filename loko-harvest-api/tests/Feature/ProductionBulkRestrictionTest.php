@@ -124,21 +124,35 @@ class ProductionBulkRestrictionTest extends TestCase
         $response->assertStatus(201);
     }
 
-    public function test_cannot_transfer_restricted_product_to_sales()
+    public function test_can_transfer_damaged_or_shell_egg_products_to_sales()
     {
+        $d1Product = Product::firstOrCreate(
+            ['code' => 'EGG-CRM-D1'],
+            [
+                'name' => 'Cream Eggs - D1 Class',
+                'category' => 'eggs',
+                'unit_of_measure' => 'trays',
+                'default_unit_price' => 10000,
+            ]
+        );
+
+        ProductionStoreStock::create([
+            'production_store_id' => $this->prodStore->id,
+            'product_id' => $d1Product->id,
+            'current_quantity' => 20,
+            'valuation_price' => 10000,
+            'updated_by' => $this->user->id,
+        ]);
+
         $response = $this->actingAs($this->user, 'sanctum')
             ->postJson('/api/v1/store-transfers', [
                 'production_store_id' => $this->prodStore->id,
                 'sales_store_id' => $this->salesStore->id,
-                'product_id' => $this->restrictedProduct->id,
-                'quantity' => 10,
+                'product_id' => $d1Product->id,
+                'quantity' => 5,
                 'transfer_date' => '2026-06-26',
             ]);
 
-        $response->assertStatus(422);
-        $response->assertJsonFragment([
-            'success' => false,
-            'message' => 'Only white plain trays, brown plain trays, cream plain trays, live chicken, dressed chicken, and manure can be transferred from production to sales stores.',
-        ]);
+        $response->assertStatus(201);
     }
 }
