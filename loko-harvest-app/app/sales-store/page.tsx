@@ -106,7 +106,7 @@ export default function SalesStorePage() {
   });
 
   const isBulkProduct = (code: string) => {
-    return ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
+    return code.startsWith('EGG-') || ['POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
   };
 
   interface RowGroup {

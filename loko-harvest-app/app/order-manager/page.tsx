@@ -1845,7 +1845,7 @@ export default function OrderManagerDashboard() {
 
   const getBulkProductsForConversion = () => {
     const isBulkProduct = (code: string) => {
-      return ['EGG-WHT', 'EGG-BRN', 'EGG-CRM', 'POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
+      return code.startsWith('EGG-') || ['POU-LVE', 'POU-DRS', 'BY-MNR'].includes(code);
     };
 
     const aggregated: Record<string, { product_id: string; product: string; code: string; quantity: number; unit: string }> = {};
