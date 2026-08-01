@@ -3318,9 +3318,16 @@ export default function OrderManagerDashboard() {
 
                   <Card className="border border-brand-sage/40 shadow-xl rounded-2xl bg-white">
                     <CardContent className="p-4 space-y-4">
-                      <div className="flex items-center gap-2 pb-2 border-b border-brand-sage/20">
-                        <span className="h-2 w-2 rounded-full bg-brand-forest" />
-                        <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-forest">Request Stock Transfer</h4>
+                      <div className="flex items-center justify-between pb-2 border-b border-brand-sage/20">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-brand-forest" />
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-forest">Request Stock Transfer</h4>
+                        </div>
+                        <Link href="/sales-store/transfers">
+                          <Button className="bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-black text-[10px] h-7 px-2.5 rounded-lg border-none cursor-pointer">
+                            ⚡ Multi-Category Transfer Panel →
+                          </Button>
+                        </Link>
                       </div>
                       <form onSubmit={handleTransferSubmit} className="space-y-3.5 text-xs">
                         {/* Source Production Store */}

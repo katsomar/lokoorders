@@ -1306,18 +1306,14 @@ export default function ProductionStorePage() {
           
           <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-2.5 items-center w-full sm:w-auto">
             <UITooltip content="Transfer bulk egg stock to Sales Store for packaging into retail trays and packs" side="bottom">
-              <Button 
-                onClick={() => {
-                  if (productionStores.length > 0) {
-                    setSalesTransferStoreId(productionStores[0].id);
-                  }
-                  setShowTransferModal(true);
-                }}
-                className="flex-1 sm:flex-initial gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-3 sm:px-4 rounded-xl text-xs cursor-pointer justify-center"
-              >
-                <ArrowRightLeft size={15} />
-                <span>Transfer to Sales</span>
-              </Button>
+              <Link href="/sales-store/transfers" className="flex-1 sm:flex-initial">
+                <Button 
+                  className="w-full gap-1.5 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-extrabold border-none shadow-sm h-9.5 px-3 sm:px-4 rounded-xl text-xs cursor-pointer justify-center"
+                >
+                  <ArrowRightLeft size={15} />
+                  <span>Transfer to Sales</span>
+                </Button>
+              </Link>
             </UITooltip>
             <Link href="/production-store/activity" className="flex-1 sm:flex-initial">
               <Button className="w-full gap-1.5 bg-transparent border border-brand-forest text-brand-forest hover:bg-brand-sage/20 font-extrabold h-9.5 px-3 sm:px-4 rounded-xl text-xs shadow-sm cursor-pointer justify-center">
