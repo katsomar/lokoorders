@@ -238,6 +238,21 @@ export default function SalesStorePage() {
   const [adjustDrawing, setAdjustDrawing] = useState(false);
 
   // Damages reference details modal
+  const [adjustmentsList, setAdjustmentsList] = useState<any[]>([]);
+
+  const fetchAdjustments = async () => {
+    try {
+      const res = await api.get('/store-adjustments', { params: { store_type: 'sales', per_page: -1 } });
+      setAdjustmentsList(res.data?.data?.data || res.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch sales store adjustments", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdjustments();
+  }, [selectedDateFilter]);
+
   const [showDamageDetailsModal, setShowDamageDetailsModal] = useState(false);
   const [damageDetailsLoading, setDamageDetailsLoading] = useState(false);
   const [damageDetailsList, setDamageDetailsList] = useState<any[]>([]);
@@ -1077,6 +1092,64 @@ export default function SalesStorePage() {
 
     return rows;
   }, [stockItems, selectedStoreFilter, selectedBatchFilter]);
+
+  const damageAuditRows = React.useMemo(() => {
+    const filtered = adjustmentsList.filter(item => {
+      const matchesStore = selectedStoreFilter === "all" || item.sales_store_id === selectedStoreFilter;
+      const matchesBatch = selectedBatchFilter === "all" || (item.batch_reference || 'N/A') === selectedBatchFilter;
+      const matchesDate = !selectedDateFilter || (item.adjustment_date === selectedDateFilter || item.created_at?.startsWith(selectedDateFilter));
+      return matchesStore && matchesBatch && matchesDate;
+    });
+
+    return filtered.map((item) => {
+      const qty = Math.abs(parseFloat(item.quantity_change) || 0);
+      const unit = item.product?.unit_of_measure === 'trays' ? 'trays' : 'units';
+      const formattedQty = formatQuantity(qty, unit);
+      
+      const price = parseFloat(item.product?.sales_unit_price || item.product?.default_unit_price || 0);
+      const lossVal = qty * price;
+
+      const code = item.product?.code || '';
+      let badgeClass = "bg-red-100 text-red-900 border-red-300";
+      let typeLabel = "Damaged / Stock Loss";
+
+      if (code.endsWith("-D1")) {
+        badgeClass = "bg-amber-100 text-amber-900 border-amber-300";
+        typeLabel = "D1 - Hairline Cracks";
+      } else if (code.endsWith("-D2")) {
+        badgeClass = "bg-orange-100 text-orange-900 border-orange-300";
+        typeLabel = "D2 - Medium Cracks";
+      } else if (code.endsWith("-D3")) {
+        badgeClass = "bg-gray-100 text-gray-800 border-gray-300";
+        typeLabel = "D3 - Heavy Cracks";
+      } else if (code.endsWith("-SHL")) {
+        badgeClass = "bg-blue-100 text-blue-900 border-blue-300";
+        typeLabel = "Shell Eggs / Soft";
+      } else if (code.startsWith("EGG-")) {
+        badgeClass = "bg-green-100 text-green-900 border-green-300";
+        typeLabel = "Good Quality Loss";
+      }
+
+      return [
+        <span key={`sdtime-${item.id}`} className="font-mono text-[9px] text-gray-600 font-semibold">{new Date(item.created_at).toLocaleString()}</span>,
+        <span key={`sdstore-${item.id}`} className="font-bold text-gray-800">{item.sales_store?.name || 'N/A'}</span>,
+        <span key={`sdprod-${item.id}`} className="font-extrabold text-brand-forest">{item.product?.name} <span className="font-mono text-gray-400 font-bold text-[8.5px]">({item.product?.code})</span></span>,
+        <span key={`sdbatch-${item.id}`} className="font-mono text-gray-500 font-bold">{item.batch_reference || 'N/A'}</span>,
+        <Badge key={`sdtype-${item.id}`} className={`${badgeClass} text-[8px] font-black uppercase px-2 py-0.5 border shadow-2xs`}>{typeLabel}</Badge>,
+        <span key={`sdqty-${item.id}`} className="font-mono font-black text-red-700">{formattedQty}</span>,
+        <span key={`sdval-${item.id}`} className="font-mono font-black text-red-800">UGX {lossVal.toLocaleString()}</span>,
+        <span key={`sdreason-${item.id}`} className="text-gray-700 font-medium text-[9px] max-w-[200px] inline-block">{item.reason || 'N/A'}</span>,
+        item.image_url ? (
+          <a key={`sdimg-${item.id}`} href={item.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
+            <img src={item.image_url} alt="Proof" className="h-10 w-10 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
+          </a>
+        ) : (
+          <span key={`sdimg-${item.id}`} className="text-gray-400 text-[8.5px] italic">No Photo</span>
+        ),
+        <span key={`sdrec-${item.id}`} className="font-semibold text-gray-700 text-[9px]">{item.creator?.name || 'HQ Admin'}</span>
+      ];
+    });
+  }, [adjustmentsList, selectedStoreFilter, selectedBatchFilter, selectedDateFilter]);
 
   return (
     <DashboardLayout>
@@ -2794,6 +2867,20 @@ export default function SalesStorePage() {
           "Worth Closing"
         ]}
         secondTableRows={reportSecondTableRows}
+        damageAuditTitle="Detailed Sales Store Damage & Loss Audit Ledger"
+        damageAuditHeaders={[
+          "Date & Time",
+          "Sales Store",
+          "Product Item",
+          "Batch Ref",
+          "Damage Class / Type",
+          "Quantity Damaged",
+          "Monetary Loss Value",
+          "Reason / Declaration Details",
+          "Photo Proof",
+          "Recorded By"
+        ]}
+        damageAuditRows={damageAuditRows}
       />
 
       </div>

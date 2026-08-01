@@ -42,7 +42,10 @@ export interface ReportGeneratorModalProps {
   // Optional Second Table (e.g. Sales Store Converted Packaged Stock)
   secondTableTitle?: string;
   secondTableHeaders?: string[];
-  secondTableRows?: (string | number | React.ReactNode)[][];
+  // Optional Damage & Stock Loss Audit Table
+  damageAuditTitle?: string;
+  damageAuditHeaders?: string[];
+  damageAuditRows?: (string | number | React.ReactNode)[][];
   // Optional date filtering for Orders
   startDate?: string;
   endDate?: string;
@@ -74,6 +77,9 @@ export default function ReportGeneratorModal({
   secondTableTitle,
   secondTableHeaders,
   secondTableRows,
+  damageAuditTitle,
+  damageAuditHeaders,
+  damageAuditRows,
   startDate,
   endDate,
   onDateChange,
@@ -503,6 +509,59 @@ export default function ReportGeneratorModal({
                         >
                           {row.map((cell, cellIdx) => (
                             <td key={cellIdx} className="px-2 py-1.5 text-gray-800 font-medium border-b border-gray-100 whitespace-nowrap">
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Optional Damage & Stock Loss Breakdown Table */}
+          {damageAuditHeaders && damageAuditRows && (
+            <div className="space-y-3 pt-6 border-t border-brand-sage/40">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-[11px] font-black uppercase tracking-wider text-red-900 flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+                    {damageAuditTitle || `Detailed Damage & Stock Loss Audit Ledger (${damageAuditRows.length} Line Items)`}
+                  </h4>
+                </div>
+                <span className="text-[10px] text-red-700 font-bold font-mono bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200">
+                  Damage Declarations, Types, Reasons & Photo Evidence Audit
+                </span>
+              </div>
+
+              <div className="border border-red-200 rounded-2xl overflow-hidden shadow-sm print:rounded-none print:shadow-none print:border-gray-300 print:overflow-visible">
+                <table className="w-full text-left text-[9.5px] border-collapse">
+                  <thead className="bg-red-900 text-white uppercase text-[8.5px] font-black tracking-wider">
+                    <tr>
+                      {damageAuditHeaders.map((head, idx) => (
+                        <th key={idx} className="px-2.5 py-2.5 border-b border-red-800 whitespace-nowrap">
+                          {head}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-red-100 bg-white">
+                    {damageAuditRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={damageAuditHeaders.length} className="px-4 py-8 text-center text-gray-400 italic">
+                          No damages or stock loss declarations recorded for the selected report filters.
+                        </td>
+                      </tr>
+                    ) : (
+                      damageAuditRows.map((row, rowIdx) => (
+                        <tr 
+                          key={rowIdx} 
+                          className={rowIdx % 2 === 0 ? "bg-white hover:bg-red-50/40" : "bg-red-50/20 hover:bg-red-50/40"}
+                        >
+                          {row.map((cell, cellIdx) => (
+                            <td key={cellIdx} className="px-2.5 py-2 text-gray-800 font-medium border-b border-red-50 whitespace-normal">
                               {cell}
                             </td>
                           ))}
