@@ -70,6 +70,8 @@ Route::prefix('v1')->middleware('throttle:60,1')->group(function () {
         Route::get('/deliveries', [App\Http\Controllers\Api\V1\DeliveryController::class, 'index']);
         Route::get('/deliveries/{id}', [App\Http\Controllers\Api\V1\DeliveryController::class, 'show']);
         Route::post('/deliveries/assign', [App\Http\Controllers\Api\V1\DeliveryController::class, 'assign']);
+        Route::post('/deliveries/stock-out', [App\Http\Controllers\Api\V1\DeliveryController::class, 'stockOut']);
+        Route::post('/deliveries/{id}/complete-stock-out', [App\Http\Controllers\Api\V1\DeliveryController::class, 'completeStockOut']);
         Route::post('/deliveries/{id}/confirm', [App\Http\Controllers\Api\V1\DeliveryController::class, 'confirm']);
         Route::post('/deliveries/{id}/transit', [App\Http\Controllers\Api\V1\DeliveryController::class, 'transit']);
         Route::post('/deliveries/{id}/undone', [App\Http\Controllers\Api\V1\DeliveryController::class, 'undone']);

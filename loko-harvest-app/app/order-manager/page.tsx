@@ -144,6 +144,156 @@ export default function OrderManagerDashboard() {
   const [productSearchText, setProductSearchText] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
 
+  // Stock Out Modal States
+  const [showStockOutModal, setShowStockOutModal] = useState(false);
+  const [stockOutOrderIds, setStockOutOrderIds] = useState<string[]>([]);
+  const [stockOutDriverName, setStockOutDriverName] = useState("");
+  const [stockOutDriverPhone, setStockOutDriverPhone] = useState("");
+  const [stockOutVehicleInfo, setStockOutVehicleInfo] = useState("");
+  const [stockOutNotes, setStockOutNotes] = useState("");
+  const [isSubmittingStockOut, setIsSubmittingStockOut] = useState(false);
+
+  // Complete Stock Out / Proof Modal States
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completeOrderObj, setCompleteOrderObj] = useState<any | null>(null);
+  const [completeRecipientName, setCompleteRecipientName] = useState("");
+  const [completeRecipientPhone, setCompleteRecipientPhone] = useState("");
+  const [completeProofFile, setCompleteProofFile] = useState<File | null>(null);
+  const [completeProofPreview, setCompleteProofPreview] = useState<string | null>(null);
+  const [completeSignatureData, setCompleteSignatureData] = useState<string>("");
+  const [isSubmittingComplete, setIsSubmittingComplete] = useState(false);
+  const completeSigCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [isDrawingSig, setIsDrawingSig] = useState(false);
+
+  // Handle Stock Out submission
+  const handleStockOutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockOutDriverName.trim() || !stockOutDriverPhone.trim()) {
+      alert("Please enter the Rider/Driver Name and Phone Contact.");
+      return;
+    }
+    if (stockOutOrderIds.length === 0) {
+      alert("No orders selected for stock out.");
+      return;
+    }
+
+    setIsSubmittingStockOut(true);
+    try {
+      await api.post("/deliveries/stock-out", {
+        order_ids: stockOutOrderIds,
+        driver_name: stockOutDriverName.trim(),
+        driver_phone: stockOutDriverPhone.trim(),
+        vehicle_info: stockOutVehicleInfo.trim() || "Boda / Delivery Vehicle",
+        notes: stockOutNotes.trim(),
+      });
+
+      alert(`Successfully stocked out ${stockOutOrderIds.length} order(s)!`);
+      setShowStockOutModal(false);
+      setSelectedOrderIds([]);
+      setStockOutOrderIds([]);
+      setStockOutDriverName("");
+      setStockOutDriverPhone("");
+      setStockOutVehicleInfo("");
+      setStockOutNotes("");
+      await fetchOrders(true);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to submit stock out.");
+    } finally {
+      setIsSubmittingStockOut(false);
+    }
+  };
+
+  // Handle Complete Delivery Submission
+  const handleCompleteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!completeOrderObj) return;
+    if (!completeRecipientName.trim()) {
+      alert("Please enter the Recipient Name.");
+      return;
+    }
+
+    const deliveryId = completeOrderObj.deliveries?.[0]?.id || completeOrderObj.id;
+    if (!deliveryId) {
+      alert("Invalid delivery reference.");
+      return;
+    }
+
+    setIsSubmittingComplete(true);
+    try {
+      const formData = new FormData();
+      formData.append("recipient_name", completeRecipientName.trim());
+      if (completeRecipientPhone) formData.append("recipient_phone", completeRecipientPhone.trim());
+      if (completeProofFile) formData.append("proof_image_file", completeProofFile);
+      if (completeSignatureData) formData.append("signature_data", completeSignatureData);
+
+      await api.post(`/deliveries/${deliveryId}/complete-stock-out`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      alert("Delivery marked as completed successfully!");
+      setShowCompleteModal(false);
+      setCompleteOrderObj(null);
+      setCompleteRecipientName("");
+      setCompleteRecipientPhone("");
+      setCompleteProofFile(null);
+      setCompleteProofPreview(null);
+      setCompleteSignatureData("");
+      await fetchOrders(true);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to complete delivery.");
+    } finally {
+      setIsSubmittingComplete(false);
+    }
+  };
+
+  const startSigDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    setIsDrawingSig(true);
+    const canvas = completeSigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+  };
+
+  const drawSig = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawingSig) return;
+    const canvas = completeSigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.strokeStyle = "#132A1C";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.stroke();
+  };
+
+  const stopSigDrawing = () => {
+    if (!isDrawingSig) return;
+    setIsDrawingSig(false);
+    const canvas = completeSigCanvasRef.current;
+    if (canvas) {
+      setCompleteSignatureData(canvas.toDataURL("image/png"));
+    }
+  };
+
+  const clearSigCanvas = () => {
+    const canvas = completeSigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    setCompleteSignatureData("");
+  };
+
   // Stock transfers states
   const [transferProductionStores, setTransferProductionStores] = useState<any[]>([]);
   const [transferSalesStores, setTransferSalesStores] = useState<any[]>([]);
@@ -1879,6 +2029,37 @@ export default function OrderManagerDashboard() {
                   </button>
                 </div>
 
+                {/* STICKY BATCH STOCK OUT ACTION BAR */}
+                {selectedOrderIds.length > 0 && (
+                  <div className="bg-brand-forest text-white p-3 rounded-2xl shadow-xl border border-brand-yellow flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-brand-yellow text-brand-forest px-2.5 py-1 rounded-lg">
+                        {selectedOrderIds.length} Selected
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderIds([])}
+                        className="text-xs font-bold text-gray-300 hover:text-white px-2 py-1 rounded-lg hover:bg-white/10"
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStockOutOrderIds(selectedOrderIds);
+                          setShowStockOutModal(true);
+                        }}
+                        className="bg-brand-yellow hover:bg-[#E08C00] text-brand-forest font-black text-xs px-3.5 py-1.5 rounded-xl flex items-center gap-1 shadow-md active:scale-95 transition-all"
+                      >
+                        <Truck size={14} />
+                        <span>Stock Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Search Bar */}
                 <div className="relative">
                   <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -2134,60 +2315,46 @@ export default function OrderManagerDashboard() {
                       })()}
 
                       {/* Action Buttons depending on status */}
-                      <div className="flex gap-2.5 pt-1">
-                        {order.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => triggerStatusTransition(order, "processing")}
-                              className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
-                            >
-                              <Check size={14} />
-                              Process Order
-                            </button>
-                            <button
-                              onClick={() => openEditModal(order)}
-                              className="h-9 px-3.5 bg-amber-50 hover:bg-amber-100 text-brand-amber border border-brand-amber/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                              title="Adjust Order quantities"
-                            >
-                              <Edit2 size={14} />
-                              Adjust
-                            </button>
-                          </>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {["pending", "processing", "ready_for_dispatch", "undone"].includes(order.status) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStockOutOrderIds([order.id]);
+                              setShowStockOutModal(true);
+                            }}
+                            className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                          >
+                            <Truck size={14} />
+                            Stock Out
+                          </button>
                         )}
 
-                        {order.status === "processing" && (
+                        {["dispatched", "on_route"].includes(order.status) && (
                           <button
-                            onClick={() => triggerStatusTransition(order, "ready_for_dispatch")}
-                            className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                            type="button"
+                            onClick={() => {
+                              setCompleteOrderObj(order);
+                              setCompleteRecipientName(order.customer?.contact_person || order.customer?.name || "");
+                              setCompleteRecipientPhone(order.customer?.phone_primary || "");
+                              setShowCompleteModal(true);
+                            }}
+                            className="flex-1 h-9 bg-green-600 hover:bg-green-700 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
                           >
                             <CheckCircle2 size={14} />
-                            Ready for Dispatch
+                            Complete & Upload Proof
                           </button>
                         )}
 
-                        {order.status === "ready_for_dispatch" && (
+                        {order.status === "pending" && (
                           <button
-                            onClick={() => handleSetOffClick(order)}
-                            className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                            type="button"
+                            onClick={() => openEditModal(order)}
+                            className="h-9 px-3 bg-amber-50 hover:bg-amber-100 text-brand-amber border border-brand-amber/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform"
+                            title="Adjust Order quantities"
                           >
-                            <Truck size={14} />
-                            Set Off (Dispatched)
-                          </button>
-                        )}
-
-                        {order.status === "undone" && (
-                          <button
-                            onClick={() => {
-                              setDriverModalOrder(order);
-                              setDriverModalOrders([]);
-                              setSelectedDriverIdForAssign("");
-                              setIsDriverModalForDispatch(false);
-                              setShowDriverModal(true);
-                            }}
-                            className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
-                          >
-                            <Truck size={14} />
-                            Re-dispatch Order
+                            <Edit2 size={14} />
+                            Adjust
                           </button>
                         )}
                       </div>
@@ -4316,6 +4483,267 @@ export default function OrderManagerDashboard() {
           </div>
         </div>
       )}
+      {/* STOCK OUT DISPATCH MODAL */}
+      {showStockOutModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-brand-sage/30 animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center pb-4 border-b border-brand-sage/20">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-2xl bg-brand-yellow/20 flex items-center justify-center text-brand-forest">
+                  <Truck size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-brand-forest">Stock Out Dispatch</h3>
+                  <p className="text-xs text-gray-500 font-medium">Assign rider details & mark orders dispatched</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowStockOutModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleStockOutSubmit} className="space-y-4 pt-4">
+              {/* Summary of Selected Orders */}
+              <div className="bg-[#132A1C]/5 p-3 rounded-2xl border border-brand-sage/30">
+                <p className="text-[10px] font-black text-brand-forest uppercase tracking-wider mb-1">
+                  Selected Orders ({stockOutOrderIds.length})
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                  {stockOutOrderIds.map(id => {
+                    const ord = orders.find(o => o.id === id);
+                    return (
+                      <span key={id} className="text-xs font-mono font-bold bg-white text-brand-forest px-2.5 py-1 rounded-lg border border-brand-sage/30">
+                        {ord?.order_number || id.substring(0, 8)} {ord?.customer?.name ? `(${ord.customer.name})` : ''}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Driver / Rider Full Name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Rider / Driver Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="e.g. Musisi John"
+                  value={stockOutDriverName}
+                  onChange={(e) => setStockOutDriverName(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Phone Contact */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Phone Contact Number <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="e.g. 0781234567"
+                  value={stockOutDriverPhone}
+                  onChange={(e) => setStockOutDriverPhone(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Vehicle / Plate Info */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Vehicle / Boda Number Plate
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Boda UFG 482K or Probox UAT 907Y"
+                  value={stockOutVehicleInfo}
+                  onChange={(e) => setStockOutVehicleInfo(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Dispatch Notes */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Internal Notes (Optional)
+                </label>
+                <Input
+                  type="text"
+                  placeholder="Any special dispatch notes..."
+                  value={stockOutNotes}
+                  onChange={(e) => setStockOutNotes(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/20">
+                <Button
+                  type="button"
+                  onClick={() => setShowStockOutModal(false)}
+                  className="bg-transparent hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-xl h-10 px-4 border border-gray-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  isLoading={isSubmittingStockOut}
+                  className="bg-brand-forest hover:bg-brand-forest/90 text-white font-black text-xs rounded-xl h-10 px-5"
+                >
+                  <Truck size={14} className="mr-1" />
+                  Confirm Stock Out
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* COMPLETE DELIVERY & UPLOAD PROOF MODAL */}
+      {showCompleteModal && completeOrderObj && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-brand-sage/30 my-8 animate-in fade-in zoom-in-95">
+            <div className="flex justify-between items-center pb-4 border-b border-brand-sage/20">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-2xl bg-green-100 flex items-center justify-center text-green-700">
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-brand-forest">Complete Order & Upload Proof</h3>
+                  <p className="text-xs text-gray-500 font-medium">
+                    Order Ref: <span className="font-mono font-bold text-brand-forest">{completeOrderObj.order_number}</span>
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowCompleteModal(false);
+                  setCompleteOrderObj(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCompleteSubmit} className="space-y-4 pt-4">
+              {/* Recipient Name */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Recipient Name <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  required
+                  placeholder="e.g. John Doe / Receiving Officer"
+                  value={completeRecipientName}
+                  onChange={(e) => setCompleteRecipientName(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Recipient Phone */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Recipient Phone Contact
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. 0781234567"
+                  value={completeRecipientPhone}
+                  onChange={(e) => setCompleteRecipientPhone(e.target.value)}
+                  className="h-10 text-xs rounded-xl font-medium"
+                />
+              </div>
+
+              {/* Upload Proof Image File / Take Photo */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Upload Photo Proof / Document (File or Camera)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setCompleteProofFile(file);
+                      setCompleteProofPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                  className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-sage/20 file:text-brand-forest hover:file:bg-brand-sage/30 cursor-pointer"
+                />
+                {completeProofPreview && (
+                  <div className="mt-2 relative rounded-xl overflow-hidden border border-brand-sage/30 h-36 bg-gray-50 flex items-center justify-center">
+                    <img src={completeProofPreview} alt="Proof preview" className="h-full object-contain" />
+                  </div>
+                )}
+              </div>
+
+              {/* Digital Signature Canvas */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-bold text-gray-700">
+                    Recipient Signature
+                  </label>
+                  <button
+                    type="button"
+                    onClick={clearSigCanvas}
+                    className="text-[10px] font-bold text-gray-500 hover:text-red-600"
+                  >
+                    Clear Signature
+                  </button>
+                </div>
+                <div className="border-2 border-dashed border-gray-300 rounded-2xl bg-gray-50 overflow-hidden">
+                  <canvas
+                    ref={completeSigCanvasRef}
+                    width={400}
+                    height={120}
+                    onMouseDown={startSigDrawing}
+                    onMouseMove={drawSig}
+                    onMouseUp={stopSigDrawing}
+                    onMouseLeave={stopSigDrawing}
+                    onTouchStart={startSigDrawing}
+                    onTouchMove={drawSig}
+                    onTouchEnd={stopSigDrawing}
+                    className="w-full h-30 touch-none cursor-crosshair bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-brand-sage/20">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setShowCompleteModal(false);
+                    setCompleteOrderObj(null);
+                  }}
+                  className="bg-transparent hover:bg-gray-50 text-gray-600 text-xs font-bold rounded-xl h-10 px-4 border border-gray-300"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  isLoading={isSubmittingComplete}
+                  className="bg-green-600 hover:bg-green-700 text-white font-black text-xs rounded-xl h-10 px-5"
+                >
+                  <CheckCircle2 size={14} className="mr-1" />
+                  Complete & Mark Delivered
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Emergency QR Code Generator Modal */}
       <EmergencyQRGeneratorModal
         isOpen={showEmergencyQRModal}

@@ -425,4 +425,158 @@ class DeliveryController extends Controller
             return $this->success($delivery, 'Delivery successfully marked as undone and stock returned.');
         });
     }
+
+    /**
+     * Stock Out multiple orders at once with assigned rider details.
+     */
+    public function stockOut(Request $request)
+    {
+        $validated = $request->validate([
+            'order_ids' => 'required|array|min:1',
+            'order_ids.*' => 'required|string|exists:orders,id',
+            'driver_name' => 'required|string|min:2|max:100',
+            'driver_phone' => 'required|string|min:5|max:20',
+            'vehicle_info' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $driverName = trim($validated['driver_name']);
+        $driverPhone = trim($validated['driver_phone']);
+        $vehicleInfo = trim($validated['vehicle_info'] ?? 'Boda / Delivery Vehicle');
+        $notes = $validated['notes'] ?? 'Dispatched via Stock Out';
+
+        $fallbackDriverId = \App\Models\Driver::first()?->id;
+
+        return DB::transaction(function () use ($validated, $driverName, $driverPhone, $vehicleInfo, $notes, $fallbackDriverId) {
+            $deliveries = [];
+            foreach ($validated['order_ids'] as $orderId) {
+                $order = Order::findOrFail($orderId);
+                $wasUndone = ($order->status === 'undone');
+
+                // Find or create delivery record
+                $delivery = Delivery::where('order_id', $orderId)->latest()->first();
+
+                $notesPayload = json_encode([
+                    'emergency_driver' => $driverName,
+                    'emergency_phone' => $driverPhone,
+                    'vehicle_info' => $vehicleInfo,
+                    'stock_out' => true,
+                    'notes' => $notes,
+                ]);
+
+                if (!$delivery) {
+                    $deliveryData = [
+                        'order_id' => $orderId,
+                        'assigned_by' => auth()->id() ?? (\App\Models\User::first()?->id ?? 1),
+                        'status' => 'dispatched',
+                        'dispatched_at' => now(),
+                        'delivery_notes' => $notesPayload,
+                    ];
+                    if ($fallbackDriverId) {
+                        $deliveryData['driver_id'] = $fallbackDriverId;
+                    }
+                    $delivery = Delivery::create($deliveryData);
+                } else {
+                    $deliveryData = [
+                        'status' => 'dispatched',
+                        'dispatched_at' => now(),
+                        'delivery_notes' => $notesPayload,
+                    ];
+                    if ($fallbackDriverId && empty($delivery->driver_id)) {
+                        $deliveryData['driver_id'] = $fallbackDriverId;
+                    }
+                    $delivery->update($deliveryData);
+                }
+
+                if ($wasUndone) {
+                    $order->deductStockForRedispatch();
+                }
+
+                $order->update(['status' => 'dispatched']);
+                $order->statusHistory()->create([
+                    'status' => 'dispatched',
+                    'changed_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? 1),
+                    'notes' => "Stock Out dispatch to {$driverName} ({$driverPhone} • {$vehicleInfo})",
+                ]);
+
+                $deliveries[] = $delivery;
+            }
+
+            try {
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+                \App\Services\RealtimePublisher::publish('order.updated');
+            } catch (\Throwable $th) {}
+
+            return $this->success($deliveries, count($deliveries) . ' order(s) successfully stocked out and dispatched.');
+        });
+    }
+
+    /**
+     * Direct proof upload and completion for Stock Out deliveries.
+     */
+    public function completeStockOut(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'recipient_name' => 'required|string|min:2|max:100',
+            'recipient_phone' => 'nullable|string',
+            'delivered_at' => 'nullable|date',
+            'notes' => 'nullable|string|max:500',
+            'proof_image_file' => 'nullable|file|image|max:8192',
+            'signature_data' => 'nullable|string',
+        ]);
+
+        $delivery = Delivery::findOrFail($id);
+
+        return DB::transaction(function () use ($delivery, $validated, $request) {
+            $proofPath = null;
+            if ($request->hasFile('proof_image_file')) {
+                $proofPath = $request->file('proof_image_file')->store('proofs', 'public');
+            }
+
+            $sigPath = null;
+            if (!empty($validated['signature_data'])) {
+                $sigData = $validated['signature_data'];
+                if (preg_match('/^data:image\/(\w+);base64,/', $sigData)) {
+                    $sigData = substr($sigData, strpos($sigData, ',') + 1);
+                    $sigData = base64_decode($sigData);
+                    $sigFileName = 'signatures/sig_' . time() . '_' . \Illuminate\Support\Str::random(6) . '.png';
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($sigFileName, $sigData);
+                    $sigPath = $sigFileName;
+                }
+            }
+
+            $delivery->update([
+                'status' => 'delivered',
+                'delivered_at' => $validated['delivered_at'] ?? now(),
+            ]);
+
+            \App\Models\DeliveryProof::create([
+                'delivery_id' => $delivery->id,
+                'recipient_name' => $validated['recipient_name'],
+                'recipient_phone' => $validated['recipient_phone'] ?? null,
+                'photo_path' => $proofPath ?? 'proofs/default.png',
+                'signature_path' => $sigPath ?? 'signatures/default.png',
+                'delivered_at' => $validated['delivered_at'] ?? now(),
+                'gps_latitude' => 0.3476,
+                'gps_longitude' => 32.5825,
+            ]);
+
+            $order = $delivery->order;
+            if ($order) {
+                $order->update(['status' => 'delivered']);
+                $order->statusHistory()->create([
+                    'status' => 'delivered',
+                    'changed_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? 1),
+                    'notes' => 'Delivery completed & proof uploaded (Received by: ' . $validated['recipient_name'] . ')',
+                ]);
+            }
+
+            try {
+                \App\Services\RealtimePublisher::publish('delivery.updated');
+                \App\Services\RealtimePublisher::publish('order.updated');
+            } catch (\Throwable $th) {}
+
+            return $this->success($delivery, 'Delivery completed successfully.');
+        });
+    }
 }
