@@ -2311,6 +2311,19 @@ export default function OrderManagerDashboard() {
                                   <QrCode size={11} />
                                   <span>QR Pass</span>
                                 </button>
+                                <button
+                                  onClick={() => {
+                                    setStockOutOrderIds([order.id]);
+                                    setStockOutDriverName("");
+                                    setStockOutDriverPhone("");
+                                    setStockOutVehicleInfo("");
+                                    setShowStockOutModal(true);
+                                  }}
+                                  className="text-[10px] font-black text-white bg-brand-forest hover:bg-brand-forest/90 border border-brand-forest px-2 py-0.5 rounded-md flex items-center gap-1 uppercase transition-colors"
+                                >
+                                  <Truck size={11} />
+                                  <span>Stock Out</span>
+                                </button>
                               </div>
                             </div>
                           );
@@ -2319,18 +2332,60 @@ export default function OrderManagerDashboard() {
                       })()}
 
                       {/* Action Buttons depending on status */}
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {["pending", "processing", "ready_for_dispatch", "undone"].includes(order.status) && (
+                      <div className="flex gap-2.5 pt-1">
+                        {order.status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => triggerStatusTransition(order, "processing")}
+                              className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                            >
+                              <Check size={14} />
+                              Process Order
+                            </button>
+                            <button
+                              onClick={() => openEditModal(order)}
+                              className="h-9 px-3.5 bg-amber-50 hover:bg-amber-100 text-brand-amber border border-brand-amber/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform"
+                              title="Adjust Order quantities"
+                            >
+                              <Edit2 size={14} />
+                              Adjust
+                            </button>
+                          </>
+                        )}
+
+                        {order.status === "processing" && (
                           <button
-                            type="button"
-                            onClick={() => {
-                              setStockOutOrderIds([order.id]);
-                              setShowStockOutModal(true);
-                            }}
-                            className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                            onClick={() => triggerStatusTransition(order, "ready_for_dispatch")}
+                            className="flex-1 h-9 bg-brand-forest hover:bg-brand-forest/90 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                          >
+                            <CheckCircle2 size={14} />
+                            Ready for Dispatch
+                          </button>
+                        )}
+
+                        {order.status === "ready_for_dispatch" && (
+                          <button
+                            onClick={() => handleSetOffClick(order)}
+                            className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
                           >
                             <Truck size={14} />
-                            Stock Out
+                            Set Off (Dispatched)
+                          </button>
+                        )}
+
+                        {order.status === "undone" && (
+                          <button
+                            onClick={() => {
+                              setDriverModalOrder(order);
+                              setDriverModalOrders([]);
+                              setSelectedDriverIdForAssign("");
+                              setIsDriverModalForDispatch(false);
+                              setShowDriverModal(true);
+                            }}
+                            className="flex-1 h-9 bg-brand-yellow hover:bg-[#E08C00] text-brand-forest rounded-xl font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-sm active:scale-95 transition-transform"
+                          >
+                            <Truck size={14} />
+                            Re-dispatch Order
                           </button>
                         )}
 
@@ -2347,18 +2402,6 @@ export default function OrderManagerDashboard() {
                           >
                             <CheckCircle2 size={14} />
                             Complete & Upload Proof
-                          </button>
-                        )}
-
-                        {order.status === "pending" && (
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(order)}
-                            className="h-9 px-3 bg-amber-50 hover:bg-amber-100 text-brand-amber border border-brand-amber/30 rounded-xl font-bold text-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 transition-transform"
-                            title="Adjust Order quantities"
-                          >
-                            <Edit2 size={14} />
-                            Adjust
                           </button>
                         )}
                       </div>
