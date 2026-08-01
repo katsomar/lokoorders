@@ -683,16 +683,19 @@ export default function OrderDetailPage() {
                               <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">Delivered By (Driver)</p>
                               <p className="text-xs font-bold text-gray-800 mt-0.5">
                                 {(() => {
-                                  let driverName = deliveryWithProof?.driver?.full_name || deliveryWithProof?.driver?.name;
-                                  if (!driverName && deliveryWithProof?.delivery_notes) {
+                                  let driverName = null;
+                                  if (deliveryWithProof?.delivery_notes) {
                                     try {
                                       const notes = typeof deliveryWithProof.delivery_notes === "string" ? JSON.parse(deliveryWithProof.delivery_notes) : deliveryWithProof.delivery_notes;
                                       if (notes?.emergency_driver) {
-                                        driverName = `${notes.emergency_driver} (${notes.emergency_phone || "Emergency Boda"})`;
+                                        driverName = `${notes.emergency_driver} (${notes.emergency_phone || "Stock Out"})`;
                                       }
                                     } catch (e) {}
                                   }
-                                  return driverName || "Emergency Rider / Driver";
+                                  if (!driverName) {
+                                    driverName = deliveryWithProof?.driver?.full_name || deliveryWithProof?.driver?.name;
+                                  }
+                                  return driverName || "Stock Out Rider / Driver";
                                 })()}
                               </p>
                               {deliveryWithProof?.delivered_at && (

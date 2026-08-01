@@ -2233,16 +2233,19 @@ export default function OrderManagerDashboard() {
                       {/* Driver Display Line */}
                       {(() => {
                         const activeDelivery = order.deliveries?.find((d: any) => d.status === "assigned" || d.status === "in_transit" || d.status === "on_route");
-                        const activePass = order.emergency_pass || order.active_emergency_pass;
-                        let assignedDriverName = activeDelivery?.driver?.full_name || activeDelivery?.driver?.name;
+                        let assignedDriverName = null;
                         
-                        if (!assignedDriverName && activeDelivery?.delivery_notes) {
+                        if (activeDelivery?.delivery_notes) {
                           try {
                             const notes = typeof activeDelivery.delivery_notes === "string" ? JSON.parse(activeDelivery.delivery_notes) : activeDelivery.delivery_notes;
                             if (notes?.emergency_driver) {
-                              assignedDriverName = `${notes.emergency_driver} (${notes.emergency_phone || "Emergency Boda"})`;
+                              assignedDriverName = `${notes.emergency_driver} (${notes.emergency_phone || "Stock Out"})`;
                             }
                           } catch (e) {}
+                        }
+
+                        if (!assignedDriverName) {
+                          assignedDriverName = activeDelivery?.driver?.full_name || activeDelivery?.driver?.name;
                         }
 
                         if (!assignedDriverName && activePass) {

@@ -642,21 +642,26 @@ export default function DeliveriesPage() {
                           </TableCell>
                           <TableCell>
                             {(() => {
-                              let driverName = delivery.driver?.full_name || delivery.driver?.name;
-                              let vehicleText = delivery.driver?.vehicle
-                                ? `${delivery.driver.vehicle.registration_number} (${delivery.driver.vehicle.make} ${delivery.driver.vehicle.model || ''})`
-                                : null;
+                              let driverName = null;
+                              let vehicleText = null;
                               let isEmergency = false;
 
-                              if (!driverName && delivery.delivery_notes) {
+                              if (delivery.delivery_notes) {
                                 try {
                                   const notes = typeof delivery.delivery_notes === "string" ? JSON.parse(delivery.delivery_notes) : delivery.delivery_notes;
                                   if (notes?.emergency_driver) {
                                     driverName = notes.emergency_driver;
-                                    vehicleText = `${notes.vehicle_info || 'Emergency Boda'} (${notes.emergency_phone || ''})`;
+                                    vehicleText = `${notes.vehicle_info || 'Stock Out Boda'} (${notes.emergency_phone || ''})`;
                                     isEmergency = true;
                                   }
                                 } catch (e) {}
+                              }
+
+                              if (!driverName) {
+                                driverName = delivery.driver?.full_name || delivery.driver?.name;
+                                vehicleText = delivery.driver?.vehicle
+                                  ? `${delivery.driver.vehicle.registration_number} (${delivery.driver.vehicle.make} ${delivery.driver.vehicle.model || ''})`
+                                  : null;
                               }
 
                               return (

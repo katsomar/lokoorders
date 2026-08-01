@@ -447,7 +447,7 @@ class DeliveryController extends Controller
 
         $fallbackDriverId = \App\Models\Driver::first()?->id;
 
-        return DB::transaction(function () use ($validated, $driverName, $driverPhone, $vehicleInfo, $notes, $fallbackDriverId) {
+        return DB::transaction(function () use ($validated, $driverName, $driverPhone, $vehicleInfo, $notes) {
             $deliveries = [];
             foreach ($validated['order_ids'] as $orderId) {
                 $order = Order::findOrFail($orderId);
@@ -467,24 +467,20 @@ class DeliveryController extends Controller
                 if (!$delivery) {
                     $deliveryData = [
                         'order_id' => $orderId,
+                        'driver_id' => null,
                         'assigned_by' => auth()->id() ?? (\App\Models\User::first()?->id ?? 1),
                         'status' => 'assigned',
                         'dispatched_at' => now(),
                         'delivery_notes' => $notesPayload,
                     ];
-                    if ($fallbackDriverId) {
-                        $deliveryData['driver_id'] = $fallbackDriverId;
-                    }
                     $delivery = Delivery::create($deliveryData);
                 } else {
                     $deliveryData = [
+                        'driver_id' => null,
                         'status' => 'assigned',
                         'dispatched_at' => now(),
                         'delivery_notes' => $notesPayload,
                     ];
-                    if ($fallbackDriverId && empty($delivery->driver_id)) {
-                        $deliveryData['driver_id'] = $fallbackDriverId;
-                    }
                     $delivery->update($deliveryData);
                 }
 
