@@ -468,7 +468,7 @@ class DeliveryController extends Controller
                     $deliveryData = [
                         'order_id' => $orderId,
                         'assigned_by' => auth()->id() ?? (\App\Models\User::first()?->id ?? 1),
-                        'status' => 'dispatched',
+                        'status' => 'assigned',
                         'dispatched_at' => now(),
                         'delivery_notes' => $notesPayload,
                     ];
@@ -478,7 +478,7 @@ class DeliveryController extends Controller
                     $delivery = Delivery::create($deliveryData);
                 } else {
                     $deliveryData = [
-                        'status' => 'dispatched',
+                        'status' => 'assigned',
                         'dispatched_at' => now(),
                         'delivery_notes' => $notesPayload,
                     ];
