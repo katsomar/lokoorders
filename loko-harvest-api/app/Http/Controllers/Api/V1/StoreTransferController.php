@@ -95,49 +95,7 @@ class StoreTransferController extends Controller
 
         $user = auth()->user() ?? \App\Models\User::first();
 
-        // If the user is an order manager, we only save it as a pending request.
-        if ($user && $user->role === 'order_manager') {
-            $firstStock = ProductionStoreStock::where('production_store_id', $validated['production_store_id'])
-                ->where('product_id', $validated['product_id'])
-                ->when($supportsBatch && $batchRef, fn($q) => $q->where('batch_reference', $batchRef))
-                ->when($supportsBatch === false, fn($q) => $q->whereNull('batch_reference'))
-                ->where('current_quantity', '>', 0)
-                ->orderBy('created_at', 'asc')
-                ->first();
-
-            $transferPrice = $firstStock && $firstStock->valuation_price ? $firstStock->valuation_price : ($product->production_unit_price ?? $product->default_unit_price);
-
-            $transfer = StoreTransfer::create([
-                'transfer_date' => $validated['transfer_date'],
-                'production_store_id' => $validated['production_store_id'],
-                'sales_store_id' => $validated['sales_store_id'],
-                'product_id' => $validated['product_id'],
-                'quantity' => $validated['quantity'],
-                'unit_price' => $transferPrice,
-                'batch_reference' => $batchRef,
-                'transferred_by' => $user->id,
-                'notes' => $validated['notes'],
-                'status' => 'pending',
-            ]);
-
-            // Notify Admin users of new pending transfer request
-            try {
-                $adminUsers = \App\Models\User::where('role', 'admin')->get();
-                foreach ($adminUsers as $admin) {
-                    $admin->notify(new \App\Notifications\TransferRequestedNotification(
-                        $transfer->id,
-                        $user->name ?? 'Order Manager',
-                        $product->name,
-                        (float)$validated['quantity']
-                    ));
-                }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning("Notification failed: " . $e->getMessage());
-            }
-
-            return $this->success($transfer, 'Stock transfer request submitted successfully and is pending approval.', 201);
-
-        }
+        // Auto-approve and execute transfers immediately for ALL roles per user instruction
 
         return DB::transaction(function () use ($validated, $product, $supportsBatch, $batchRef, $user) {
             $fromStoreId = $validated['production_store_id'];

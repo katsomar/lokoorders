@@ -77,9 +77,8 @@ class StoreAdjustmentController extends Controller
         }
 
         $user = auth()->user() ?? \App\Models\User::first();
-        $isAdmin = ($user && $user->role === 'admin');
-
         // Store adjustment record (quantity_change is stored as negative representing reduction/exit)
+        // Auto-approved for ALL roles per user instruction (bypassing pending requests approval workflow)
         $adjustment = StoreAdjustment::create([
             'store_type' => $validated['store_type'],
             'production_store_id' => $validated['production_store_id'] ?? null,
@@ -90,59 +89,55 @@ class StoreAdjustmentController extends Controller
             'reason' => $validated['reason'],
             'image_path' => $imagePath,
             'signature_path' => $signaturePath,
-            'status' => $isAdmin ? 'approved' : 'pending',
+            'status' => 'approved',
             'created_by' => $user->id,
-            'approved_by' => $isAdmin ? $user->id : null,
-            'approved_at' => $isAdmin ? now() : null,
+            'approved_by' => $user->id,
+            'approved_at' => now(),
             'adjustment_date' => now()->toDateString(),
         ]);
 
-        if ($isAdmin) {
-            DB::transaction(function () use ($adjustment, $user) {
-                $qty = abs($adjustment->quantity_change);
+        DB::transaction(function () use ($adjustment, $user) {
+            $qty = abs($adjustment->quantity_change);
 
-                if ($adjustment->store_type === 'production') {
-                    $stock = ProductionStoreStock::firstOrCreate(
-                        [
-                            'production_store_id' => $adjustment->production_store_id,
-                            'product_id' => $adjustment->product_id,
-                            'batch_reference' => $adjustment->batch_reference,
-                        ]
-                    );
-                    $stock->updateStock('damage', $qty);
-                } else {
-                    $stock = SalesStoreStock::firstOrCreate(
-                        [
-                            'sales_store_id' => $adjustment->sales_store_id,
-                            'product_id' => $adjustment->product_id,
-                            'batch_reference' => $adjustment->batch_reference,
-                        ],
-                        [
-                            'current_quantity' => 0,
-                            'unit_price' => 0,
-                            'updated_by' => $user->id,
-                        ]
-                    );
-                    $stock->updateStock('damage', $qty);
-
-                    SalesStoreMovement::create([
+            if ($adjustment->store_type === 'production') {
+                $stock = ProductionStoreStock::firstOrCreate(
+                    [
+                        'production_store_id' => $adjustment->production_store_id,
+                        'product_id' => $adjustment->product_id,
+                        'batch_reference' => $adjustment->batch_reference,
+                    ]
+                );
+                $stock->updateStock('damage', $qty);
+            } else {
+                $stock = SalesStoreStock::firstOrCreate(
+                    [
                         'sales_store_id' => $adjustment->sales_store_id,
                         'product_id' => $adjustment->product_id,
                         'batch_reference' => $adjustment->batch_reference,
-                        'movement_date' => now()->toDateString(),
-                        'movement_type' => 'wastage',
-                        'quantity' => $qty,
-                        'reference_id' => $adjustment->id,
-                        'notes' => 'Stock adjustment auto-approved for Admin: ' . $adjustment->reason,
-                        'created_by' => $user->id,
-                    ]);
-                }
-            });
+                    ],
+                    [
+                        'current_quantity' => 0,
+                        'unit_price' => 0,
+                        'updated_by' => $user->id,
+                    ]
+                );
+                $stock->updateStock('damage', $qty);
 
-            return $this->success($adjustment, 'Stock adjustment request auto-approved and stock updated successfully.');
-        }
+                SalesStoreMovement::create([
+                    'sales_store_id' => $adjustment->sales_store_id,
+                    'product_id' => $adjustment->product_id,
+                    'batch_reference' => $adjustment->batch_reference,
+                    'movement_date' => now()->toDateString(),
+                    'movement_type' => 'wastage',
+                    'quantity' => $qty,
+                    'reference_id' => $adjustment->id,
+                    'notes' => 'Stock adjustment recorded & updated: ' . $adjustment->reason,
+                    'created_by' => $user->id,
+                ]);
+            }
+        });
 
-        return $this->success($adjustment, 'Stock adjustment request submitted successfully and is pending approval.');
+        return $this->success($adjustment, 'Stock adjustment recorded and inventory updated successfully.');
     }
 
     public function approve($id)

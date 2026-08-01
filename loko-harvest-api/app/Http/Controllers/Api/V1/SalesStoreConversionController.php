@@ -77,43 +77,7 @@ class SalesStoreConversionController extends Controller
 
         $user = auth()->user() ?? \App\Models\User::first();
 
-        // If the user is an order manager, we only save it as a pending request.
-        if ($user && $user->role === 'order_manager') {
-            // Check available stock first
-            if ($supportsBatch && $batchRef) {
-                $sourceStock = SalesStoreStock::where('sales_store_id', $storeId)
-                    ->where('product_id', $fromId)
-                    ->where('batch_reference', $batchRef)
-                    ->first();
-                $totalAvailable = $sourceStock ? $sourceStock->current_quantity : 0;
-            } else {
-                $totalAvailable = SalesStoreStock::where('sales_store_id', $storeId)
-                    ->where('product_id', $fromId)
-                    ->where('current_quantity', '>', 0)
-                    ->sum('current_quantity');
-            }
-
-            if ($totalAvailable < $fromQty) {
-                return $this->error('Insufficient bulk trays in the selected sales store.', 422, [
-                    'available' => $totalAvailable
-                ]);
-            }
-
-            $conversion = SalesStoreConversion::create([
-                'conversion_date' => now()->toDateString(),
-                'sales_store_id' => $storeId,
-                'from_product_id' => $fromId,
-                'to_product_id' => $toId,
-                'from_quantity' => $fromQty,
-                'to_quantity' => $toQty,
-                'batch_reference' => $batchRef,
-                'converted_by' => $user->id,
-                'notes' => $validated['notes'] ?? null,
-                'status' => 'pending',
-            ]);
-
-            return $this->success($conversion->load(['fromProduct', 'toProduct']), 'Conversion request submitted successfully and is pending approval.', 201);
-        }
+        // Auto-approve and execute conversions immediately for ALL roles per user instruction
 
         return DB::transaction(function () use ($storeId, $fromId, $toId, $fromQty, $toQty, $fromProduct, $toProduct, $supportsBatch, $batchRef, $validated, $user) {
             if ($supportsBatch && $batchRef) {
