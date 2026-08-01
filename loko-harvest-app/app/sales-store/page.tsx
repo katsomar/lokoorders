@@ -588,6 +588,18 @@ export default function SalesStorePage() {
     return getFilteredStock().reduce((acc, item) => acc + getStockItemValuation(item), 0);
   };
 
+  const calculateIncomingTransferValue = () => {
+    return getFilteredStock().reduce((acc, item) => {
+      return acc + ((item.transferred_in || 0) * (item.unit_price || 0));
+    }, 0);
+  };
+
+  const calculateOutgoingValue = () => {
+    return getFilteredStock().reduce((acc, item) => {
+      return acc + getStockItemValuationTaken(item);
+    }, 0);
+  };
+
   // Create Sales Store
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1095,18 +1107,18 @@ export default function SalesStorePage() {
         </div>
 
 
-        {/* Global Valuation Cards */}
+        {/* Financial Link Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           
-          {/* TOTAL SALES STORE VALUATION */}
+          {/* TOTAL SALES STORE INVENTORY VALUATION */}
           <Card className="border-none shadow-xl bg-brand-forest text-white md:col-span-2">
             <CardContent className="pt-6 flex flex-col justify-between h-full">
               <div>
                 <div className="flex items-center justify-between">
                   <p className="text-white/60 text-xs font-bold uppercase tracking-wider">
-                    {selectedStoreFilter === "all" ? "Total Sales Valuation" : "Store Sales Valuation"}
+                    {selectedStoreFilter === "all" ? "Total Sales Inventory Value" : "Store Sales Inventory Value"}
                   </p>
-                  <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[9px]">TOTAL SALES VALUE</Badge>
+                  <Badge className="bg-brand-yellow text-brand-forest border-none font-bold text-[9px]">NET INVENTORY VALUE</Badge>
                 </div>
                 <h3 className="text-2xl sm:text-3xl font-black font-heading mt-2 truncate">
                   UGX {calculateTotalValuation().toLocaleString()}
@@ -1116,41 +1128,43 @@ export default function SalesStorePage() {
               <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center text-xs text-white/70">
                 <div className="flex items-center gap-1">
                   <TrendingUp size={14} className="text-brand-yellow animate-pulse" />
-                  <span>Aggregated worth of all converted packaging categories</span>
+                  <span>Value of current stock (appreciates with packaging conversions)</span>
                 </div>
                 <span className="font-bold text-brand-yellow">Ready for Dispatch</span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Stats Cards */}
-          <Card className="border border-brand-sage/40 shadow-sm">
+          {/* INCOMING TRANSFER VALUE CARD (FROM PRODUCTION STORE) */}
+          <Card className="border border-brand-sage/40 shadow-sm bg-gradient-to-br from-white to-emerald-50/30">
             <CardContent className="pt-6">
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Converted Packs</p>
-              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
-                {getFilteredStock()
-                  .filter(item => item.unit === "Packs")
-                  .reduce((acc, item) => acc + item.closing_stock, 0)
-                  .toLocaleString()} Units
+              <div className="flex items-center justify-between">
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Incoming Transfer Value</p>
+                <Badge className="bg-emerald-100 text-emerald-800 border-none font-bold text-[9px]">FROM PRODUCTION</Badge>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-emerald-900 font-heading mt-2 truncate">
+                UGX {calculateIncomingTransferValue().toLocaleString()}
               </h3>
-              <p className="text-[10px] text-gray-400 font-bold mt-4 flex items-center gap-1">
-                <Boxes size={12} className="text-brand-forest" />
-                Includes 15-pack and 6-pack cartons
+              <p className="text-[10px] text-gray-500 font-bold mt-4 flex items-center gap-1">
+                <ArrowDownToLine size={12} className="text-emerald-600 shrink-0" />
+                Value received from Production Store
               </p>
             </CardContent>
           </Card>
 
-          <Card className="border border-brand-sage/40 shadow-sm">
+          {/* TOTAL OUTGOING VALUE CARD (ORDERS FULFILLMENTS) */}
+          <Card className="border border-brand-sage/40 shadow-sm bg-gradient-to-br from-white to-amber-50/30">
             <CardContent className="pt-6">
-              <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Plain & Single Trays</p>
-              <h3 className="text-xl sm:text-2xl font-black text-brand-forest font-heading mt-1.5 truncate">
-                {getFilteredStock()
-                  .filter(item => item.unit === "Trays")
-                  .reduce((acc, item) => acc + item.closing_stock, 0)
-                  .toLocaleString()} Trays
+              <div className="flex items-center justify-between">
+                <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Outgoing Value</p>
+                <Badge className="bg-amber-100 text-amber-800 border-none font-bold text-[9px]">ORDERS DISPATCHED</Badge>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-amber-900 font-heading mt-2 truncate">
+                UGX {calculateOutgoingValue().toLocaleString()}
               </h3>
-              <p className="text-[10px] text-gray-400 font-bold mt-4">
-                Bulk White, Brown and Cream trays
+              <p className="text-[10px] text-gray-500 font-bold mt-4 flex items-center gap-1">
+                <ArrowUpFromLine size={12} className="text-amber-600 shrink-0" />
+                Value fulfilled for Customer Orders
               </p>
             </CardContent>
           </Card>
