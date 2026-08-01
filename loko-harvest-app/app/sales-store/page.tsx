@@ -48,7 +48,6 @@ import { useAuth } from "@/store/useAuth";
 import { useLookups } from "@/store/useLookups";
 import { UITooltip, InfoTooltip } from "@/components/ui/tooltip";
 import ReportGeneratorModal from "@/components/ReportGeneratorModal";
-import { FileText } from "lucide-react";
 
 
 interface SalesStockItem {
