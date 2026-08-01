@@ -1168,20 +1168,43 @@ export default function ProductionStorePage() {
       return matchesStore && matchesBatch && matchesDate;
     });
 
-    // 2. Group items belonging to the exact same damage report submission
-    const groupsMap = new Map<string, any[]>();
-    filtered.forEach(item => {
-      const timeKey = item.created_at ? new Date(item.created_at).toISOString().substring(0, 16) : item.adjustment_date;
-      const key = `${item.image_url || item.signature_url || timeKey}_${item.created_by}_${item.production_store_id}_${item.batch_reference}`;
-      if (!groupsMap.has(key)) {
-        groupsMap.set(key, []);
+    // 2. Group items belonging to the same damage report submission (within 2 minutes of each other)
+    const groups: any[][] = [];
+    const sorted = [...filtered].sort((a, b) => new Date(b.created_at || b.adjustment_date).getTime() - new Date(a.created_at || a.adjustment_date).getTime());
+
+    sorted.forEach(item => {
+      const itemTime = new Date(item.created_at || item.adjustment_date).getTime();
+      const cleanReasonStr = (item.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim().toLowerCase();
+      const storeId = item.production_store_id;
+
+      const existingGroup = groups.find(grp => {
+        const first = grp[0];
+        const firstTime = new Date(first.created_at || first.adjustment_date).getTime();
+        const firstStoreId = first.production_store_id;
+        const firstReasonStr = (first.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim().toLowerCase();
+
+        const matchUser = (item.created_by || 1) === (first.created_by || 1);
+        const matchStore = storeId === firstStoreId;
+        const matchBatch = (item.batch_reference || '') === (first.batch_reference || '');
+        const matchReason = cleanReasonStr === firstReasonStr;
+        const matchTime = Math.abs(itemTime - firstTime) <= 120000; // Within 2 minutes
+
+        return matchUser && matchStore && matchBatch && matchReason && matchTime;
+      });
+
+      if (existingGroup) {
+        existingGroup.push(item);
+      } else {
+        groups.push([item]);
       }
-      groupsMap.get(key)!.push(item);
     });
 
     // 3. Map grouped submissions to 1 single table row each
-    return Array.from(groupsMap.values()).map((groupItems, groupIdx) => {
-      const firstItem = groupItems[0];
+    return groups.map((groupItems, groupIdx) => {
+      const firstItem = groupItems.find(i => i.image_url || i.signature_url) || groupItems[0];
+      const photoItem = groupItems.find(i => i.image_url) || firstItem;
+      const sigItem = groupItems.find(i => i.signature_url) || firstItem;
+
       const rawName = firstItem.product?.name || 'N/A';
       const baseProdName = rawName.replace(/\s*-\s*(Damage\s*\d*(st|nd|rd)?\s*Class|Shell\s*Eggs)/gi, '');
       const cleanReasonStr = (firstItem.reason || '').replace(/\s*\[Damage Class:.*?\]/gi, '').trim() || 'N/A';
@@ -1247,16 +1270,16 @@ export default function ProductionStorePage() {
         <span key={`gtotalqty-${groupIdx}`} className="font-mono font-black text-red-700 text-[10px]">{formatTotalQuantity(totalQty)}</span>,
         <span key={`gtotalloss-${groupIdx}`} className="font-mono font-black text-red-800 text-[10px]">UGX {totalLossVal.toLocaleString()}</span>,
         <span key={`greason-${groupIdx}`} className="text-gray-700 font-medium text-[9px] max-w-[150px] inline-block">{cleanReasonStr}</span>,
-        firstItem.image_url ? (
-          <a key={`gimg-${groupIdx}`} href={firstItem.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
-            <img src={firstItem.image_url} alt="Proof" className="h-11 w-11 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
+        photoItem?.image_url ? (
+          <a key={`gimg-${groupIdx}`} href={photoItem.image_url} target="_blank" rel="noopener noreferrer" title="Click to view full photo proof">
+            <img src={photoItem.image_url} alt="Proof" className="h-11 w-11 object-cover rounded-lg border border-red-200 shadow-2xs hover:scale-105 transition-transform" />
           </a>
         ) : (
           <span key={`gimg-${groupIdx}`} className="text-gray-400 text-[8.5px] italic">No Photo</span>
         ),
-        firstItem.signature_url ? (
-          <a key={`gsig-${groupIdx}`} href={firstItem.signature_url} target="_blank" rel="noopener noreferrer" title="Click to view signature">
-            <img src={firstItem.signature_url} alt="Signature" className="h-9 w-14 object-contain rounded bg-gray-50 border border-gray-200 p-0.5" />
+        sigItem?.signature_url ? (
+          <a key={`gsig-${groupIdx}`} href={sigItem.signature_url} target="_blank" rel="noopener noreferrer" title="Click to view signature">
+            <img src={sigItem.signature_url} alt="Signature" className="h-9 w-14 object-contain rounded bg-gray-50 border border-gray-200 p-0.5" />
           </a>
         ) : (
           <span key={`gsig-${groupIdx}`} className="text-gray-400 text-[8.5px] italic">No Signature</span>
