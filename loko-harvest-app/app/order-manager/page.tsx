@@ -132,6 +132,15 @@ export default function OrderManagerDashboard() {
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustTraysInput, setAdjustTraysInput] = useState("");
   const [adjustEggsInput, setAdjustEggsInput] = useState("");
+  const [eggDamageCategoryInputs, setEggDamageCategoryInputs] = useState<{
+    [key: string]: { trays: string; eggs: string }
+  }>({
+    good: { trays: "", eggs: "" },
+    d1: { trays: "", eggs: "" },
+    d2: { trays: "", eggs: "" },
+    d3: { trays: "", eggs: "" },
+    shell: { trays: "", eggs: "" },
+  });
   const [adjustReason, setAdjustReason] = useState("");
   const [adjustImageFile, setAdjustImageFile] = useState<File | null>(null);
   const [isSubmittingAdjustment, setIsSubmittingAdjustment] = useState(false);
@@ -1048,13 +1057,8 @@ export default function OrderManagerDashboard() {
 
     const signatureData = canvas.toDataURL("image/png");
 
-    if (!adjustStoreId || !adjustProductId || !adjustQty || !adjustReason) {
+    if (!adjustStoreId || !adjustProductId || !adjustReason) {
       alert("Please fill in all required fields.");
-      return;
-    }
-
-    if (parseFloat(adjustQty) <= 0) {
-      alert("Adjustment quantity must be greater than 0.");
       return;
     }
 
@@ -1068,41 +1072,120 @@ export default function OrderManagerDashboard() {
       return;
     }
 
+    const selectedProd = adjustProducts.find(p => p.id === adjustProductId);
+    const isEggProd = selectedProd?.unit_of_measure?.toLowerCase() === "trays" || selectedProd?.code?.startsWith("EGG-");
+
     setIsSubmittingAdjustment(true);
     try {
-      const formData = new FormData();
-      formData.append("store_type", adjustStoreType);
-      if (adjustStoreType === "production") {
-        formData.append("production_store_id", adjustStoreId);
-      } else {
-        formData.append("sales_store_id", adjustStoreId);
-      }
-      formData.append("batch_reference", adjustBatch);
-      formData.append("product_id", adjustProductId);
-      formData.append("quantity", adjustQty);
-      formData.append("reason", adjustReason);
-      formData.append("signature_data", signatureData);
-      
-      if (adjustImageFile) {
-        formData.append("image_file", adjustImageFile);
-      }
+      if (isEggProd && selectedProd) {
+        // Collect all non-zero sub-category damage inputs
+        const categoriesToSubmit: { catKey: string; qty: number }[] = [];
+        const keys = ["good", "d1", "d2", "d3", "shell"];
 
-      const res = await api.post("/store-adjustments", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
+        keys.forEach(k => {
+          const inputObj = eggDamageCategoryInputs[k] || { trays: "", eggs: "" };
+          const tVal = parseFloat(inputObj.trays) || 0;
+          const eVal = parseFloat(inputObj.eggs) || 0;
+          const totalTrays = tVal + (eVal / 30);
+          if (totalTrays > 0) {
+            categoriesToSubmit.push({ catKey: k, qty: totalTrays });
+          }
+        });
+
+        // Fallback if user used single computed quantity
+        if (categoriesToSubmit.length === 0 && parseFloat(adjustQty) > 0) {
+          categoriesToSubmit.push({ catKey: "good", qty: parseFloat(adjustQty) });
         }
-      });
 
-      if (res.data?.success) {
+        if (categoriesToSubmit.length === 0) {
+          alert("Please enter damage quantities for at least one damage class (Good, D1, D2, D3, or Shell).");
+          setIsSubmittingAdjustment(false);
+          return;
+        }
+
+        const baseCode = selectedProd.code.split('-').slice(0, 2).join('-'); // e.g. EGG-WHT
+
+        for (const itemToSub of categoriesToSubmit) {
+          let targetCode = baseCode;
+          if (itemToSub.catKey === "d1") targetCode = `${baseCode}-D1`;
+          else if (itemToSub.catKey === "d2") targetCode = `${baseCode}-D2`;
+          else if (itemToSub.catKey === "d3") targetCode = `${baseCode}-D3`;
+          else if (itemToSub.catKey === "shell") targetCode = `${baseCode}-SHL`;
+
+          const targetProd = products.find(p => p.code === targetCode) || selectedProd;
+
+          const formData = new FormData();
+          formData.append("store_type", adjustStoreType);
+          if (adjustStoreType === "production") {
+            formData.append("production_store_id", adjustStoreId);
+          } else {
+            formData.append("sales_store_id", adjustStoreId);
+          }
+          formData.append("batch_reference", adjustBatch);
+          formData.append("product_id", targetProd.id);
+          formData.append("quantity", itemToSub.qty.toString());
+          formData.append("reason", `${adjustReason} [Damage Class: ${itemToSub.catKey.toUpperCase()}]`);
+          formData.append("signature_data", signatureData);
+          
+          if (adjustImageFile) {
+            formData.append("image_file", adjustImageFile);
+          }
+
+          await api.post("/store-adjustments", formData, {
+            headers: {
+              "Content-Type": "multipart/form-data"
+            }
+          });
+        }
+
+        alert(`Successfully recorded ${categoriesToSubmit.length} damage category item(s) for approval!`);
+      } else {
+        if (parseFloat(adjustQty) <= 0) {
+          alert("Adjustment quantity must be greater than 0.");
+          setIsSubmittingAdjustment(false);
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("store_type", adjustStoreType);
+        if (adjustStoreType === "production") {
+          formData.append("production_store_id", adjustStoreId);
+        } else {
+          formData.append("sales_store_id", adjustStoreId);
+        }
+        formData.append("batch_reference", adjustBatch);
+        formData.append("product_id", adjustProductId);
+        formData.append("quantity", adjustQty);
+        formData.append("reason", adjustReason);
+        formData.append("signature_data", signatureData);
+        
+        if (adjustImageFile) {
+          formData.append("image_file", adjustImageFile);
+        }
+
+        await api.post("/store-adjustments", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data"
+          }
+        });
+
         alert("Stock adjustment request submitted successfully for approval!");
-        setAdjustQty("");
-        setAdjustTraysInput("");
-        setAdjustEggsInput("");
-        setAdjustReason("");
-        setAdjustImageFile(null);
-        clearSignature();
-        fetchAdjustments();
       }
+
+      setAdjustQty("");
+      setAdjustTraysInput("");
+      setAdjustEggsInput("");
+      setAdjustReason("");
+      setAdjustImageFile(null);
+      setEggDamageCategoryInputs({
+        good: { trays: "", eggs: "" },
+        d1: { trays: "", eggs: "" },
+        d2: { trays: "", eggs: "" },
+        d3: { trays: "", eggs: "" },
+        shell: { trays: "", eggs: "" },
+      });
+      clearSignature();
+      fetchAdjustments();
     } catch (err: any) {
       console.error(err);
       alert(err.response?.data?.message || "Failed to submit stock adjustment request.");
@@ -2983,44 +3066,87 @@ export default function OrderManagerDashboard() {
                         )}
 
                         <div className="grid grid-cols-2 gap-3">
-                          {/* Quantity */}
+                          {/* Quantity & Multi-Category Damage Breakdown */}
                           {(() => {
                             const selectedProd = adjustProducts.find(p => p.id === adjustProductId);
                             const isTrayProd = selectedProd?.unit_of_measure?.toLowerCase() === "trays" || selectedProd?.code?.startsWith("EGG-");
                             if (isTrayProd) {
                               return (
-                                <div className="space-y-1 col-span-2 bg-brand-sage/5 p-3 rounded-xl border border-brand-sage/20">
-                                  <label className="text-[9px] text-brand-forest font-bold uppercase tracking-wider block mb-1">Quantity (Trays & Eggs) *</label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        placeholder="Trays"
-                                        value={adjustTraysInput}
-                                        onChange={(e) => setAdjustTraysInput(e.target.value)}
-                                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                                      />
-                                      <span className="text-[8px] text-gray-400 font-semibold mt-1 block">Full Trays</span>
-                                    </div>
-                                    <div>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="29"
-                                        placeholder="Eggs"
-                                        value={adjustEggsInput}
-                                        onChange={(e) => setAdjustEggsInput(e.target.value)}
-                                        className="w-full h-10 px-3 text-xs font-bold rounded-xl border border-brand-sage/60 bg-white text-gray-800 focus:outline-none"
-                                      />
-                                      <span className="text-[8px] text-gray-400 font-semibold mt-1 block">Loose Eggs (0-29)</span>
-                                    </div>
+                                <div className="space-y-3 col-span-2 bg-brand-sage/5 p-3.5 rounded-2xl border border-brand-sage/20">
+                                  <div className="flex justify-between items-center pb-1.5 border-b border-brand-sage/20">
+                                    <label className="text-[10px] text-brand-forest font-black uppercase tracking-wider">
+                                      Egg Damage Sub-Categories Breakdown *
+                                    </label>
+                                    <span className="text-[9px] text-gray-400 font-semibold">Multiple classes supported at once</span>
                                   </div>
-                                  {adjustQty && (
-                                    <div className="text-[9px] text-brand-amber font-mono font-black mt-2 text-right">
-                                      Computed Quantity: {parseFloat(adjustQty).toFixed(3)} Trays
-                                    </div>
-                                  )}
+
+                                  <div className="space-y-2.5">
+                                    {[
+                                      { key: "good", label: "Good Quality Trays", badge: "bg-green-100 text-green-900 border-green-300", desc: "Undamaged eggs with loss" },
+                                      { key: "d1", label: "D1 - Hairline Cracks", badge: "bg-amber-100 text-amber-900 border-amber-300", desc: "Light shell hairline cracks" },
+                                      { key: "d2", label: "D2 - Medium Cracks", badge: "bg-orange-100 text-orange-900 border-orange-300", desc: "Medium shell cracks / leaks" },
+                                      { key: "d3", label: "D3 - Heavy Cracks", badge: "bg-gray-100 text-gray-800 border-gray-300", desc: "Heavy cracks / severe damage" },
+                                      { key: "shell", label: "Shell Eggs / Soft Shell", badge: "bg-blue-100 text-blue-900 border-blue-300", desc: "Soft shell or shell-less" },
+                                    ].map((cat) => {
+                                      const inputs = eggDamageCategoryInputs[cat.key] || { trays: "", eggs: "" };
+                                      const traysVal = parseFloat(inputs.trays) || 0;
+                                      const eggsVal = parseFloat(inputs.eggs) || 0;
+                                      const computedQty = traysVal + (eggsVal / 30);
+
+                                      return (
+                                        <div key={cat.key} className="bg-white p-2.5 rounded-xl border border-brand-sage/30 shadow-2xs space-y-1.5">
+                                          <div className="flex justify-between items-center">
+                                            <span className={`px-2 py-0.5 rounded text-[8.5px] font-black uppercase border ${cat.badge}`}>
+                                              {cat.label}
+                                            </span>
+                                            {computedQty > 0 && (
+                                              <span className="text-[9px] text-brand-forest font-mono font-black">
+                                                Total: {computedQty.toFixed(2)} Trays
+                                              </span>
+                                            )}
+                                          </div>
+
+                                          <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                placeholder="Full Trays"
+                                                value={inputs.trays}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setEggDamageCategoryInputs(prev => ({
+                                                    ...prev,
+                                                    [cat.key]: { ...prev[cat.key], trays: val }
+                                                  }));
+                                                }}
+                                                className="w-full h-8 px-2.5 text-xs font-bold rounded-lg border border-brand-sage/50 bg-gray-50/50 focus:bg-white focus:outline-none"
+                                              />
+                                              <span className="text-[8px] text-gray-400 font-semibold mt-0.5 block">Full Trays</span>
+                                            </div>
+                                            <div>
+                                              <input
+                                                type="number"
+                                                min="0"
+                                                max="29"
+                                                placeholder="Loose (0-29)"
+                                                value={inputs.eggs}
+                                                onChange={(e) => {
+                                                  const val = e.target.value;
+                                                  setEggDamageCategoryInputs(prev => ({
+                                                    ...prev,
+                                                    [cat.key]: { ...prev[cat.key], eggs: val }
+                                                  }));
+                                                }}
+                                                className="w-full h-8 px-2.5 text-xs font-bold rounded-lg border border-brand-sage/50 bg-gray-50/50 focus:bg-white focus:outline-none"
+                                              />
+                                              <span className="text-[8px] text-gray-400 font-semibold mt-0.5 block">Loose Eggs</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               );
                             }
