@@ -124,10 +124,24 @@ export default function NewOrderPage() {
     fetchLookups();
   }, [fetchLookups]);
 
-  // Set default sales store when loaded
+  // Set default sales store when loaded - pick store with active stock automatically!
   useEffect(() => {
     if (salesStores.length > 0 && !watchSalesStoreId) {
-      setValue("sales_store_id", salesStores[0].id);
+      const initDefaultStore = async () => {
+        try {
+          const res = await api.get('/sales-stock');
+          const stocks = res.data.data || [];
+          const storeWithStock = stocks.find((s: any) => (parseFloat(s.current_quantity) || 0) > 0)?.sales_store_id;
+          if (storeWithStock && salesStores.some(st => st.id === storeWithStock)) {
+            setValue("sales_store_id", storeWithStock);
+            return;
+          }
+        } catch (err) {
+          console.error("Failed auto-detecting store with stock", err);
+        }
+        setValue("sales_store_id", salesStores[0].id);
+      };
+      initDefaultStore();
     }
   }, [salesStores, watchSalesStoreId, setValue]);
 
@@ -212,12 +226,13 @@ export default function NewOrderPage() {
       .map(p => {
         const avail = getAvailableStock(p.id);
         return {
-          label: `${p.name} (${avail} available)`,
+          label: `${p.name} (${avail > 0 ? Number(avail.toFixed(2)).toLocaleString() : 0} available)`,
           value: p.id,
           avail: avail
         };
       })
-      .filter(p => p.avail >= 1 || p.value === selectedProdId);
+      .filter(p => p.avail > 0 || p.value === selectedProdId)
+      .sort((a, b) => (b.avail - a.avail) || a.label.localeCompare(b.label));
   };
 
   const totalAmount = watchedItems.reduce((acc, item) => acc + (item.quantity * item.unit_price || 0), 0);

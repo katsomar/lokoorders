@@ -269,12 +269,13 @@ export default function EditOrderPage() {
       .map(p => {
         const avail = getAvailableStock(p.id);
         return {
-          label: `${p.name} (${avail} available)`,
+          label: `${p.name} (${avail > 0 ? Number(avail.toFixed(2)).toLocaleString() : 0} available)`,
           value: p.id,
           avail: avail
         };
       })
-      .filter(p => p.avail >= 1 || p.value === selectedProdId);
+      .filter(p => p.avail > 0 || p.value === selectedProdId)
+      .sort((a, b) => (b.avail - a.avail) || a.label.localeCompare(b.label));
   };
 
   const totalAmount = (watchedItems || []).reduce((acc, item) => acc + ((item?.quantity || 0) * (item?.unit_price || 0)), 0);

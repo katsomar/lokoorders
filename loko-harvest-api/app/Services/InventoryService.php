@@ -137,7 +137,7 @@ class InventoryService
                 $currentStockOnD = $closingStockOnD + $takenOnD + $replacementsOnD + $damagesOnD;
                 $openingStockOnD = $currentStockOnD - $incomingOnD;
 
-                $item->current_quantity = $closingStockOnD;
+                $item->current_quantity = $currentStockOnD;
                 $item->opening_stock = $openingStockOnD;
                 $item->incoming = $incomingOnD;
                 $item->stock_taken = $takenOnD;
@@ -220,16 +220,24 @@ class InventoryService
 
             $conversionsIn = DB::table('sales_store_conversions')
                 ->whereIn('sales_store_id', $storeIds)
-                ->where('created_at', '<=', $date . ' 23:59:59')
-                ->selectRaw('to_product_id as product_id, batch_reference, sum(to_quantity) as total, sum(case when date(created_at) = ? then to_quantity else 0 end) as total_on', [$date])
+                ->where('status', '!=', 'rejected')
+                ->where(function($q) use ($date) {
+                    $q->whereDate('conversion_date', '<=', $date)
+                      ->orWhere('created_at', '<=', $date . ' 23:59:59');
+                })
+                ->selectRaw('to_product_id as product_id, batch_reference, sum(to_quantity) as total, sum(case when conversion_date = ? or date(created_at) = ? then to_quantity else 0 end) as total_on', [$date, $date])
                 ->groupBy('to_product_id', 'batch_reference')
                 ->get()
                 ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
 
             $conversionsOut = DB::table('sales_store_conversions')
                 ->whereIn('sales_store_id', $storeIds)
-                ->where('created_at', '<=', $date . ' 23:59:59')
-                ->selectRaw('from_product_id as product_id, batch_reference, sum(from_quantity) as total, sum(case when date(created_at) = ? then from_quantity else 0 end) as total_on', [$date])
+                ->where('status', '!=', 'rejected')
+                ->where(function($q) use ($date) {
+                    $q->whereDate('conversion_date', '<=', $date)
+                      ->orWhere('created_at', '<=', $date . ' 23:59:59');
+                })
+                ->selectRaw('from_product_id as product_id, batch_reference, sum(from_quantity) as total, sum(case when conversion_date = ? or date(created_at) = ? then from_quantity else 0 end) as total_on', [$date, $date])
                 ->groupBy('from_product_id', 'batch_reference')
                 ->get()
                 ->groupBy(fn($i) => $i->product_id . '_' . ($i->batch_reference ?? ''));
@@ -294,10 +302,16 @@ class InventoryService
                 $transfersInOn = $transfersProdOn + $transfersSalesInOn;
 
                 $getConvIn = $conversionsIn->get($key)?->first();
+                if (!$getConvIn && !empty($item->batch_reference)) {
+                    $getConvIn = $conversionsIn->get($item->product_id . '_')?->first();
+                }
                 $conversionsInUpToD = (float) ($getConvIn?->total ?? 0);
                 $conversionsInOn = (float) ($getConvIn?->total_on ?? 0);
 
                 $getConvOut = $conversionsOut->get($key)?->first();
+                if (!$getConvOut && !empty($item->batch_reference)) {
+                    $getConvOut = $conversionsOut->get($item->product_id . '_')?->first();
+                }
                 $conversionsOutUpToD = (float) ($getConvOut?->total ?? 0);
                 $conversionsOutOn = (float) ($getConvOut?->total_on ?? 0);
 

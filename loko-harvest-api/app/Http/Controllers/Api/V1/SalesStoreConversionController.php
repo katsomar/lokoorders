@@ -243,6 +243,173 @@ class SalesStoreConversionController extends Controller
         });
     }
 
+    public function storeBatch(Request $request)
+    {
+        $validated = $request->validate([
+            'sales_store_id' => 'required|exists:sales_stores,id',
+            'batch_reference' => 'nullable|string|max:50',
+            'notes' => 'nullable|string|max:500',
+            'conversions' => 'required|array|min:1',
+            'conversions.*.from_product_id' => 'required|exists:products,id',
+            'conversions.*.to_product_id' => 'required|exists:products,id',
+            'conversions.*.trays' => 'nullable|numeric|min:0',
+            'conversions.*.eggs' => 'nullable|numeric|min:0',
+        ]);
+
+        $storeId = $validated['sales_store_id'];
+        $batchRef = $validated['batch_reference'] ?? null;
+        $items = $validated['conversions'];
+        $user = auth()->user() ?? \App\Models\User::first();
+
+        // 1. Collect product IDs to pre-fetch in a single query
+        $allProductIds = [];
+        foreach ($items as $item) {
+            $fromQty = ($item['trays'] ?? 0) + (($item['eggs'] ?? 0) / 30);
+            if ($fromQty > 0) {
+                $allProductIds[] = $item['from_product_id'];
+                $allProductIds[] = $item['to_product_id'];
+            }
+        }
+
+        $allProductIds = array_unique($allProductIds);
+        if (empty($allProductIds)) {
+            return $this->error('No valid quantities entered for conversion.', 422);
+        }
+
+        // Single query for all products
+        $products = Product::whereIn('id', $allProductIds)->get()->keyBy('id');
+
+        // Fetch all relevant store stocks for selected products in store
+        $sourceStockQuery = SalesStoreStock::where('sales_store_id', $storeId)
+            ->whereIn('product_id', $allProductIds);
+        
+        if ($batchRef) {
+            $sourceStockQuery->where(function ($q) use ($batchRef) {
+                $q->where('batch_reference', $batchRef)->orWhereNull('batch_reference');
+            });
+        }
+
+        $allSourceStocks = $sourceStockQuery->get();
+
+        return DB::transaction(function () use ($storeId, $batchRef, $items, $products, $allSourceStocks, $validated, $user) {
+            $createdConversions = [];
+
+            foreach ($items as $item) {
+                $fromQty = ($item['trays'] ?? 0) + (($item['eggs'] ?? 0) / 30);
+                if ($fromQty <= 0) continue;
+
+                $fromProduct = $products->get($item['from_product_id']);
+                $toProduct = $products->get($item['to_product_id']);
+
+                if (!$fromProduct || !$toProduct) continue;
+
+                if ($fromProduct->id === $toProduct->id) {
+                    return $this->error("Cannot convert {$fromProduct->name} into itself. Please select a valid retail destination product.", 422);
+                }
+
+                $fromPrefix = substr($fromProduct->code, 0, 7);
+                $toPrefix = substr($toProduct->code, 0, 7);
+                if ($fromPrefix !== $toPrefix) {
+                    return $this->error("Cannot convert {$fromProduct->name} to {$toProduct->name}. Categories must match.", 422);
+                }
+
+                $ratio = 1.0;
+                if (str_ends_with($toProduct->code, '-15P')) {
+                    $ratio = 2.0;
+                } elseif (str_ends_with($toProduct->code, '-06P')) {
+                    $ratio = 5.0;
+                } elseif (str_ends_with($toProduct->code, '-FAM')) {
+                    $ratio = 0.2;
+                } elseif (str_ends_with($toProduct->code, '-DBL')) {
+                    $ratio = 0.5;
+                } elseif (str_ends_with($toProduct->code, '-TPL')) {
+                    $ratio = 1.0 / 3.0;
+                } elseif (str_ends_with($toProduct->code, '-SGL') || str_ends_with($toProduct->code, '-TRYS')) {
+                    $ratio = 1.0;
+                }
+
+                $toQty = $fromQty * $ratio;
+
+                // Find matching stock record for source product
+                $sourceStock = $allSourceStocks->where('product_id', $item['from_product_id'])
+                    ->filter(function ($s) use ($batchRef) {
+                        return !$batchRef || $s->batch_reference === $batchRef || $s->batch_reference === null;
+                    })
+                    ->sortByDesc(function ($s) use ($batchRef) {
+                        return ($batchRef && $s->batch_reference === $batchRef) ? 2 : ($s->current_quantity > 0 ? 1 : 0);
+                    })
+                    ->first();
+
+                if (!$sourceStock || ($sourceStock->current_quantity - $fromQty) < -0.001) {
+                    $avail = $sourceStock ? $sourceStock->current_quantity : 0;
+                    return $this->error("Insufficient stock for {$fromProduct->name}. Available: {$avail} trays, Requested: {$fromQty} trays.", 422);
+                }
+
+                $effectiveBatchRef = $sourceStock->batch_reference ?? $batchRef;
+
+                $conversion = SalesStoreConversion::create([
+                    'conversion_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'from_product_id' => $item['from_product_id'],
+                    'to_product_id' => $item['to_product_id'],
+                    'from_quantity' => $fromQty,
+                    'to_quantity' => $toQty,
+                    'batch_reference' => $effectiveBatchRef,
+                    'converted_by' => $user->id,
+                    'notes' => $validated['notes'] ?? 'Batch conversion execution',
+                    'status' => 'approved',
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+
+                $sourceStock->update(['updated_by' => $user->id, 'last_updated' => now()]);
+                $sourceStock->updateStock('conversion_out', $fromQty, $fromProduct->sales_unit_price ?? $fromProduct->default_unit_price);
+
+                $destStock = SalesStoreStock::firstOrCreate(
+                    [
+                        'sales_store_id' => $storeId,
+                        'product_id' => $item['to_product_id'],
+                        'batch_reference' => $effectiveBatchRef,
+                    ],
+                    [
+                        'current_quantity' => 0,
+                        'updated_by' => $user->id,
+                    ]
+                );
+                $destStock->update(['updated_by' => $user->id, 'last_updated' => now()]);
+                $destStock->updateStock('conversion_in', $toQty, $toProduct->sales_unit_price ?? $toProduct->default_unit_price);
+
+                SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'product_id' => $item['from_product_id'],
+                    'batch_reference' => $batchRef,
+                    'movement_type' => 'dispatch_out',
+                    'quantity' => $fromQty,
+                    'reference_id' => $conversion->id,
+                    'created_by' => $user->id,
+                    'notes' => "Converted {$fromQty} trays of {$fromProduct->name} into {$toProduct->name}",
+                ]);
+
+                SalesStoreMovement::create([
+                    'movement_date' => now()->toDateString(),
+                    'sales_store_id' => $storeId,
+                    'product_id' => $item['to_product_id'],
+                    'batch_reference' => $batchRef,
+                    'movement_type' => 'transfer_in',
+                    'quantity' => $toQty,
+                    'reference_id' => $conversion->id,
+                    'created_by' => $user->id,
+                    'notes' => "Obtained from conversion of {$fromProduct->name}",
+                ]);
+
+                $createdConversions[] = $conversion;
+            }
+
+            return $this->success($createdConversions, 'Batch conversions completed successfully', 201);
+        });
+    }
+
     public function approve(Request $request, $id)
     {
         $user = auth()->user() ?? \App\Models\User::first();

@@ -88,9 +88,9 @@ class SalesStoreStock extends Model
             $this->egg_unit_price = $eggPrice;
         }
 
-        $this->opening_stock = $this->conversions_in;
-        $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out + $this->damages;
-        $this->closing_stock = $this->opening_stock + $this->transferred_in - ($exits + $this->replacements);
+        $inflow = $this->conversions_in + $this->transferred_in;
+        $exits = $this->conversions_out + $this->sold_quantity + $this->transferred_out + $this->damages + $this->replacements;
+        $this->closing_stock = ($this->opening_stock ?? 0) + $inflow - $exits;
         $this->current_quantity = $this->closing_stock;
         $this->save();
     }

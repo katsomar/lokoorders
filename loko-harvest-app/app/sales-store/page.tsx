@@ -294,17 +294,23 @@ export default function SalesStorePage() {
   const [interNotes, setInterNotes] = useState("");
   const [isSubmittingInter, setIsSubmittingInter] = useState(false);
 
-  // Packaging Conversion State
+  // Packaging Conversion State (Multi-Item Overhaul)
   const [showConvModal, setShowConvModal] = useState(false);
   const [convStoreId, setConvStoreId] = useState("");
-  const [convFromProductId, setConvFromProductId] = useState("");
-  const [convToProductId, setConvToProductId] = useState("");
-  const [convQty, setConvQty] = useState("");
-  const [convTrays, setConvTrays] = useState("");
-  const [convEggs, setConvEggs] = useState("");
-  const [convBatchRef, setConvBatchRef] = useState("");
+  const [convEggCategory, setConvEggCategory] = useState<"cream" | "white" | "brown">("white");
+  const [convBatchRef, setConvBatchRef] = useState("all");
   const [convNotes, setConvNotes] = useState("");
   const [isSubmittingConv, setIsSubmittingConv] = useState(false);
+
+  const [convClassInputs, setConvClassInputs] = useState<{
+    [key: string]: { trays: string; eggs: string; targetProductId: string }
+  }>({
+    good: { trays: "", eggs: "", targetProductId: "" },
+    d1: { trays: "", eggs: "", targetProductId: "" },
+    d2: { trays: "", eggs: "", targetProductId: "" },
+    d3: { trays: "", eggs: "", targetProductId: "" },
+    shell: { trays: "", eggs: "", targetProductId: "" }
+  });
 
   // Report damage states
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -721,7 +727,7 @@ export default function SalesStorePage() {
 
   const calculateOutgoingValue = () => {
     return getFilteredStock().reduce((acc, item) => {
-      return acc + getStockItemValuationSold(item);
+      return acc + getStockItemValuationTaken(item);
     }, 0);
   };
 
@@ -815,128 +821,213 @@ export default function SalesStorePage() {
     if (!interFromStoreId) return [];
     return stockItems.filter(item => item.sales_store_id === interFromStoreId && item.quantity > 0);
   };
-
   const getSelectedSourceProduct = () => {
     return getSourceStoreProducts().find(p => p.product_id === interProductId);
   };
 
-  // Conversion Helpers
-  const getBulkProductsInStore = () => {
-    if (!convStoreId) return [];
-    const items = stockItems.filter(item => 
-      item.sales_store_id === convStoreId && 
-      (isBulkProduct(item.code) || item.code.startsWith("EGG-"))
-    );
-    // Group by product_id and sum quantity
-    const grouped: { [key: string]: SalesStockItem } = {};
-    for (const item of items) {
-      if (!grouped[item.product_id]) {
-        grouped[item.product_id] = { ...item };
-      } else {
-        grouped[item.product_id].quantity += item.quantity;
-      }
-    }
-    return Object.values(grouped).filter(i => i.quantity > 0);
+  // Conversion Helpers (Multi-Item Overhaul)
+  const getCategoryPrefix = (cat: "cream" | "white" | "brown") => {
+    return cat === "white" ? "EGG-WHT" : cat === "cream" ? "EGG-CRM" : "EGG-BRN";
   };
 
-  const getAvailableBatchesForConversion = () => {
-    if (!convStoreId || !convFromProductId) return [];
-    return stockItems.filter(item => 
+  const getAvailableBatchesForCategory = () => {
+    if (!convStoreId) return [];
+    const prefix = getCategoryPrefix(convEggCategory);
+    const matches = stockItems.filter(item => 
       item.sales_store_id === convStoreId && 
-      item.product_id === convFromProductId && 
+      item.code.startsWith(prefix) && 
       item.quantity > 0
     );
+    const batches = matches.map(m => m.batch_reference || 'N/A');
+    return ["all", ...Array.from(new Set(batches))];
   };
 
-  const getTargetPackagedProducts = () => {
-    if (!convFromProductId) return [];
-    const sourceProduct = stockItems.find(item => item.product_id === convFromProductId) || products.find(p => p.id === convFromProductId);
-    if (!sourceProduct) return [];
-    const prefix = sourceProduct.code.substring(0, 7); // e.g. "EGG-CRM", "EGG-WHT", "EGG-BRN"
-    return products.filter(p => p.code.startsWith(prefix) && p.id !== convFromProductId);
+  const getSourceProductForClass = (typeKey: string) => {
+    const prefix = getCategoryPrefix(convEggCategory);
+    let targetCode = prefix;
+    if (typeKey === "d1") targetCode = `${prefix}-D1`;
+    else if (typeKey === "d2") targetCode = `${prefix}-D2`;
+    else if (typeKey === "d3") targetCode = `${prefix}-D3`;
+    else if (typeKey === "shell") targetCode = `${prefix}-SHL`;
+
+    return products.find(p => p.code === targetCode) || stockItems.find(s => s.code === targetCode);
   };
 
-  const getSelectedSourceStockItem = () => {
-    if (convBatchRef) {
-      return stockItems.find(item => 
-        item.sales_store_id === convStoreId && 
-        item.product_id === convFromProductId && 
-        item.batch_reference === convBatchRef
-      );
-    }
-    const matchingItems = stockItems.filter(item => 
-      item.sales_store_id === convStoreId && 
-      item.product_id === convFromProductId
+  const getAvailableStockForClass = (typeKey: string) => {
+    if (!convStoreId) return 0;
+    const prefix = getCategoryPrefix(convEggCategory);
+    let targetCode = prefix;
+    if (typeKey === "d1") targetCode = `${prefix}-D1`;
+    else if (typeKey === "d2") targetCode = `${prefix}-D2`;
+    else if (typeKey === "d3") targetCode = `${prefix}-D3`;
+    else if (typeKey === "shell") targetCode = `${prefix}-SHL`;
+
+    const matches = stockItems.filter(item => 
+      item.sales_store_id === convStoreId &&
+      item.code === targetCode &&
+      (convBatchRef === "all" || item.batch_reference === convBatchRef)
     );
-    if (matchingItems.length === 0) return undefined;
-    const totalQty = matchingItems.reduce((sum, item) => sum + item.quantity, 0);
-    return {
-      ...matchingItems[0],
-      quantity: totalQty
-    };
+
+    return matches.reduce((sum, item) => sum + item.quantity, 0);
   };
 
-  const selectedTargetProduct = products.find(p => p.id === convToProductId);
-
-  const getEnteredConversionQty = () => {
-    const t = parseFloat(convTrays) || 0;
-    const e = parseFloat(convEggs) || 0;
-    const calc = t + (e / 30);
-    if (calc > 0) return calc;
-    return parseFloat(convQty) || 0;
+  const getTargetProductsForCategory = () => {
+    const prefix = getCategoryPrefix(convEggCategory);
+    return products.filter(p => 
+      p.code.startsWith(prefix) && 
+      !p.code.endsWith("-D1") && 
+      !p.code.endsWith("-D2") && 
+      !p.code.endsWith("-D3") && 
+      !p.code.endsWith("-SHL") &&
+      p.code !== prefix
+    );
   };
 
-  const getConversionYield = () => {
-    const qty = getEnteredConversionQty();
-    if (!selectedTargetProduct) return 0;
-    if (selectedTargetProduct.code.endsWith('-15P')) return qty * 2;
-    if (selectedTargetProduct.code.endsWith('-06P')) return qty * 5;
-    if (selectedTargetProduct.code.endsWith('-FAM')) return qty / 5;
-    if (selectedTargetProduct.code.endsWith('-DBL')) return qty / 2;
-    if (selectedTargetProduct.code.endsWith('-TPL')) return qty / 3;
-    if (selectedTargetProduct.code.endsWith('-SGL') || selectedTargetProduct.code.endsWith('-TRYS')) return qty;
-    return qty; // Single Pack / Plain Trays ratio is 1:1
+  const getClassEnteredQty = (typeKey: string) => {
+    const input = convClassInputs[typeKey];
+    if (!input) return 0;
+    const t = parseFloat(input.trays) || 0;
+    const e = parseFloat(input.eggs) || 0;
+    return t + (e / 30);
   };
 
-  const handlePostConversion = async (e: React.FormEvent) => {
+  const getClassYield = (typeKey: string) => {
+    const qty = getClassEnteredQty(typeKey);
+    const input = convClassInputs[typeKey];
+    if (qty <= 0 || !input?.targetProductId) return { yieldQty: 0, formattedYield: "0 units", unitLabel: "units", targetProduct: undefined };
+
+    const targetProduct = products.find(p => p.id === input.targetProductId);
+    if (!targetProduct) return { yieldQty: 0, formattedYield: "0 units", unitLabel: "units", targetProduct: undefined };
+
+    let yieldQty = qty;
+    if (targetProduct.code.endsWith('-15P')) yieldQty = qty * 2;
+    else if (targetProduct.code.endsWith('-06P')) yieldQty = qty * 5;
+    else if (targetProduct.code.endsWith('-FAM')) yieldQty = qty / 5;
+    else if (targetProduct.code.endsWith('-DBL')) yieldQty = qty / 2;
+    else if (targetProduct.code.endsWith('-TPL')) yieldQty = qty / 3;
+
+    const unitLabel = targetProduct.unit_of_measure || "units";
+    const isTrayUnit = unitLabel.toLowerCase() === "trays" || 
+                       targetProduct.code.endsWith("-TRYS") || 
+                       targetProduct.code.endsWith("-D1") || 
+                       targetProduct.code.endsWith("-D2") || 
+                       targetProduct.code.endsWith("-D3") || 
+                       targetProduct.code.endsWith("-SHL") || 
+                       targetProduct.code.endsWith("-SGL");
+
+    let formattedYield = "";
+    if (isTrayUnit) {
+      formattedYield = formatQuantity(yieldQty, "trays");
+    } else {
+      const rounded = Number(yieldQty.toFixed(2));
+      formattedYield = `${rounded.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${unitLabel}`;
+    }
+
+    return { yieldQty, formattedYield, unitLabel, targetProduct, isTrayUnit };
+  };
+
+  const openConversionModal = (storeId?: string, cat?: "white" | "cream" | "brown", batchRef?: string) => {
+    const storeToUse = storeId || convStoreId || (salesStores[0]?.id || "");
+    const catToUse = cat || convEggCategory || "white";
+    const batchToUse = batchRef || convBatchRef || "all";
+
+    setConvStoreId(storeToUse);
+    setConvEggCategory(catToUse);
+    setConvBatchRef(batchToUse);
+
+    const prefix = getCategoryPrefix(catToUse);
+    const targets = products.filter(p => 
+      p.code.startsWith(prefix) && 
+      !p.code.endsWith("-D1") && 
+      !p.code.endsWith("-D2") && 
+      !p.code.endsWith("-D3") && 
+      !p.code.endsWith("-SHL") &&
+      p.code !== prefix
+    );
+    const defaultPack = targets.find(p => p.code.endsWith("-TRYS"))?.id || targets.find(p => p.code.endsWith("-15P"))?.id || targets[0]?.id || "";
+
+    setConvClassInputs({
+      good: { trays: "", eggs: "", targetProductId: defaultPack },
+      d1: { trays: "", eggs: "", targetProductId: defaultPack },
+      d2: { trays: "", eggs: "", targetProductId: defaultPack },
+      d3: { trays: "", eggs: "", targetProductId: defaultPack },
+      shell: { trays: "", eggs: "", targetProductId: defaultPack },
+    });
+
+    setShowConvModal(true);
+  };
+
+  const handlePostBatchConversion = async (e: React.FormEvent) => {
     e.preventDefault();
-    const qty = getEnteredConversionQty();
-    if (qty <= 0 || !convStoreId || !convFromProductId || !convToProductId) {
-      alert("Please fill all required conversion fields with a quantity greater than 0.");
-      return;
-    }
-    if (convFromProductId === convToProductId) {
-      alert("Source product and destination packaged product cannot be the same product.");
+    if (!convStoreId) {
+      alert("Please select a Sales Store Facility.");
       return;
     }
 
-    const availableStock = getSelectedSourceStockItem()?.quantity || 0;
-    if (availableStock < qty) {
-      alert(`Insufficient stock available for conversion! Only ${availableStock} trays available.`);
+    const payloadConversions: Array<{
+      from_product_id: string;
+      to_product_id: string;
+      trays: number;
+      eggs: number;
+    }> = [];
+
+    const keys = ["good", "d1", "d2", "d3", "shell"];
+    for (const key of keys) {
+      const qty = getClassEnteredQty(key);
+      if (qty > 0) {
+        const sourceProd = getSourceProductForClass(key);
+        const input = convClassInputs[key];
+        if (!sourceProd) {
+          alert(`Source product for ${key.toUpperCase()} not found in product registry.`);
+          return;
+        }
+        if (!input.targetProductId) {
+          alert(`Please select a destination product for ${key.toUpperCase()} conversion.`);
+          return;
+        }
+
+        const avail = getAvailableStockForClass(key);
+        if (qty - avail > 0.001) {
+          alert(`Insufficient stock for ${sourceProd.name}! Available: ${formatQuantity(avail, "trays")}, Entered: ${formatQuantity(qty, "trays")}.`);
+          return;
+        }
+
+        payloadConversions.push({
+          from_product_id: sourceProd.id,
+          to_product_id: input.targetProductId,
+          trays: parseFloat(input.trays) || 0,
+          eggs: parseFloat(input.eggs) || 0
+        });
+      }
+    }
+
+    if (payloadConversions.length === 0) {
+      alert("Please enter a conversion quantity (trays or eggs) for at least one quality class.");
       return;
     }
 
     setIsSubmittingConv(true);
     try {
-      await api.post('/sales-store-conversions', {
+      await api.post('/sales-store-conversions/batch', {
         sales_store_id: convStoreId,
-        from_product_id: convFromProductId,
-        to_product_id: convToProductId,
-        from_quantity: qty,
-        batch_reference: convBatchRef || null,
-        notes: convNotes || `Conversion by operator: ${user?.name || 'Administrator'}`
+        batch_reference: convBatchRef === "all" ? null : convBatchRef,
+        notes: convNotes || `Multi-class conversion by operator: ${user?.name || 'Administrator'}`,
+        conversions: payloadConversions
       });
 
-      alert("Conversion completed successfully!");
-      setConvQty("");
-      setConvTrays("");
-      setConvEggs("");
-      setConvBatchRef("");
+      alert("Multi-item stock conversion executed successfully!");
       setConvNotes("");
+      setConvClassInputs({
+        good: { trays: "", eggs: "", targetProductId: "" },
+        d1: { trays: "", eggs: "", targetProductId: "" },
+        d2: { trays: "", eggs: "", targetProductId: "" },
+        d3: { trays: "", eggs: "", targetProductId: "" },
+        shell: { trays: "", eggs: "", targetProductId: "" }
+      });
       setShowConvModal(false);
-      fetchData();
+      fetchSalesDashboardData(false);
     } catch (err: any) {
-      alert(err.response?.data?.message || "Failed to complete conversion. Please try again.");
+      alert(err.response?.data?.message || "Failed to process multi-item stock conversion.");
     } finally {
       setIsSubmittingConv(false);
     }
@@ -1608,16 +1699,16 @@ export default function SalesStorePage() {
                       <TableHead className="text-[10px] font-semibold text-gray-500 tracking-wider uppercase h-10 py-2 border-r border-brand-sage/25 whitespace-nowrap">Batch No</TableHead>
                       
                       <TableHead className="text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Class</TableHead>
-                      <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Incoming</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Opening</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Incoming</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Current</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Outgoing/Converted</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Damages</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-emerald-700 tracking-wider uppercase h-10 py-2 border-r border-brand-sage/25 whitespace-nowrap">Closing</TableHead>
                       
                       <TableHead className="text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Product Packs</TableHead>
-                      <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Conv/Incoming</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Opening Stock</TableHead>
+                      <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Conv/Incoming</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Current</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Outgoing</TableHead>
                       <TableHead className="text-right text-[10px] font-semibold text-blue-700 tracking-wider uppercase h-10 py-2 whitespace-nowrap">Returns</TableHead>
@@ -1677,13 +1768,15 @@ export default function SalesStorePage() {
                                   const convertedItem = i < group.convertedItems.length ? group.convertedItems[i] : null;
 
                                   // Audit calculation for bulk (first sub-row only)
-                                  const primaryBulk = group.bulkSubItems.good || group.bulkSubItems.d1 || group.bulkSubItems.d2;
-                                  const bulkInflow = primaryBulk.opening_stock + primaryBulk.transferred_in + primaryBulk.conversions_in + (primaryBulk.returns || 0);
-                                  const bulkExits = primaryBulk.conversions_out + primaryBulk.transferred_out + primaryBulk.sold_quantity + (primaryBulk.replacements || 0) + (primaryBulk.damages || 0) + primaryBulk.closing_stock;
+                                  const bulkSubItemsList = Object.values(group.bulkSubItems).filter(item => item && (item.product_id || item.opening_stock > 0 || item.transferred_in > 0 || item.closing_stock > 0 || item.unit_price > 0));
+                                  const primaryBulk = group.bulkSubItems.good || group.bulkSubItems.d1 || group.bulkSubItems.d2 || bulkSubItemsList[0];
+
+                                  const bulkInflow = bulkSubItemsList.reduce((sum, item) => sum + item.opening_stock + item.transferred_in + item.conversions_in + (item.returns || 0), 0);
+                                  const bulkExits = bulkSubItemsList.reduce((sum, item) => sum + item.conversions_out + item.transferred_out + item.sold_quantity + (item.replacements || 0) + (item.damages || 0) + item.closing_stock, 0);
                                   const bulkCrossCheck = bulkInflow - bulkExits;
                                   const isBulkAudited = Math.abs(bulkCrossCheck) < 0.01;
-                                  const bulkWorthTaken = getStockItemValuationTaken(primaryBulk);
-                                  const bulkWorthClosing = getStockItemValuation(primaryBulk);
+                                  const bulkWorthTaken = bulkSubItemsList.reduce((sum, item) => sum + getStockItemValuationTaken(item), 0);
+                                  const bulkWorthClosing = bulkSubItemsList.reduce((sum, item) => sum + getStockItemValuation(item), 0);
 
                                   // Audit calculation for converted pack in this sub-row
                                   const packInflow = convertedItem ? (convertedItem.opening_stock + convertedItem.transferred_in + convertedItem.conversions_in + (convertedItem.returns || 0)) : 0;
@@ -1730,11 +1823,11 @@ export default function SalesStorePage() {
                                           <span className="text-gray-300">—</span>
                                         )}
                                       </TableCell>
-                                      <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!bulkItem ? 'text-gray-300' : bulkItem.transferred_in === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-emerald-750'}`}>
-                                        {bulkItem ? formatQuantity(bulkItem.transferred_in, bulkItem.unit) : "—"}
-                                      </TableCell>
                                       <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!bulkItem ? 'text-gray-300' : bulkItem.opening_stock === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-emerald-750'}`}>
                                         {bulkItem ? formatQuantity(bulkItem.opening_stock, bulkItem.unit) : "—"}
+                                      </TableCell>
+                                      <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!bulkItem ? 'text-gray-300' : bulkItem.transferred_in === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-emerald-750'}`}>
+                                        {bulkItem ? formatQuantity(bulkItem.transferred_in, bulkItem.unit) : "—"}
                                       </TableCell>
                                       <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!bulkItem ? 'text-gray-300' : (bulkItem.opening_stock + bulkItem.transferred_in) === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-emerald-850'}`}>
                                         {bulkItem ? formatQuantity(bulkItem.opening_stock + bulkItem.transferred_in, bulkItem.unit) : "—"}
@@ -1768,11 +1861,11 @@ export default function SalesStorePage() {
                                       <TableCell className="pt-3 text-xs whitespace-nowrap">
                                         {convertedItem ? <div className="font-medium text-gray-700">{convertedItem.product}</div> : <span className="text-gray-300">—</span>}
                                       </TableCell>
-                                      <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!convertedItem ? 'text-gray-300' : (convertedItem.conversions_in + convertedItem.transferred_in) === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-blue-750'}`}>
-                                        {convertedItem ? formatQuantity(convertedItem.conversions_in + convertedItem.transferred_in, convertedItem.unit) : "—"}
-                                      </TableCell>
                                       <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!convertedItem ? 'text-gray-300' : convertedItem.opening_stock === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-blue-750'}`}>
                                         {convertedItem ? formatQuantity(convertedItem.opening_stock, convertedItem.unit) : "—"}
+                                      </TableCell>
+                                      <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!convertedItem ? 'text-gray-300' : (convertedItem.conversions_in + convertedItem.transferred_in) === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-blue-750'}`}>
+                                        {convertedItem ? formatQuantity(convertedItem.conversions_in + convertedItem.transferred_in, convertedItem.unit) : "—"}
                                       </TableCell>
                                       <TableCell className={`text-right text-xs pt-4 whitespace-nowrap ${!convertedItem ? 'text-gray-300' : (convertedItem.opening_stock + convertedItem.conversions_in + convertedItem.transferred_in) === 0 ? 'text-gray-300 font-medium' : 'font-semibold text-blue-850'}`}>
                                         {convertedItem ? formatQuantity(convertedItem.opening_stock + convertedItem.conversions_in + convertedItem.transferred_in, convertedItem.unit) : "—"}
@@ -1808,75 +1901,109 @@ export default function SalesStorePage() {
                                         {convertedItem ? formatQuantity(convertedItem.closing_stock, convertedItem.unit) : "—"}
                                       </TableCell>
 
-                                      {/* Valuation & Audit */}
-                                      {isFirstSubRow && (
-                                        <>
-                                          <TableCell rowSpan={totalSubRows} className="text-right font-medium text-xs text-gray-500 pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
-                                            <div className="flex flex-col items-end text-[10px] leading-tight">
-                                              <span className="text-gray-400">B: UGX {primaryBulk.unit_price.toLocaleString()}</span>
-                                              {convertedItem && <span className="font-semibold text-gray-800 mt-0.5">P: UGX {convertedItem.unit_price.toLocaleString()}</span>}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell rowSpan={totalSubRows} className="text-right text-xs pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
-                                            <div className="flex flex-col items-end text-[10px] leading-tight">
-                                              <span className={`${bulkWorthTaken === 0 ? 'text-gray-300' : 'text-amber-700/80'} font-normal`}>B: UGX {bulkWorthTaken.toLocaleString()}</span>
-                                              {convertedItem && <span className={`font-semibold mt-0.5 ${packWorthTaken === 0 ? 'text-gray-300' : 'text-amber-700'}`}>P: UGX {packWorthTaken.toLocaleString()}</span>}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell rowSpan={totalSubRows} className="text-right text-xs pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
-                                            <div className="flex flex-col items-end text-[10px] leading-tight">
-                                              <span className={`${bulkWorthClosing === 0 ? 'text-gray-300' : 'text-brand-forest/80'} font-normal`}>B: UGX {bulkWorthClosing.toLocaleString()}</span>
-                                              {convertedItem && <span className={`font-semibold mt-0.5 ${packWorthClosing === 0 ? 'text-gray-300' : 'text-brand-forest'}`}>P: UGX {packWorthClosing.toLocaleString()}</span>}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell rowSpan={totalSubRows} className="text-center pt-2.5 whitespace-nowrap align-middle border-r border-brand-sage/10">
-                                            <div className="flex flex-col items-center gap-0.5">
-                                              {isBulkAudited ? (
-                                                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[8px] hover:bg-emerald-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
-                                                  B: ✓ Audited
-                                                </Badge>
-                                              ) : (
-                                                <Badge className="bg-rose-50 text-rose-700 border border-rose-300 text-[8px] hover:bg-rose-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
-                                                  B: ⚠️ Err ({bulkCrossCheck.toFixed(1)})
-                                                </Badge>
-                                              )}
-                                              {convertedItem && (
-                                                isPackAudited ? (
-                                                  <Badge className="bg-blue-50 text-blue-700 border border-blue-300 text-[8px] hover:bg-blue-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
-                                                    P: ✓ Audited
-                                                  </Badge>
-                                                ) : (
-                                                  <Badge className="bg-amber-50 text-amber-700 border border-amber-300 text-[8px] hover:bg-amber-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
-                                                    P: ⚠️ Err ({packCrossCheck.toFixed(1)})
-                                                  </Badge>
-                                                )
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                          <TableCell rowSpan={totalSubRows} className="text-center pt-3 whitespace-nowrap align-middle">
-                                            <div className="flex items-center justify-center gap-1">
-                                              <Button
-                                                onClick={() => {
-                                                  setConvStoreId(primaryBulk.sales_store_id);
-                                                  setConvFromProductId(primaryBulk.product_id);
-                                                  setShowConvModal(true);
-                                                }}
-                                                className="h-7 px-2 text-[10px] bg-brand-forest hover:bg-brand-forest/90 text-white font-semibold rounded-lg shadow-none border-none cursor-pointer"
-                                                title="Convert bulk egg trays into packaged units"
-                                              >
-                                                Convert
-                                              </Button>
-                                              <Button
-                                                onClick={() => handleStartAdjustment(primaryBulk)}
-                                                className="h-7 px-2 text-[10px] bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg shadow-none border border-red-200 cursor-pointer"
-                                                title="Record damage or store adjustment"
-                                              >
-                                                Damage
-                                              </Button>
-                                            </div>
-                                          </TableCell>
-                                        </>
-                                      )}
+                                      {/* Valuation & Audit - Per Sub-Row */}
+                                      <TableCell className="text-right font-medium text-xs text-gray-500 pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
+                                        <div className="flex flex-col items-end text-[10px] leading-tight">
+                                          {bulkItem ? (
+                                            <span className="text-gray-600 font-semibold">B: UGX {bulkItem.unit_price ? bulkItem.unit_price.toLocaleString() : "0"}</span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                          {convertedItem && (
+                                            <span className="font-semibold text-gray-800 mt-0.5">P: UGX {convertedItem.unit_price ? convertedItem.unit_price.toLocaleString() : "0"}</span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell className="text-right text-xs pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
+                                        <div className="flex flex-col items-end text-[10px] leading-tight">
+                                          {bulkItem ? (
+                                            <span className={`${getStockItemValuationTaken(bulkItem) === 0 ? 'text-gray-300' : 'text-amber-700/80'} font-normal`}>
+                                              B: UGX {getStockItemValuationTaken(bulkItem).toLocaleString()}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                          {convertedItem && (
+                                            <span className={`font-semibold mt-0.5 ${getStockItemValuationTaken(convertedItem) === 0 ? 'text-gray-300' : 'text-amber-700'}`}>
+                                              P: UGX {getStockItemValuationTaken(convertedItem).toLocaleString()}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell className="text-right text-xs pt-3 whitespace-nowrap align-middle border-r border-brand-sage/10">
+                                        <div className="flex flex-col items-end text-[10px] leading-tight">
+                                          {bulkItem ? (
+                                            <span className={`${getStockItemValuation(bulkItem) === 0 ? 'text-gray-300' : 'text-brand-forest/80'} font-normal`}>
+                                              B: UGX {getStockItemValuation(bulkItem).toLocaleString()}
+                                            </span>
+                                          ) : (
+                                            <span className="text-gray-300">—</span>
+                                          )}
+                                          {convertedItem && (
+                                            <span className={`font-semibold mt-0.5 ${getStockItemValuation(convertedItem) === 0 ? 'text-gray-300' : 'text-brand-forest'}`}>
+                                              P: UGX {getStockItemValuation(convertedItem).toLocaleString()}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell className="text-center pt-2.5 whitespace-nowrap align-middle border-r border-brand-sage/10">
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          {bulkItem && (
+                                            Math.abs((bulkItem.opening_stock + bulkItem.transferred_in + bulkItem.conversions_in + (bulkItem.returns || 0)) - (bulkItem.conversions_out + bulkItem.transferred_out + bulkItem.sold_quantity + (bulkItem.replacements || 0) + (bulkItem.damages || 0) + bulkItem.closing_stock)) < 0.01 ? (
+                                              <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-300 text-[8px] hover:bg-emerald-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
+                                                B: ✓ Audited
+                                              </Badge>
+                                            ) : (
+                                              <Badge className="bg-rose-50 text-rose-700 border border-rose-300 text-[8px] hover:bg-rose-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
+                                                B: ⚠️ Err
+                                              </Badge>
+                                            )
+                                          )}
+                                          {convertedItem && (
+                                            Math.abs((convertedItem.opening_stock + convertedItem.transferred_in + convertedItem.conversions_in + (convertedItem.returns || 0)) - (convertedItem.conversions_out + convertedItem.transferred_out + convertedItem.sold_quantity + (convertedItem.replacements || 0) + (convertedItem.damages || 0) + convertedItem.closing_stock)) < 0.01 ? (
+                                              <Badge className="bg-blue-50 text-blue-700 border border-blue-300 text-[8px] hover:bg-blue-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
+                                                P: ✓ Audited
+                                              </Badge>
+                                            ) : (
+                                              <Badge className="bg-amber-50 text-amber-700 border border-amber-300 text-[8px] hover:bg-amber-50 font-semibold shadow-none py-0 px-1 whitespace-nowrap">
+                                                P: ⚠️ Err
+                                              </Badge>
+                                            )
+                                          )}
+                                        </div>
+                                      </TableCell>
+
+                                      <TableCell className="text-center pt-3 whitespace-nowrap align-middle">
+                                        <div className="flex items-center justify-center gap-1">
+                                          {bulkItem && bulkItem.closing_stock > 0 && (
+                                            <Button
+                                              onClick={() => {
+                                                let cat: "white" | "cream" | "brown" = "white";
+                                                if (bulkItem.code.startsWith("EGG-CRM")) cat = "cream";
+                                                else if (bulkItem.code.startsWith("EGG-BRN")) cat = "brown";
+                                                const batch = bulkItem.batch_reference || "all";
+                                                openConversionModal(bulkItem.sales_store_id, cat, batch);
+                                              }}
+                                              className="h-7 px-2 text-[10px] bg-brand-forest hover:bg-brand-forest/90 text-white font-semibold rounded-lg shadow-none border-none cursor-pointer"
+                                              title="Convert bulk egg trays into packaged units"
+                                            >
+                                              Convert
+                                            </Button>
+                                          )}
+                                          {(bulkItem || convertedItem) && (
+                                            <Button
+                                              onClick={() => handleStartAdjustment(bulkItem || convertedItem!)}
+                                              className="h-7 px-2 text-[10px] bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-lg shadow-none border border-red-200 cursor-pointer"
+                                              title="Record damage or store adjustment"
+                                            >
+                                              Damage
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </TableCell>
                                     </TableRow>
                                   );
                                 });
@@ -2000,20 +2127,23 @@ export default function SalesStorePage() {
                   </div>
 
                   {calcDirection === "trays-to-packs" ? (
-                    // Trays to Packs Conversion Transaction Form
-                    <form onSubmit={handlePostConversion} className="space-y-4">
-                      {/* Sales Store Dropdown */}
+                    // Multi-Class Stock Conversion Launcher & Quick Calculator
+                    <div className="space-y-4 text-xs">
+                      <div className="p-3 bg-brand-forest/5 border border-brand-forest/20 rounded-xl space-y-2">
+                        <span className="text-[10px] font-black uppercase text-brand-forest tracking-wider block">
+                          🚀 Simultaneous Multi-Class Conversions
+                        </span>
+                        <p className="text-[11px] font-medium text-gray-600 leading-relaxed">
+                          Convert <strong>Good</strong>, <strong>D1</strong>, <strong>D2</strong>, <strong>D3</strong>, and <strong>Shell</strong> eggs into retail packages and class products all at once with live yield guidance.
+                        </p>
+                      </div>
+
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-brand-forest block">Sales Store</label>
+                        <label className="text-[10px] font-bold text-brand-forest block">Sales Store Facility</label>
                         <select
                           value={convStoreId}
-                          onChange={(e) => {
-                            setConvStoreId(e.target.value);
-                            setConvFromProductId("");
-                            setConvToProductId("");
-                          }}
+                          onChange={(e) => setConvStoreId(e.target.value)}
                           className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
-                          required
                         >
                           <option value="">Select store...</option>
                           {salesStores.map(store => (
@@ -2022,99 +2152,18 @@ export default function SalesStorePage() {
                         </select>
                       </div>
 
-                      {/* From Product (Bulk) */}
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-brand-forest block">Convert From Product (Bulk Trays)</label>
+                        <label className="text-[10px] font-bold text-brand-forest block">Egg Category</label>
                         <select
-                          value={convFromProductId}
-                          onChange={(e) => {
-                            setConvFromProductId(e.target.value);
-                            setConvToProductId("");
-                            setConvBatchRef("");
-                          }}
-                          className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
-                          disabled={!convStoreId}
-                          required
+                          value={convEggCategory}
+                          onChange={(e) => setConvEggCategory(e.target.value as any)}
+                          className="w-full text-xs font-bold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
                         >
-                          <option value="">Choose bulk product...</option>
-                          {getBulkProductsInStore().map(p => (
-                            <option key={p.product_id} value={p.product_id}>
-                              {p.product} ({p.quantity} Trays available)
-                            </option>
-                          ))}
+                          <option value="white">⚪ White Eggs</option>
+                          <option value="cream">🟡 Cream Eggs</option>
+                          <option value="brown">🟤 Brown Eggs</option>
                         </select>
                       </div>
-
-                      {/* Source Batch Dropdown (Only shown if product is selected and has batches) */}
-                      {convFromProductId && getAvailableBatchesForConversion().length > 0 && (
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-brand-forest block">Source Batch</label>
-                          <select
-                            value={convBatchRef}
-                            onChange={(e) => setConvBatchRef(e.target.value)}
-                            className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
-                          >
-                            <option value="">FIFO (Auto-split across batches)</option>
-                            {getAvailableBatchesForConversion().map(b => (
-                              <option key={b.id} value={b.batch_reference || ""}>
-                                Batch: {b.batch_reference || "N/A"} ({b.quantity} Trays available)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      {/* To Product (Packaged) */}
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-brand-forest block">Convert To Product (Packaged Carton)</label>
-                        <select
-                          value={convToProductId}
-                          onChange={(e) => setConvToProductId(e.target.value)}
-                          className="w-full text-xs font-semibold text-gray-700 border border-brand-sage rounded-xl px-2.5 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-brand-forest h-10"
-                          disabled={!convFromProductId}
-                          required
-                        >
-                          <option value="">Choose packaged product...</option>
-                          {getTargetPackagedProducts().map(p => (
-                            <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Input Trays Quantity */}
-                      <Input
-                        label="Number of Trays to Convert"
-                        type="number"
-                        step="1"
-                        value={convQty}
-                        onChange={(e) => setConvQty(e.target.value)}
-                        placeholder="Enter tray count"
-                        disabled={!convToProductId}
-                        required
-                      />
-
-                      {/* Live Yield & Operator Details */}
-                      {parseFloat(convQty) > 0 && selectedTargetProduct && (
-                        <div className="bg-brand-sage/10 rounded-xl p-3 border border-brand-sage/20 space-y-2 text-xs">
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-500 font-semibold">Yield Output Estimate:</span>
-                            <strong className="text-brand-forest text-sm">
-                              {getConversionYield().toLocaleString()} {selectedTargetProduct.unit_of_measure === 'trays' ? 'Trays' : 'Packs'}
-                            </strong>
-                          </div>
-                           <div className="text-[9px] text-gray-400 font-medium">
-                             Formula: {
-                              selectedTargetProduct.code.endsWith('-15P') ? '1 tray yields 2 x 15-Packs' :
-                              selectedTargetProduct.code.endsWith('-06P') ? '1 tray yields 5 x 6-Packs' :
-                              selectedTargetProduct.code.endsWith('-FAM') ? '5 trays yield 1 x Family Pack' :
-                              selectedTargetProduct.code.endsWith('-DBL') ? '2 trays yield 1 x Double Pack' :
-                              selectedTargetProduct.code.endsWith('-TPL') ? '3 trays yield 1 x Triple Pack' :
-                              selectedTargetProduct.code.endsWith('-SGL') || selectedTargetProduct.code.endsWith('-TRYS') ? '1 tray yields 1 x Single Pack / Plain Tray' :
-                              '1 tray yields 1 unit/pack/tray'
-                            }
-                          </div>
-                        </div>
-                      )}
 
                       <div className="border-t border-brand-sage/20 pt-2 flex justify-between items-center text-[10px] text-gray-400 font-bold">
                         <span>Operator:</span>
@@ -2122,19 +2171,13 @@ export default function SalesStorePage() {
                       </div>
 
                       <Button
-                        type="submit"
+                        type="button"
+                        onClick={() => openConversionModal()}
                         className="w-full bg-brand-yellow text-brand-forest hover:bg-[#E08C00] font-black rounded-xl h-10 shadow cursor-pointer text-xs border-none"
-                        isLoading={isSubmittingConv}
-                        disabled={!convQty || parseFloat(convQty) <= 0 || (getSelectedSourceStockItem() && parseFloat(convQty) > (getSelectedSourceStockItem()?.quantity || 0))}
                       >
-                        Complete
+                        Launch Multi-Class Conversion Form ⚡
                       </Button>
-                      {getSelectedSourceStockItem() && parseFloat(convQty) > (getSelectedSourceStockItem()?.quantity || 0) && (
-                        <p className="text-center text-[10px] text-red-500 font-bold mt-1">
-                          Exceeds available stock of {getSelectedSourceStockItem()?.quantity} trays.
-                        </p>
-                      )}
-                    </form>
+                    </div>
                   ) : (
                     // Packs to Trays Calculator Estimator (static calculator tab)
                     <div className="space-y-4">
@@ -2820,16 +2863,16 @@ export default function SalesStorePage() {
         </div>
       )}
 
-      {/* CONVERSION MODAL DIALOG */}
+      {/* CONVERSION MODAL DIALOG (MULTI-ITEM OVERHAUL) */}
       {showConvModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="bg-brand-forest text-white px-6 py-4 flex items-center justify-between">
+          <div className="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-brand-sage overflow-hidden animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+            <div className="bg-brand-forest text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <Boxes size={22} className="text-brand-yellow" />
                 <div>
-                  <h3 className="font-heading font-black text-base">Convert Stock & Packaging</h3>
-                  <p className="text-[10px] text-white/70">Convert bulk egg trays (Good, D1, D2, D3, Shells) into packaged retail units</p>
+                  <h3 className="font-heading font-black text-base">Multi-Class Stock Conversion</h3>
+                  <p className="text-[10px] text-white/70">Convert Good, D1, D2, D3, and Shell eggs into retail packages and class products simultaneously</p>
                 </div>
               </div>
               <button
@@ -2840,143 +2883,218 @@ export default function SalesStorePage() {
               </button>
             </div>
 
-            <form onSubmit={handlePostConversion} className="p-6 space-y-4 text-xs font-body">
-              {/* Store & Source Product Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <form onSubmit={handlePostBatchConversion} className="p-6 space-y-4 text-xs font-body overflow-y-auto flex-1">
+              {/* Store & Category & Batch Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50/80 p-3 rounded-xl border border-brand-sage/30">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-brand-forest block">Sales Store Facility *</label>
                   <select
                     value={convStoreId}
-                    onChange={(e) => {
-                      setConvStoreId(e.target.value);
-                      setConvFromProductId("");
-                      setConvToProductId("");
-                      setConvBatchRef("");
-                    }}
-                    className="w-full h-10 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest"
+                    onChange={(e) => setConvStoreId(e.target.value)}
+                    className="w-full h-9 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest"
                     required
                   >
-                    <option value="">-- Select Store Facility --</option>
+                    <option value="">-- Select Facility --</option>
                     {salesStores.map(store => (
-                      <option key={store.id} value={store.id}>{store.name} ({store.code})</option>
+                      <option key={store.id} value={store.id}>{store.name}</option>
                     ))}
                   </select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-brand-forest block">Source Product (Good / Damaged) *</label>
+                  <label className="text-[11px] font-bold text-brand-forest block">Egg Color Category *</label>
                   <select
-                    value={convFromProductId}
+                    value={convEggCategory}
                     onChange={(e) => {
-                      setConvFromProductId(e.target.value);
-                      setConvToProductId("");
-                      setConvBatchRef("");
+                      const newCat = e.target.value as any;
+                      setConvEggCategory(newCat);
+                      const prefix = getCategoryPrefix(newCat);
+                      const targets = products.filter(p => 
+                        p.code.startsWith(prefix) && 
+                        !p.code.endsWith("-D1") && 
+                        !p.code.endsWith("-D2") && 
+                        !p.code.endsWith("-D3") && 
+                        !p.code.endsWith("-SHL") &&
+                        p.code !== prefix
+                      );
+                      const defaultPack = targets.find(p => p.code.endsWith("-TRYS"))?.id || targets.find(p => p.code.endsWith("-15P"))?.id || targets[0]?.id || "";
+
+                      setConvClassInputs(prev => ({
+                        good: { ...prev.good, targetProductId: defaultPack },
+                        d1: { ...prev.d1, targetProductId: defaultPack },
+                        d2: { ...prev.d2, targetProductId: defaultPack },
+                        d3: { ...prev.d3, targetProductId: defaultPack },
+                        shell: { ...prev.shell, targetProductId: defaultPack },
+                      }));
                     }}
-                    disabled={!convStoreId}
-                    className="w-full h-10 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest disabled:bg-gray-100"
+                    className="w-full h-9 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest"
                     required
                   >
-                    <option value="">-- Select Source Quality Class --</option>
-                    {getBulkProductsInStore().map(prod => (
-                      <option key={prod.product_id} value={prod.product_id}>
-                        {prod.product} ({prod.code}) - {prod.quantity.toFixed(1)} Trays Available
-                      </option>
-                    ))}
+                    <option value="white">⚪ White Eggs</option>
+                    <option value="cream">🟡 Cream Eggs</option>
+                    <option value="brown">🟤 Brown Eggs</option>
                   </select>
                 </div>
-              </div>
 
-              {/* Batch Reference & Target Product Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-brand-forest block">Target Batch Ref (Optional)</label>
+                  <label className="text-[11px] font-bold text-brand-forest block">Batch Reference</label>
                   <select
                     value={convBatchRef}
                     onChange={(e) => setConvBatchRef(e.target.value)}
-                    disabled={!convFromProductId}
-                    className="w-full h-10 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest disabled:bg-gray-100"
+                    className="w-full h-9 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest"
                   >
-                    <option value="">All Batches (FIFO Automatic Deduct)</option>
-                    {getAvailableBatchesForConversion().map(item => (
-                      <option key={item.id} value={item.batch_reference || ""}>
-                        Batch #{item.batch_reference || 'N/A'} ({item.quantity} Trays)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-brand-forest block">Destination Packaged Product *</label>
-                  <select
-                    value={convToProductId}
-                    onChange={(e) => setConvToProductId(e.target.value)}
-                    disabled={!convFromProductId}
-                    className="w-full h-10 px-3 border border-brand-sage/60 rounded-xl bg-white font-semibold focus:outline-none focus:ring-1 focus:ring-brand-forest disabled:bg-gray-100"
-                    required
-                  >
-                    <option value="">-- Select Target Retail Product --</option>
-                    {getTargetPackagedProducts().map(target => (
-                      <option key={target.id} value={target.id}>
-                        {target.name} ({target.code})
-                      </option>
+                    <option value="all">All Batches (Automatic FIFO)</option>
+                    {getAvailableBatchesForCategory().filter(b => b !== "all").map(b => (
+                      <option key={b} value={b}>Batch #{b}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              {/* Dual Quantity Inputs: Trays & Loose Eggs */}
-              <div className="p-3 bg-gray-50/80 rounded-xl border border-brand-sage/30 space-y-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-forest block">
-                  Quantity to Convert
-                </span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[9px] font-bold text-gray-500 block mb-1">Trays (30 Eggs/Tray)</label>
-                    <Input
-                      type="number"
-                      step="1"
-                      placeholder="e.g. 10"
-                      value={convTrays}
-                      onChange={(e) => setConvTrays(e.target.value)}
-                      className="bg-white font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-bold text-gray-500 block mb-1">Loose Eggs (Individual)</label>
-                    <Input
-                      type="number"
-                      step="1"
-                      placeholder="e.g. 15"
-                      value={convEggs}
-                      onChange={(e) => setConvEggs(e.target.value)}
-                      className="bg-white font-bold"
-                    />
-                  </div>
+              {/* Multi-Class Conversion Input Table */}
+              <div className="border border-brand-sage/40 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-brand-sage/15 px-4 py-2 flex items-center justify-between border-b border-brand-sage/30">
+                  <span className="text-xs font-black uppercase text-brand-forest tracking-wider">Source Quality Classes & Input Quantities</span>
+                  <span className="text-[10px] text-gray-500 font-bold">Enter Trays & Loose Eggs for any class</span>
                 </div>
-                {getEnteredConversionQty() > 0 && (
-                  <p className="text-[10px] font-extrabold text-brand-forest">
-                    Total Selected: {formatQuantity(getEnteredConversionQty(), "trays")} ({getEnteredConversionQty().toFixed(2)} Trays)
-                  </p>
-                )}
+                <div className="divide-y divide-gray-100 bg-white">
+                  {[
+                    { key: "good", label: "Good Eggs", badge: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+                    { key: "d1", label: "D1 (Hairline Cracks)", badge: "bg-amber-100 text-amber-800 border-amber-300" },
+                    { key: "d2", label: "D2 (Medium Cracks)", badge: "bg-orange-100 text-orange-800 border-orange-300" },
+                    { key: "d3", label: "D3 (Heavy Cracks)", badge: "bg-gray-100 text-gray-800 border-gray-300" },
+                    { key: "shell", label: "Shell Eggs", badge: "bg-sky-100 text-sky-800 border-sky-300" }
+                  ].map(cls => {
+                    const avail = getAvailableStockForClass(cls.key);
+                    const entered = getClassEnteredQty(cls.key);
+                    const input = convClassInputs[cls.key] || { trays: "", eggs: "", targetProductId: "" };
+
+                    return (
+                      <div key={cls.key} className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/50 transition-colors">
+                        <div className="min-w-[180px]">
+                          <div className="flex items-center gap-2">
+                            <Badge className={`${cls.badge} text-[9px] font-black px-2 py-0.5`}>
+                              {cls.label}
+                            </Badge>
+                          </div>
+                          <p className="text-[10px] font-bold text-gray-500 mt-1">
+                            Available: <span className="text-brand-forest font-extrabold">{formatQuantity(avail, "trays")}</span>
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 flex-1 max-w-xs">
+                          <div className="flex-1">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Trays</label>
+                            <Input
+                              type="number"
+                              step="1"
+                              placeholder="Trays"
+                              value={input.trays}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setConvClassInputs(prev => ({
+                                  ...prev,
+                                  [cls.key]: { ...prev[cls.key], trays: val }
+                                }));
+                              }}
+                              className="h-8 text-xs font-bold bg-white"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[9px] font-bold text-gray-400 block mb-0.5">Loose Eggs</label>
+                            <Input
+                              type="number"
+                              step="1"
+                              placeholder="Eggs"
+                              value={input.eggs}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setConvClassInputs(prev => ({
+                                  ...prev,
+                                  [cls.key]: { ...prev[cls.key], eggs: val }
+                                }));
+                              }}
+                              className="h-8 text-xs font-bold bg-white"
+                            />
+                          </div>
+                        </div>
+
+                        {entered > 0 && (
+                          <div className="text-right min-w-[110px]">
+                            <span className="text-[10px] font-black text-brand-forest block">
+                              {formatQuantity(entered, "trays")}
+                            </span>
+                            {entered - avail > 0.001 && (
+                              <span className="text-[8px] font-bold text-red-600 animate-pulse">
+                                ⚠️ Exceeds Available
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Live Yield Estimate Banner */}
-              {selectedTargetProduct && getEnteredConversionQty() > 0 && (
-                <div className="p-3 bg-brand-forest/5 border border-brand-forest/20 rounded-xl flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] font-black uppercase text-brand-forest tracking-wider block">Estimated Output Yield</span>
-                    <span className="text-sm font-black text-brand-forest font-heading">
-                      {getConversionYield().toLocaleString()} {selectedTargetProduct.unit_of_measure || 'units'}
-                    </span>
-                  </div>
-                  <Badge className="bg-brand-forest text-white font-bold text-[9px]">
-                    Ratio 1 : {(getConversionYield() / getEnteredConversionQty()).toFixed(1)}
-                  </Badge>
+              {/* Dynamic Target Mapping Cards */}
+              {["good", "d1", "d2", "d3", "shell"].some(k => getClassEnteredQty(k) > 0) && (
+                <div className="space-y-2.5 pt-1">
+                  <span className="text-xs font-black uppercase text-brand-forest tracking-wider block">
+                    Destination Product Mapping & Yield Estimates
+                  </span>
+                  {["good", "d1", "d2", "d3", "shell"].map(key => {
+                    const entered = getClassEnteredQty(key);
+                    if (entered <= 0) return null;
+
+                    const input = convClassInputs[key] || { trays: "", eggs: "", targetProductId: "" };
+                    const yieldInfo = getClassYield(key);
+                    const label = key === "good" ? "Good Eggs" : key === "d1" ? "D1 (Hairline)" : key === "d2" ? "D2 (Medium)" : key === "d3" ? "D3 (Heavy)" : "Shell Eggs";
+
+                    return (
+                      <div key={key} className="p-3 bg-brand-forest/5 border border-brand-forest/20 rounded-xl space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-forest/10 pb-2">
+                          <span className="font-bold text-brand-forest text-xs flex items-center gap-1.5">
+                            🔄 Converting <span className="font-black underline">{formatQuantity(entered, "trays")}</span> of <span className="font-black">{label}</span>
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-500">Convert To:</span>
+                            <select
+                              value={input.targetProductId}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setConvClassInputs(prev => ({
+                                  ...prev,
+                                  [key]: { ...prev[key], targetProductId: val }
+                                }));
+                              }}
+                              className="h-8 text-xs font-bold border border-brand-sage rounded-lg bg-white px-2 focus:ring-1 focus:ring-brand-forest max-w-[220px]"
+                              required
+                            >
+                              <option value="">-- Choose Target Product --</option>
+                              {getTargetProductsForCategory().map(p => (
+                                <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        {yieldInfo.targetProduct && (
+                          <div className="flex items-center justify-between text-[11px] font-bold text-brand-forest pt-0.5">
+                            <span>Target Output Yield:</span>
+                            <Badge className="bg-brand-forest text-white font-extrabold text-[10px]">
+                              📦 {yieldInfo.formattedYield}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
-              {/* Notes */}
-              <div className="space-y-1">
+              {/* Conversion Notes */}
+              <div className="space-y-1 pt-1">
                 <label className="text-[11px] font-bold text-brand-forest block">Conversion Notes / Purpose</label>
                 <textarea
                   placeholder="Optional packaging notes, worker name, special customer request..."
@@ -2986,8 +3104,8 @@ export default function SalesStorePage() {
                 />
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-2.5 pt-2">
+              {/* Submit Buttons */}
+              <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-100 flex-shrink-0">
                 <Button 
                   type="button" 
                   variant="outline" 
@@ -3001,9 +3119,9 @@ export default function SalesStorePage() {
                   type="submit"
                   className="bg-brand-forest text-white hover:bg-brand-forest/90 font-bold border-none text-xs rounded-xl h-10 px-6 shadow-md cursor-pointer"
                   isLoading={isSubmittingConv}
-                  disabled={getEnteredConversionQty() <= 0 || !convStoreId || !convFromProductId || !convToProductId}
+                  disabled={!["good", "d1", "d2", "d3", "shell"].some(k => getClassEnteredQty(k) > 0) || ["good", "d1", "d2", "d3", "shell"].some(k => getClassEnteredQty(k) - getAvailableStockForClass(k) > 0.001)}
                 >
-                  Execute Conversion
+                  Complete Multi-Item Conversion
                 </Button>
               </div>
             </form>
