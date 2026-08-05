@@ -919,6 +919,32 @@ export default function OrderDetailPage() {
                   <TableBody>
                     {order.items?.map((item: any) => {
                       const uom = item.product?.unit_of_measure || "trays";
+                      const code = item.product?.code || "";
+                      const qtyNum = parseFloat(item.quantity) || 0;
+                      const isTrayUnit = uom.toLowerCase() === "trays" || 
+                                         code.endsWith("-TRYS") || 
+                                         code.endsWith("-D1") || 
+                                         code.endsWith("-D2") || 
+                                         code.endsWith("-D3") || 
+                                         code.endsWith("-SHL") || 
+                                         code === "EGG-WHT" || 
+                                         code === "EGG-CRM" || 
+                                         code === "EGG-BRN";
+
+                      let formattedQty = `${qtyNum.toLocaleString()} ${uom}`;
+                      if (isTrayUnit) {
+                        const absQty = Math.abs(qtyNum);
+                        const trays = Math.floor(absQty);
+                        const eggs = Math.round((absQty - trays) * 30);
+                        let finalTrays = trays;
+                        let finalEggs = eggs;
+                        if (finalEggs === 30) {
+                          finalTrays += 1;
+                          finalEggs = 0;
+                        }
+                        formattedQty = `${qtyNum < 0 ? '-' : ''}${finalTrays} Trays & ${finalEggs} Eggs`;
+                      }
+
                       return (
                         <TableRow key={item.id} className="hover:bg-brand-sage/5 transition-colors border-b border-gray-100 last:border-b-0">
                           <TableCell className="pl-6 py-4">
@@ -926,10 +952,17 @@ export default function OrderDetailPage() {
                             <p className="text-[10px] text-gray-400 font-semibold tracking-wider font-mono mt-0.5">{item.product?.code || "N/A"}</p>
                           </TableCell>
                           <TableCell className="text-center font-bold text-gray-800 text-xs">
-                            {parseFloat(item.quantity).toLocaleString()} {uom}
+                            <Badge className="bg-brand-sage/15 text-brand-forest border border-brand-sage/30 text-xs py-0.5 px-2.5 font-bold shadow-none">
+                              {formattedQty}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-right font-medium text-gray-500 text-xs">
-                            UGX {parseFloat(item.unit_price).toLocaleString()}
+                            <div>UGX {parseFloat(item.unit_price).toLocaleString()}</div>
+                            {isTrayUnit && (
+                              <div className="text-[9px] text-gray-400 font-bold">
+                                (UGX {Number((parseFloat(item.unit_price) / 30).toFixed(2)).toLocaleString()} per egg)
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="text-right font-extrabold pr-6 text-brand-forest text-xs font-heading">
                             UGX {parseFloat(item.line_total).toLocaleString()}

@@ -6,6 +6,7 @@ import { Trash2, CheckCircle2 } from "lucide-react";
 
 export function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [isEmpty, setIsEmpty] = useState(true);
 
@@ -23,18 +24,49 @@ export function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void 
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
     ctx.lineCap = "round";
-    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2.5;
     ctx.strokeStyle = "#1A5C2A";
   }, []);
+
+  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    let clientX = 0;
+    let clientY = 0;
+    if ("touches" in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ("clientX" in e) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  };
 
   const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     setIsDrawing(true);
     setIsEmpty(false);
-    draw(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+
+    const coords = getCoordinates(e);
+    lastPosRef.current = coords;
+
+    ctx.beginPath();
+    ctx.arc(coords.x, coords.y, 1.25, 0, Math.PI * 2);
+    ctx.fillStyle = "#1A5C2A";
+    ctx.fill();
   };
 
   const stopDrawing = () => {
     setIsDrawing(false);
+    lastPosRef.current = null;
     const canvas = canvasRef.current;
     if (canvas) {
       onSave(canvas.toDataURL());
@@ -42,26 +74,29 @@ export function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void 
   };
 
   const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return;
+    if (!isDrawing || !lastPosRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    let x, y;
+    const currentCoords = getCoordinates(e);
+    const lastCoords = lastPosRef.current;
 
-    if ("touches" in e) {
-      x = e.touches[0].clientX - rect.left;
-      y = e.touches[0].clientY - rect.top;
-    } else {
-      x = e.clientX - rect.left;
-      y = e.clientY - rect.top;
-    }
+    const midPoint = {
+      x: (lastCoords.x + currentCoords.x) / 2,
+      y: (lastCoords.y + currentCoords.y) / 2
+    };
 
-    ctx.lineTo(x, y);
-    ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(lastCoords.x, lastCoords.y);
+    ctx.quadraticCurveTo(lastCoords.x, lastCoords.y, midPoint.x, midPoint.y);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#1A5C2A";
+    ctx.stroke();
+
+    lastPosRef.current = currentCoords;
   };
 
   const clear = () => {
@@ -70,6 +105,7 @@ export function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void 
     if (canvas && ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       setIsEmpty(true);
+      lastPosRef.current = null;
       onSave("");
     }
   };

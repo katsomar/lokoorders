@@ -78,6 +78,99 @@ const orderSchema = z.object({
 
 type OrderFormValues = z.infer<typeof orderSchema>;
 
+interface TrayEggsInputProps {
+  id: string;
+  quantity: number;
+  onChangeQuantity: (newQty: number) => void;
+}
+
+const TrayEggsInput = ({ id, quantity, onChangeQuantity }: TrayEggsInputProps) => {
+  const traysId = `trays-input-edit-${id}`;
+  const eggsId = `eggs-input-edit-${id}`;
+
+  const [traysStr, setTraysStr] = useState<string>(() => {
+    if (!quantity && quantity !== 0) return "";
+    const t = Math.floor(Math.abs(quantity));
+    return t > 0 ? String(t) : "";
+  });
+
+  const [eggsStr, setEggsStr] = useState<string>(() => {
+    if (!quantity && quantity !== 0) return "";
+    const absQty = Math.abs(quantity);
+    const t = Math.floor(absQty);
+    const e = Math.round((absQty - t) * 30);
+    return e > 0 ? String(e) : "";
+  });
+
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.activeElement) {
+      const activeId = document.activeElement.id;
+      if (activeId === traysId || activeId === eggsId) {
+        return;
+      }
+    }
+    const absQty = Math.abs(quantity || 0);
+    const t = Math.floor(absQty);
+    const e = Math.round((absQty - t) * 30);
+    setTraysStr(t > 0 ? String(t) : "");
+    setEggsStr(e > 0 ? String(e) : "");
+  }, [quantity, traysId, eggsId]);
+
+  const handleTraysChange = (val: string) => {
+    setTraysStr(val);
+    const t = parseInt(val) || 0;
+    const e = parseInt(eggsStr) || 0;
+    onChangeQuantity(t + (e / 30));
+  };
+
+  const handleEggsChange = (val: string) => {
+    setEggsStr(val);
+    const t = parseInt(traysStr) || 0;
+    let e = parseInt(val) || 0;
+    if (e > 29) e = 29;
+    onChangeQuantity(t + (e / 30));
+  };
+
+  const currentTrays = parseInt(traysStr) || 0;
+  const currentEggs = parseInt(eggsStr) || 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1.5">
+        <div className="flex-1">
+          <input
+            id={traysId}
+            type="number"
+            min="0"
+            placeholder="Trays"
+            value={traysStr}
+            onChange={(e) => handleTraysChange(e.target.value)}
+            className="flex h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+          />
+          <span className="text-[9px] font-bold text-gray-400 block text-center mt-0.5">Trays</span>
+        </div>
+        <span className="font-bold text-gray-400 text-xs pb-3">+</span>
+        <div className="w-20">
+          <input
+            id={eggsId}
+            type="number"
+            min="0"
+            max="29"
+            placeholder="Eggs"
+            value={eggsStr}
+            onChange={(e) => handleEggsChange(e.target.value)}
+            className="flex h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1 text-xs font-semibold placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-forest"
+          />
+          <span className="text-[9px] font-bold text-gray-400 block text-center mt-0.5">Eggs (0-29)</span>
+        </div>
+      </div>
+      <div className="text-[10px] font-bold text-brand-forest bg-brand-sage/10 px-2 py-0.5 rounded text-center">
+        📦 {currentTrays} Trays & {currentEggs} Eggs
+      </div>
+    </div>
+  );
+};
+
 export default function EditOrderPage() {
   const router = useRouter();
   const params = useParams();
@@ -264,12 +357,47 @@ export default function EditOrderPage() {
     return salesStock.filter(s => s.product_id === productId && (parseFloat(s.current_quantity) || 0) > 0);
   };
 
+  const formatQuantity = (qty: number, unit: string = "units", code: string = "") => {
+    if (!qty && qty !== 0) return "0";
+    if (Math.abs(qty) < 0.0001) return `0 ${unit}`;
+
+    const isTrayUnit = unit.toLowerCase() === "trays" || 
+                       code.endsWith("-TRYS") || 
+                       code.endsWith("-D1") || 
+                       code.endsWith("-D2") || 
+                       code.endsWith("-D3") || 
+                       code.endsWith("-SHL") || 
+                       code === "EGG-WHT" || 
+                       code === "EGG-CRM" || 
+                       code === "EGG-BRN";
+
+    if (isTrayUnit) {
+      const isNegative = qty < 0;
+      const absQty = Math.abs(qty);
+      const trays = Math.floor(absQty);
+      const decimal = absQty - trays;
+      const eggs = Math.round(decimal * 30);
+      
+      let finalTrays = trays;
+      let finalEggs = eggs;
+      if (finalEggs === 30) {
+        finalTrays += 1;
+        finalEggs = 0;
+      }
+
+      const sign = isNegative ? "-" : "";
+      return `${sign}${finalTrays} Trays & ${finalEggs} Eggs`;
+    }
+    return `${Number(qty.toFixed(2)).toLocaleString()} ${unit}`;
+  };
+
   const getProductOptions = (selectedProdId?: string) => {
     return productsList
       .map(p => {
         const avail = getAvailableStock(p.id);
+        const formatted = formatQuantity(avail, p.unit_of_measure || "units", p.code);
         return {
-          label: `${p.name} (${avail > 0 ? Number(avail.toFixed(2)).toLocaleString() : 0} available)`,
+          label: `${p.name} (${formatted} available)`,
           value: p.id,
           avail: avail
         };
@@ -278,7 +406,41 @@ export default function EditOrderPage() {
       .sort((a, b) => (b.avail - a.avail) || a.label.localeCompare(b.label));
   };
 
-  const totalAmount = (watchedItems || []).reduce((acc, item) => acc + ((item?.quantity || 0) * (item?.unit_price || 0)), 0);
+  const getItemLineTotal = (item: any) => {
+    if (!item?.product_id) return 0;
+    const prod = productsList.find(p => p.id === item.product_id);
+    const uom = prod?.unit_of_measure || "units";
+    const code = prod?.code || "";
+    const isTrayUnit = uom.toLowerCase() === "trays" || 
+                       code.endsWith("-TRYS") || 
+                       code.endsWith("-D1") || 
+                       code.endsWith("-D2") || 
+                       code.endsWith("-D3") || 
+                       code.endsWith("-SHL") || 
+                       code === "EGG-WHT" || 
+                       code === "EGG-CRM" || 
+                       code === "EGG-BRN";
+
+    const qty = item.quantity || 0;
+    const price = item.unit_price || 0;
+
+    if (isTrayUnit) {
+      const absQty = Math.abs(qty);
+      const trays = Math.floor(absQty);
+      const eggs = Math.round((absQty - trays) * 30);
+      
+      const rawEggPrice = (prod?.sales_egg_unit_price && parseFloat(prod.sales_egg_unit_price) > 0) 
+        ? parseFloat(prod.sales_egg_unit_price) 
+        : (price < 1000 ? price : price / 30);
+      const eggUnitPrice = Number(rawEggPrice) || 0;
+
+      const trayUnitPrice = (price >= 1000) ? price : (eggUnitPrice * 30);
+      return (trays * trayUnitPrice) + (eggs * eggUnitPrice);
+    }
+    return qty * price;
+  };
+
+  const totalAmount = (watchedItems || []).reduce((acc, item) => acc + getItemLineTotal(item), 0);
 
   // Check if any quantity exceeds stock levels
   const isAnyItemExceeding = React.useMemo(() => {
@@ -320,12 +482,17 @@ export default function EditOrderPage() {
         fiscal_document_number: data.fiscal_document_number || null,
         order_notes: data.order_notes || null,
         admin_override_reason: data.admin_override_reason || null,
-        items: data.items.map(item => ({
-          product_id: item.product_id,
-          batch_reference: item.batch_reference || null,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-        })),
+        items: data.items.map(item => {
+          const lineTot = getItemLineTotal(item);
+          const qty = item.quantity || 0;
+          const effectiveUnitPrice = qty > 0 ? (lineTot / qty) : item.unit_price;
+          return {
+            product_id: item.product_id,
+            batch_reference: item.batch_reference || null,
+            quantity: item.quantity,
+            unit_price: effectiveUnitPrice,
+          };
+        }),
       });
 
       alert("Order updated successfully!");
@@ -340,7 +507,8 @@ export default function EditOrderPage() {
   const handleProductChange = (index: number, productId: string) => {
     const product = productsList.find(p => p.id === productId);
     if (product) {
-      setValue(`items.${index}.unit_price`, parseFloat(product.sales_unit_price || product.default_unit_price) || 0);
+      const defaultPrice = parseFloat(product.sales_unit_price || product.default_unit_price) || 0;
+      setValue(`items.${index}.unit_price`, defaultPrice);
     }
   };
 
@@ -589,11 +757,15 @@ export default function EditOrderPage() {
                                       {...register(`items.${index}.batch_reference` as const)}
                                     >
                                       <option value="">-- Select Batch --</option>
-                                      {batches.map((b: any) => (
-                                        <option key={b.id} value={b.batch_reference}>
-                                          {b.batch_reference || 'Unbatched'} ({(parseFloat(b.current_quantity) || 0).toLocaleString()} avail)
-                                        </option>
-                                      ))}
+                                      {batches.map((b: any) => {
+                                        const bQty = parseFloat(b.current_quantity) || 0;
+                                        const formattedB = formatQuantity(bQty, prod?.unit_of_measure, prod?.code);
+                                        return (
+                                          <option key={b.id} value={b.batch_reference}>
+                                            {b.batch_reference || 'Unbatched'} ({formattedB} avail)
+                                          </option>
+                                        );
+                                      })}
                                     </select>
                                     {errorsItemsAtIndex && 'batch_reference' in errorsItemsAtIndex && (
                                       <p className="text-[10px] text-red-500">Batch selection required</p>
@@ -614,20 +786,55 @@ export default function EditOrderPage() {
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
-                            <Input
-                              type="number"
-                              step="0.01"
-                              {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
-                              error={errors.items?.[index]?.quantity?.message}
-                            />
-                            {selectedProdId && (
-                              <div className={`text-[10px] font-bold ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
-                                {isExceeding 
-                                  ? `Exceeds stock! (${avail} avail)` 
-                                  : `${avail} available${selectedBatchRef ? ' in batch' : ''}`
-                                }
-                              </div>
-                            )}
+                            {(() => {
+                              const prod = productsList.find(p => p.id === selectedProdId);
+                              const isTrayUnit = prod && (
+                                prod.unit_of_measure?.toLowerCase() === "trays" || 
+                                prod.code.endsWith("-TRYS") || 
+                                prod.code.endsWith("-D1") || 
+                                prod.code.endsWith("-D2") || 
+                                prod.code.endsWith("-D3") || 
+                                prod.code.endsWith("-SHL") || 
+                                prod.code === "EGG-WHT" || 
+                                prod.code === "EGG-CRM" || 
+                                prod.code === "EGG-BRN"
+                              );
+
+                              const quantityValue = watchedItems?.[index]?.quantity || 0;
+
+                              if (isTrayUnit) {
+                                return (
+                                  <TrayEggsInput
+                                    key={`tray-eggs-input-edit-${field.id}`}
+                                    id={field.id}
+                                    quantity={quantityValue}
+                                    onChangeQuantity={(newQty) => setValue(`items.${index}.quantity`, newQty, { shouldValidate: true })}
+                                  />
+                                );
+                              }
+
+                              return (
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  {...register(`items.${index}.quantity` as const, { valueAsNumber: true })}
+                                  error={errors.items?.[index]?.quantity?.message}
+                                />
+                              );
+                            })()}
+
+                            {selectedProdId && (() => {
+                              const prod = productsList.find(p => p.id === selectedProdId);
+                              const formattedAvail = formatQuantity(avail, prod?.unit_of_measure, prod?.code);
+                              return (
+                                <div className={`text-[10px] font-bold mt-1 ${isExceeding ? 'text-red-500 animate-pulse' : 'text-gray-400'}`}>
+                                  {isExceeding 
+                                    ? `Exceeds stock! (${formattedAvail} avail)` 
+                                    : `${formattedAvail} available${selectedBatchRef ? ' in batch' : ''}`
+                                  }
+                                </div>
+                              );
+                            })()}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -636,9 +843,36 @@ export default function EditOrderPage() {
                             {...register(`items.${index}.unit_price` as const, { valueAsNumber: true })}
                             error={errors.items?.[index]?.unit_price?.message}
                           />
+                          {selectedProdId && (() => {
+                            const prod = productsList.find(p => p.id === selectedProdId);
+                            const currentUnitPrice = watchedItems?.[index]?.unit_price || 0;
+                            const rawEggPrice = (prod?.sales_egg_unit_price && parseFloat(prod.sales_egg_unit_price) > 0)
+                              ? parseFloat(prod.sales_egg_unit_price)
+                              : (currentUnitPrice < 1000 ? currentUnitPrice : currentUnitPrice / 30);
+                            const eggPrice = Number(rawEggPrice) || 0;
+                            const isTrayUnit = prod && (
+                              prod.unit_of_measure?.toLowerCase() === "trays" || 
+                              prod.code.endsWith("-TRYS") || 
+                              prod.code.endsWith("-D1") || 
+                              prod.code.endsWith("-D2") || 
+                              prod.code.endsWith("-D3") || 
+                              prod.code.endsWith("-SHL") || 
+                              prod.code === "EGG-WHT" || 
+                              prod.code === "EGG-CRM" || 
+                              prod.code === "EGG-BRN"
+                            );
+                            if (isTrayUnit && eggPrice > 0) {
+                              return (
+                                <span className="text-[9px] font-bold text-gray-400 block text-right mt-0.5">
+                                  (UGX {eggPrice.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} per egg)
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </TableCell>
                         <TableCell className="font-bold text-brand-forest text-xs whitespace-nowrap pt-4">
-                          UGX {((watchedItems?.[index]?.quantity || 0) * (watchedItems?.[index]?.unit_price || 0)).toLocaleString()}
+                          UGX {getItemLineTotal(watchedItems?.[index]).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Button 

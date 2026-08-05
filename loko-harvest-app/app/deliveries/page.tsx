@@ -167,12 +167,13 @@ export default function DeliveriesPage() {
   }, [verificationMode, showCompleteModal]);
 
   // Canvas Drawing Handlers
+  const lastSigPosRef = useRef<{ x: number; y: number } | null>(null);
+
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     
-    // Scale touch/mouse coordinate relative to actual canvas resolution
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
@@ -198,34 +199,56 @@ export default function DeliveriesPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#1b4332"; // Brand Forest
-
     const coords = getCanvasCoordinates(e);
+    lastSigPosRef.current = coords;
+
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1b4332";
+
     ctx.beginPath();
-    ctx.moveTo(coords.x, coords.y);
+    ctx.arc(coords.x, coords.y, 1.25, 0, Math.PI * 2);
+    ctx.fillStyle = "#1b4332";
+    ctx.fill();
+
     setIsDrawing(true);
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
+    if (!isDrawing || !lastSigPosRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const coords = getCanvasCoordinates(e);
-    ctx.lineTo(coords.x, coords.y);
+    const currentCoords = getCanvasCoordinates(e);
+    const lastCoords = lastSigPosRef.current;
+
+    const midPoint = {
+      x: (lastCoords.x + currentCoords.x) / 2,
+      y: (lastCoords.y + currentCoords.y) / 2
+    };
+
+    ctx.beginPath();
+    ctx.moveTo(lastCoords.x, lastCoords.y);
+    ctx.quadraticCurveTo(lastCoords.x, lastCoords.y, midPoint.x, midPoint.y);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1b4332";
     ctx.stroke();
 
+    lastSigPosRef.current = currentCoords;
+
     if ("touches" in e) {
-      e.preventDefault(); // Stop screen scrolling
+      e.preventDefault();
     }
   };
 
   const stopDrawing = () => {
     setIsDrawing(false);
+    lastSigPosRef.current = null;
   };
 
   const clearSignature = () => {
@@ -235,6 +258,7 @@ export default function DeliveriesPage() {
     if (!ctx) return;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    lastSigPosRef.current = null;
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -256,38 +256,75 @@ export default function OrderManagerDashboard() {
     }
   };
 
+  const lastSigPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const getSigCanvasCoords = (
+    canvas: HTMLCanvasElement, 
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  };
+
   const startSigDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     setIsDrawingSig(true);
     const canvas = completeSigCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+
+    const pos = getSigCanvasCoords(canvas, e);
+    lastSigPosRef.current = pos;
+
+    ctx.strokeStyle = "#132A1C";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.arc(pos.x, pos.y, 1.25, 0, Math.PI * 2);
+    ctx.fillStyle = "#132A1C";
+    ctx.fill();
   };
 
   const drawSig = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!isDrawingSig) return;
+    if (!isDrawingSig || !lastSigPosRef.current) return;
     const canvas = completeSigCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+
+    const currentPos = getSigCanvasCoords(canvas, e);
+    const lastPos = lastSigPosRef.current;
+
+    const midPoint = {
+      x: (lastPos.x + currentPos.x) / 2,
+      y: (lastPos.y + currentPos.y) / 2
+    };
+
+    ctx.beginPath();
+    ctx.moveTo(lastPos.x, lastPos.y);
+    ctx.quadraticCurveTo(lastPos.x, lastPos.y, midPoint.x, midPoint.y);
     ctx.strokeStyle = "#132A1C";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.5;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.stroke();
+
+    lastSigPosRef.current = currentPos;
   };
 
   const stopSigDrawing = () => {
     if (!isDrawingSig) return;
     setIsDrawingSig(false);
+    lastSigPosRef.current = null;
     const canvas = completeSigCanvasRef.current;
     if (canvas) {
       setCompleteSignatureData(canvas.toDataURL("image/png"));
@@ -301,6 +338,7 @@ export default function OrderManagerDashboard() {
     if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
+    lastSigPosRef.current = null;
     setCompleteSignatureData("");
   };
 
