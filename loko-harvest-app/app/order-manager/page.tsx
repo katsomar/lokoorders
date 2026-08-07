@@ -237,9 +237,7 @@ export default function OrderManagerDashboard() {
       if (completeProofFile) formData.append("proof_image_file", completeProofFile);
       if (completeSignatureData) formData.append("signature_data", completeSignatureData);
 
-      await api.post(`/deliveries/${deliveryId}/complete-stock-out`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post(`/deliveries/${deliveryId}/complete-stock-out`, formData);
 
       alert("Delivery marked as completed successfully!");
       setShowCompleteModal(false);

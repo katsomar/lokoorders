@@ -2,11 +2,32 @@ import type { NextConfig } from "next";
 // @ts-ignore
 import withPWAInit from "next-pwa";
 
+const customRuntimeCaching = [
+  {
+    urlPattern: /^https?:\/\/.*\/api\/.*/i,
+    handler: 'NetworkOnly',
+  },
+  {
+    urlPattern: /.*/i,
+    handler: 'NetworkFirst',
+    options: {
+      cacheName: 'others',
+      expiration: {
+        maxEntries: 64,
+        maxAgeSeconds: 24 * 60 * 60,
+      },
+      networkTimeoutSeconds: 20,
+    },
+  },
+];
+
 const withPWA = withPWAInit({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  runtimeCaching: customRuntimeCaching,
+  buildExcludes: [/middleware-manifest\.json$/],
 });
 
 import os from "os";

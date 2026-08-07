@@ -22,6 +22,11 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  // Allow browser to auto-generate multipart/form-data boundary for FormData uploads
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   // Idempotency key for mutating state requests
   if (['post', 'put', 'delete', 'patch'].includes(config.method?.toLowerCase() || '')) {
     if (!config.headers['X-Request-ID'] && !config.headers['X-Idempotency-Key']) {
