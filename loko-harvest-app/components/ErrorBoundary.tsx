@@ -29,6 +29,15 @@ export class ErrorBoundary extends Component<Props, State> {
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught React Component Crash:", error, errorInfo);
     this.setState({ errorInfo });
+
+    // Handle stale build ChunkLoadError when a new version is deployed to server
+    if (
+      error?.name === "ChunkLoadError" || 
+      (error?.message && (error.message.includes("Loading chunk") || error.message.includes("Failed to fetch dynamically imported module")))
+    ) {
+      console.warn("Detected stale Next.js deployment chunk. Force reloading browser...");
+      window.location.reload();
+    }
   }
 
   private handleRecover = () => {
