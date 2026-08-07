@@ -80,3 +80,6 @@ export async function compressImageFile(
     img.src = url;
   });
 }
+
+export const compressImage = compressImageFile;
+export default compressImageFile;
