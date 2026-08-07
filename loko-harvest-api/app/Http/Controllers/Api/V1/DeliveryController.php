@@ -523,27 +523,57 @@ class DeliveryController extends Controller
             'recipient_phone' => 'nullable|string',
             'delivered_at' => 'nullable|date',
             'notes' => 'nullable|string|max:500',
-            'proof_image_file' => 'nullable|file|image|max:8192',
+            'proof_image_file' => 'nullable|file|max:20480',
             'signature_data' => 'nullable|string',
         ]);
 
-        $delivery = Delivery::findOrFail($id);
+        // Find delivery by delivery ID or by order ID
+        $delivery = Delivery::where('id', $id)
+            ->orWhere('order_id', $id)
+            ->latest()
+            ->first();
+
+        if (!$delivery) {
+            // Fallback: If no delivery record exists for this order yet, create a delivery record for stock-out completion
+            $order = Order::find($id);
+            if ($order) {
+                $delivery = Delivery::create([
+                    'order_id' => $order->id,
+                    'driver_id' => null,
+                    'assigned_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? \App\Models\User::first()?->id),
+                    'status' => 'assigned',
+                    'dispatched_at' => now(),
+                ]);
+            } else {
+                return $this->error('Delivery or Order record not found.', 404);
+            }
+        }
 
         return DB::transaction(function () use ($delivery, $validated, $request) {
             $proofPath = null;
             if ($request->hasFile('proof_image_file')) {
-                $proofPath = $request->file('proof_image_file')->store('proofs', 'public');
+                try {
+                    $proofPath = $request->file('proof_image_file')->store('delivery_proofs/documents', 'public');
+                } catch (\Throwable $th) {
+                    \Illuminate\Support\Facades\Log::error('Failed to store proof_image_file: ' . $th->getMessage());
+                }
             }
 
             $sigPath = null;
             if (!empty($validated['signature_data'])) {
                 $sigData = $validated['signature_data'];
-                if (preg_match('/^data:image\/(\w+);base64,/', $sigData)) {
+                if (str_contains($sigData, ';base64,')) {
                     $sigData = substr($sigData, strpos($sigData, ',') + 1);
-                    $sigData = base64_decode($sigData);
-                    $sigFileName = 'signatures/sig_' . time() . '_' . \Illuminate\Support\Str::random(6) . '.png';
-                    \Illuminate\Support\Facades\Storage::disk('public')->put($sigFileName, $sigData);
-                    $sigPath = $sigFileName;
+                }
+                $decoded = base64_decode($sigData, true);
+                if ($decoded !== false) {
+                    $sigFileName = 'delivery_proofs/signatures/sig_' . time() . '_' . \Illuminate\Support\Str::random(6) . '.png';
+                    try {
+                        \Illuminate\Support\Facades\Storage::disk('public')->put($sigFileName, $decoded);
+                        $sigPath = $sigFileName;
+                    } catch (\Throwable $th) {
+                        \Illuminate\Support\Facades\Log::error('Failed to store signature image: ' . $th->getMessage());
+                    }
                 }
             }
 
@@ -571,7 +601,8 @@ class DeliveryController extends Controller
                 'delivery_notes' => json_encode($updatedNotes),
             ]);
 
-            $userId = auth()->id() ?? (\App\Models\User::first()?->id ?? '4132bf95-06b4-4705-be84-c1973727e14e');
+            $validUser = auth()->user() ?? (\App\Models\User::where('role', 'admin')->first() ?? \App\Models\User::first());
+            $userId = $validUser?->id;
 
             \App\Models\DeliveryProof::updateOrCreate(
                 ['delivery_id' => $delivery->id],
@@ -590,14 +621,18 @@ class DeliveryController extends Controller
                 if (!$order->invoice()->exists()) {
                     try {
                         $order->commitOrder("Stock Out Proof Fulfillment");
-                    } catch (\Throwable $e) {}
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning("commitOrder warning in completeStockOut: " . $e->getMessage());
+                    }
                 }
                 $order->update(['status' => 'delivered']);
-                $order->statusHistory()->create([
-                    'status' => 'delivered',
-                    'changed_by' => auth()->id() ?? (\App\Models\User::where('role', 'admin')->first()?->id ?? 1),
-                    'notes' => 'Delivery completed & proof uploaded (Received by: ' . $validated['recipient_name'] . ')',
-                ]);
+                if ($userId) {
+                    $order->statusHistory()->create([
+                        'status' => 'delivered',
+                        'changed_by' => $userId,
+                        'notes' => 'Delivery completed & proof uploaded (Received by: ' . $validated['recipient_name'] . ')',
+                    ]);
+                }
             }
 
             try {

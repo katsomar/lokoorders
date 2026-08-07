@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import api from "@/lib/api";
+import { compressImageFile } from "@/lib/imageCompressor";
 import { useRealtime } from "@/hooks/useRealtime";
 import { EmergencyQRGeneratorModal } from "@/components/EmergencyQRGeneratorModal";
 
@@ -222,7 +223,7 @@ export default function OrderManagerDashboard() {
       return;
     }
 
-    const deliveryId = completeOrderObj.deliveries?.[0]?.id || completeOrderObj.id;
+    const deliveryId = completeOrderObj.deliveries?.[0]?.id || completeOrderObj.delivery_id || completeOrderObj.id;
     if (!deliveryId) {
       alert("Invalid delivery reference.");
       return;
@@ -250,7 +251,9 @@ export default function OrderManagerDashboard() {
       setCompleteSignatureData("");
       await fetchOrders(true);
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to complete delivery.");
+      console.error("Complete delivery stock-out error:", err);
+      const errMsg = err?.response?.data?.message || err?.message || "Failed to complete delivery & upload proof.";
+      alert(errMsg);
     } finally {
       setIsSubmittingComplete(false);
     }
@@ -4890,11 +4893,12 @@ export default function OrderManagerDashboard() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      setCompleteProofFile(file);
-                      setCompleteProofPreview(URL.createObjectURL(file));
+                      const compressed = await compressImageFile(file);
+                      setCompleteProofFile(compressed);
+                      setCompleteProofPreview(URL.createObjectURL(compressed));
                     }
                   }}
                   className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-brand-sage/20 file:text-brand-forest hover:file:bg-brand-sage/30 cursor-pointer"

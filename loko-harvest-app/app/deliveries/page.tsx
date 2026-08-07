@@ -30,6 +30,7 @@ import {
   Check
 } from "lucide-react";
 import api from "@/lib/api";
+import { compressImageFile } from "@/lib/imageCompressor";
 import { useRealtime } from "@/hooks/useRealtime";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -261,16 +262,17 @@ export default function DeliveriesPage() {
     lastSigPosRef.current = null;
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setPhotoFileName(file.name);
+    const compressed = await compressImageFile(file);
+    setPhotoFileName(compressed.name);
     const reader = new FileReader();
     reader.onload = (event) => {
       setPhotoFile(event.target?.result as string);
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   };
 
   const handleAssignDelivery = async (e: React.FormEvent) => {
