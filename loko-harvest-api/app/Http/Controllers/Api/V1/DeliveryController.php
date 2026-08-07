@@ -640,7 +640,7 @@ class DeliveryController extends Controller
                 \App\Services\RealtimePublisher::publish('order.updated');
             } catch (\Throwable $th) {}
 
-            return $this->success($delivery, 'Delivery completed successfully.');
+            return $this->success($delivery->load('proof'), 'Delivery completed successfully.');
         });
     }
 }
