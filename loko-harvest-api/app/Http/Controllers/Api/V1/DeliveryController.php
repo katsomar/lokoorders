@@ -119,7 +119,7 @@ class DeliveryController extends Controller
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
             'notes' => 'nullable|string|max:500',
-            'proof_image_file' => 'required|file|image|max:4096',
+            'proof_image_file' => 'required|file|mimes:jpeg,jpg,png,webp,gif,heic,heif,bmp|max:20480',
             'signature_data' => 'required|string',
         ]);
 
@@ -523,7 +523,7 @@ class DeliveryController extends Controller
             'recipient_phone' => 'nullable|string',
             'delivered_at' => 'nullable|date',
             'notes' => 'nullable|string|max:500',
-            'proof_image_file' => 'nullable|file|max:20480',
+            'proof_image_file' => 'nullable|file|mimes:jpeg,jpg,png,webp,gif,heic,heif,bmp|max:20480',
             'signature_data' => 'nullable|string',
         ]);
 
